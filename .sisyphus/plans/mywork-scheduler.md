@@ -872,7 +872,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-18-toggle.txt
     ```
 
-- [ ] 19. 实现任务创建/编辑表单 (TDD)
+- [x] 19. 实现任务创建/编辑表单 (TDD)
   - **What**: 创建 `TaskForm.tsx` 支持 prompt、cron/schedule、timeout 等字段
   - **TDD**: 测试表单验证和提交
   - **Category**: `visual-engineering`
