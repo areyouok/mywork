@@ -97,3 +97,44 @@
 - [x] `npm run lint` passes (no errors)
 - [x] `npm run format` runs successfully
 
+
+## Task 8: SQLite Database Connection and Initialization
+
+### What was done:
+1. Created database module structure (`src-tauri/src/db/mod.rs`, `connection.rs`)
+2. Implemented `init_database()` async function using sqlx::SqlitePool
+3. Used `include_str!` to embed schema.sql at compile time
+4. Split schema into individual statements for execution
+5. Added `get_database_path()` helper to get Tauri app data directory
+6. Added `tempfile` dev-dependency for testing
+7. Wrote 4 comprehensive tests following TDD approach:
+   - `test_init_database_creates_file`
+   - `test_init_database_creates_tables`
+   - `test_init_database_creates_indexes`
+   - `test_init_database_idempotent`
+
+### Key Points:
+- sqlx::SqlitePool requires `sqlite:?mode=rwc` URL format (rwc = read-write-create)
+- Schema execution splits on `;` and trims each statement
+- Parent directory must be created before connecting to database
+- `include_str!` macro embeds schema at compile time
+- Tauri v2 uses `app.path().app_data_dir()` to get app data directory
+- Tests use `tempfile::tempdir()` for isolated temporary directories
+- `tokio::fs::create_dir_all()` is async version of directory creation
+
+### Implementation Details:
+- Database path: `{app_data_dir}/mywork.db`
+- Connection pool: `SqlitePool` (async, thread-safe)
+- Error handling: `Result<T, sqlx::Error>` for database errors
+- Module structure:
+  - `db/mod.rs` - Public API exports
+  - `db/connection.rs` - Core initialization logic
+  - `db/schema.sql` - SQL schema (from Task 7)
+
+### Verified:
+- [x] All 4 tests pass (`cargo test db::connection`)
+- [x] Database file created in correct location
+- [x] Tables and indexes created successfully
+- [x] Idempotent initialization (can run multiple times)
+- [x] Build passes without errors
+- [x] Module structure follows Rust conventions

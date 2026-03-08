@@ -1,9 +1,10 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
+
+pub mod db;
 
 #[tauri::command]
 fn greet(name: &str) -> String {

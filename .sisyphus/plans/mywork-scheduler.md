@@ -685,7 +685,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   - Message: `docs: add database schema design`
   - Files: `src-tauri/src/db/schema.sql`, `README.md`
 
-- [ ] 8-11. 数据层实现 (数据库、Task CRUD、Execution CRUD、输出存储)
+- [x] 8-11. 数据层实现 (数据库、Task CRUD、Execution CRUD、输出存储)
 
   **What to do**: 实现完整的数据持久化层，包括数据库连接、任务和执行记录的 CRUD 操作、输出文件存储。使用 TDD 开发。
   
