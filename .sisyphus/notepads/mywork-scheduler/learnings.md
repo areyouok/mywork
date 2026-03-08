@@ -252,3 +252,49 @@
 - [x] Default status "pending" applied correctly
 - [x] Foreign key relationship working
 - [x] ExecutionStatus enum conversions working
+
+## Task 11: Output File Storage
+
+### What was done:
+1. Created storage module structure (`src-tauri/src/storage/mod.rs`, `output.rs`)
+2. Implemented 5 output file management functions:
+   - `get_output_directory(app)` - Get output directory path from Tauri app handle
+   - `create_output_directory(output_dir)` - Create output directory if not exists
+   - `write_output_file(output_dir, execution_id, content)` - Write output to file
+   - `read_output_file(output_dir, execution_id)` - Read output from file
+   - `delete_output_file(output_dir, execution_id)` - Delete output file
+   - `cleanup_old_outputs(output_dir, days_to_keep)` - Delete files older than specified days
+3. Added `filetime` dev-dependency for testing file modification times
+4. Wrote 11 comprehensive tests covering all operations
+5. Used tokio::fs for async file operations
+6. Used chrono for timestamp comparison in cleanup function
+
+### Key Points:
+- Output files stored in `{app_data_dir}/outputs/` directory
+- File naming convention: `{execution_id}.txt`
+- cleanup_old_outputs only processes .txt files, ignores other file types
+- Functions accept PathBuf instead of AppHandle for testability
+- Tauri app handle only used in `get_output_directory` to get app data dir
+- filetime crate used in tests to set file modification times for aging tests
+- std::time::SystemTime converted to chrono::DateTime<Utc> for comparison
+
+### Module Structure:
+- `storage/mod.rs` - Public API exports
+- `storage/output.rs` - Output file management functions and tests
+- Clean separation: storage module for file operations, models for database
+
+### Testing Patterns:
+- Tests use tempfile::tempdir() for isolated temporary directories
+- Tests don't require actual Tauri AppHandle - use PathBuf directly
+- Aging tests use filetime::set_file_mtime to simulate old files
+- Cleanup tests verify both file deletion and preservation
+- Mixed file type tests ensure non-.txt files are ignored
+
+### Verified:
+- [x] All 11 Output storage tests pass
+- [x] All 42 total tests pass (including db, models, storage tests)
+- [x] Build succeeds without errors
+- [x] Proper async/await implementation
+- [x] Output directory created in app data directory
+- [x] File naming convention followed
+- [x] Cleanup respects file age and type

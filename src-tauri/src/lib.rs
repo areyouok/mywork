@@ -6,6 +6,7 @@ use tauri::{
 
 pub mod db;
 pub mod models;
+pub mod storage;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
