@@ -618,7 +618,7 @@ Max Concurrent: 7 (Waves 1 & 2)
 
 ### Wave 2: Data Layer (Storage & Models)
 
-- [ ] 7. 设计数据库 schema
+- [x] 7. 设计数据库 schema
 
   **What to do**:
   - 设计并文档化数据库 schema:
