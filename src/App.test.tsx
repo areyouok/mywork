@@ -1,9 +1,58 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import App from './App';
+import * as api from './api/tasks';
+
+vi.mock('./api/tasks', () => ({
+  getTasks: vi.fn(),
+  createTask: vi.fn(),
+  updateTask: vi.fn(),
+  deleteTask: vi.fn(),
+  getExecutions: vi.fn(),
+}));
+
+const mockTasks = [
+  {
+    id: '1',
+    name: 'Daily Code Review',
+    prompt: 'Review code',
+    enabled: true,
+    timeout_seconds: 300,
+    skip_if_running: true,
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+  {
+    id: '2',
+    name: 'Weekly Report',
+    prompt: 'Generate report',
+    enabled: false,
+    timeout_seconds: 600,
+    skip_if_running: false,
+    created_at: '2024-01-02T00:00:00Z',
+    updated_at: '2024-01-02T00:00:00Z',
+  },
+];
+
+const mockExecutions = [
+  {
+    id: 'exec-1',
+    task_id: '1',
+    status: 'success' as const,
+    started_at: '2024-01-01T10:00:00Z',
+    finished_at: '2024-01-01T10:05:00Z',
+  },
+];
 
 describe('App', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(api.getTasks).mockResolvedValue(mockTasks);
+    vi.mocked(api.getExecutions).mockResolvedValue(mockExecutions);
+    vi.mocked(api.updateTask).mockResolvedValue(mockTasks[0]);
+    vi.mocked(api.deleteTask).mockResolvedValue(true);
+  });
   it('should render app header with title', () => {
     render(<App />);
 
@@ -16,18 +65,22 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /\+ new task/i })).toBeInTheDocument();
   });
 
-  it('should render sidebar with task count', () => {
+  it('should render sidebar with task count', async () => {
     render(<App />);
 
-    expect(screen.getByText('Tasks')).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Tasks')).toBeInTheDocument();
+      expect(screen.getByText('2')).toBeInTheDocument();
+    });
   });
 
-  it('should render all tasks in sidebar', () => {
+  it('should render all tasks in sidebar', async () => {
     render(<App />);
 
-    expect(screen.getByText('Daily Code Review')).toBeInTheDocument();
-    expect(screen.getByText('Weekly Report')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Daily Code Review')).toBeInTheDocument();
+      expect(screen.getByText('Weekly Report')).toBeInTheDocument();
+    });
   });
 
   it('should show empty state when no task is selected', () => {
@@ -40,6 +93,10 @@ describe('App', () => {
   it('should select task when clicking on sidebar item', async () => {
     const user = userEvent.setup();
     render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Daily Code Review')).toBeInTheDocument();
+    });
 
     await user.click(screen.getByText('Daily Code Review'));
 
@@ -65,6 +122,10 @@ describe('App', () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await waitFor(() => {
+      expect(screen.getByText('Daily Code Review')).toBeInTheDocument();
+    });
+
     await user.click(screen.getByText('Daily Code Review'));
     await user.click(screen.getByRole('button', { name: /edit/i }));
 
@@ -76,6 +137,10 @@ describe('App', () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await waitFor(() => {
+      expect(screen.getByText('Daily Code Review')).toBeInTheDocument();
+    });
+
     await user.click(screen.getByText('Daily Code Review'));
     await user.click(screen.getByRole('button', { name: /history/i }));
 
@@ -86,6 +151,10 @@ describe('App', () => {
   it('should toggle task enabled status', async () => {
     const user = userEvent.setup();
     render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Daily Code Review')).toBeInTheDocument();
+    });
 
     await user.click(screen.getByText('Daily Code Review'));
 
@@ -99,6 +168,10 @@ describe('App', () => {
   it('should delete task after confirmation', async () => {
     const user = userEvent.setup();
     render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Weekly Report')).toBeInTheDocument();
+    });
 
     await user.click(screen.getByText('Weekly Report'));
 
@@ -117,6 +190,10 @@ describe('App', () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await waitFor(() => {
+      expect(screen.getByText('Weekly Report')).toBeInTheDocument();
+    });
+
     await user.click(screen.getByText('Weekly Report'));
 
     const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
@@ -134,6 +211,10 @@ describe('App', () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await waitFor(() => {
+      expect(screen.getByText('Daily Code Review')).toBeInTheDocument();
+    });
+
     await user.click(screen.getByText('Daily Code Review'));
 
     const taskItems = screen.getAllByRole('listitem');
@@ -143,6 +224,10 @@ describe('App', () => {
   it('should switch back to list view from history', async () => {
     const user = userEvent.setup();
     render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Daily Code Review')).toBeInTheDocument();
+    });
 
     await user.click(screen.getByText('Daily Code Review'));
     await user.click(screen.getByRole('button', { name: /history/i }));
@@ -159,6 +244,10 @@ describe('App', () => {
   it('should apply selected class to active task in sidebar', async () => {
     const user = userEvent.setup();
     render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Daily Code Review')).toBeInTheDocument();
+    });
 
     const dailyReviewItem = screen.getByText('Daily Code Review').closest('.sidebar-task-item');
     expect(dailyReviewItem).not.toHaveClass('selected');

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use std::str::FromStr;
 use uuid::Uuid;
 
 /// Execution status enum
@@ -26,16 +27,20 @@ impl ExecutionStatus {
             ExecutionStatus::Skipped => "skipped",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Option<Self> {
+impl FromStr for ExecutionStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "pending" => Some(ExecutionStatus::Pending),
-            "running" => Some(ExecutionStatus::Running),
-            "success" => Some(ExecutionStatus::Success),
-            "failed" => Some(ExecutionStatus::Failed),
-            "timeout" => Some(ExecutionStatus::Timeout),
-            "skipped" => Some(ExecutionStatus::Skipped),
-            _ => None,
+            "pending" => Ok(ExecutionStatus::Pending),
+            "running" => Ok(ExecutionStatus::Running),
+            "success" => Ok(ExecutionStatus::Success),
+            "failed" => Ok(ExecutionStatus::Failed),
+            "timeout" => Ok(ExecutionStatus::Timeout),
+            "skipped" => Ok(ExecutionStatus::Skipped),
+            _ => Err(format!("Invalid execution status: {}", s)),
         }
     }
 }

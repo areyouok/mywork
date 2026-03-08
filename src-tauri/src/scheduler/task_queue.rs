@@ -72,9 +72,9 @@ impl Drop for SlotGuard {
         let task_id = self.task_id.clone();
         
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            let _ = handle.spawn(async move {
+            std::mem::drop(handle.spawn(async move {
                 running_tasks.lock().await.remove(&task_id);
-            });
+            }));
         }
     }
 }
@@ -432,22 +432,19 @@ mod tests {
             let current_concurrent = current_concurrent.clone();
 
             let handle = tokio::spawn(async move {
-                match queue.acquire_slot(&format!("task-{}", i)).await {
-                    Ok(_guard) => {
-                        let current = current_concurrent.fetch_add(1, Ordering::SeqCst) + 1;
-                        
-                        loop {
-                            let max = max_concurrent.load(Ordering::SeqCst);
-                            if current <= max || max_concurrent.compare_exchange(max, current, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
-                                break;
-                            }
+                if let Ok(_guard) = queue.acquire_slot(&format!("task-{}", i)).await {
+                    let current = current_concurrent.fetch_add(1, Ordering::SeqCst) + 1;
+                    
+                    loop {
+                        let max = max_concurrent.load(Ordering::SeqCst);
+                        if current <= max || max_concurrent.compare_exchange(max, current, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
+                            break;
                         }
-
-                        counter.fetch_add(1, Ordering::SeqCst);
-                        sleep(Duration::from_millis(50)).await;
-                        current_concurrent.fetch_sub(1, Ordering::SeqCst);
                     }
-                    Err(_) => {}
+
+                    counter.fetch_add(1, Ordering::SeqCst);
+                    sleep(Duration::from_millis(50)).await;
+                    current_concurrent.fetch_sub(1, Ordering::SeqCst);
                 }
             });
             handles.push(handle);

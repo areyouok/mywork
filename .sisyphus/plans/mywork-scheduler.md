@@ -999,7 +999,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-23-markdown-viewer.png
     ```
 
-- [ ] 24. 实现托盘菜单和主窗口
+- [x] 24. 实现托盘菜单和主窗口
   - **What**: 集成托盘菜单（显示任务数量、Open/Quit）和主窗口布局
   - **TDD**: 测试菜单交互
   - **Category**: `visual-engineering`

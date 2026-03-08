@@ -1,5 +1,5 @@
 use chrono::{DateTime, Duration, Utc};
-use std::path::PathBuf;
+use std::path::Path;
 use std::io;
 use tauri::{AppHandle, Manager};
 
@@ -11,11 +11,11 @@ use tauri::{AppHandle, Manager};
 /// # Returns
 /// * `Ok(PathBuf)` - Path to the outputs directory
 /// * `Err(io::Error)` - Failed to get app data directory
-pub fn get_output_directory(app: &AppHandle) -> Result<PathBuf, io::Error> {
+pub fn get_output_directory(app: &AppHandle) -> Result<std::path::PathBuf, io::Error> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
     Ok(app_data_dir.join("outputs"))
 }
 
@@ -27,7 +27,7 @@ pub fn get_output_directory(app: &AppHandle) -> Result<PathBuf, io::Error> {
 /// # Returns
 /// * `Ok(())` - Directory created or already exists
 /// * `Err(io::Error)` - Failed to create directory
-pub async fn create_output_directory(output_dir: &PathBuf) -> Result<(), io::Error> {
+pub async fn create_output_directory(output_dir: &Path) -> Result<(), io::Error> {
     tokio::fs::create_dir_all(output_dir).await
 }
 
@@ -42,10 +42,10 @@ pub async fn create_output_directory(output_dir: &PathBuf) -> Result<(), io::Err
 /// * `Ok(PathBuf)` - Path to the created file
 /// * `Err(io::Error)` - Failed to write file
 pub async fn write_output_file(
-    output_dir: &PathBuf,
+    output_dir: &Path,
     execution_id: &str,
     content: &str,
-) -> Result<PathBuf, io::Error> {
+) -> Result<std::path::PathBuf, io::Error> {
     let file_path = output_dir.join(format!("{}.txt", execution_id));
     tokio::fs::write(&file_path, content).await?;
     Ok(file_path)
@@ -61,7 +61,7 @@ pub async fn write_output_file(
 /// * `Ok(String)` - Content of the file
 /// * `Err(io::Error)` - Failed to read file
 pub async fn read_output_file(
-    output_dir: &PathBuf,
+    output_dir: &Path,
     execution_id: &str,
 ) -> Result<String, io::Error> {
     let file_path = output_dir.join(format!("{}.txt", execution_id));
@@ -78,7 +78,7 @@ pub async fn read_output_file(
 /// * `Ok(())` - File deleted successfully
 /// * `Err(io::Error)` - Failed to delete file
 pub async fn delete_output_file(
-    output_dir: &PathBuf,
+    output_dir: &Path,
     execution_id: &str,
 ) -> Result<(), io::Error> {
     let file_path = output_dir.join(format!("{}.txt", execution_id));
@@ -95,7 +95,7 @@ pub async fn delete_output_file(
 /// * `Ok(u64)` - Number of files deleted
 /// * `Err(io::Error)` - Failed to clean up files
 pub async fn cleanup_old_outputs(
-    output_dir: &PathBuf,
+    output_dir: &Path,
     days_to_keep: i64,
 ) -> Result<u64, io::Error> {
     let cutoff_time = Utc::now() - Duration::days(days_to_keep);
@@ -106,7 +106,7 @@ pub async fn cleanup_old_outputs(
     while let Some(entry) = entries.next_entry().await? {
         let path = entry.path();
         
-        if path.extension().map_or(false, |ext| ext == "txt") {
+        if path.extension().is_some_and(|ext| ext == "txt") {
             let metadata = entry.metadata().await?;
             
             if let Ok(modified_time) = metadata.modified() {

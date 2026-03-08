@@ -1,5 +1,5 @@
 use sqlx::SqlitePool;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
 /// Initialize database connection pool and create schema
@@ -10,11 +10,11 @@ use tauri::{AppHandle, Manager};
 /// # Returns
 /// * `Ok(SqlitePool)` - Successfully initialized connection pool
 /// * `Err(sqlx::Error)` - Database initialization failed
-pub async fn init_database(db_path: &PathBuf) -> Result<SqlitePool, sqlx::Error> {
+pub async fn init_database(db_path: &Path) -> Result<SqlitePool, sqlx::Error> {
     if let Some(parent) = db_path.parent() {
         tokio::fs::create_dir_all(parent)
             .await
-            .map_err(|e| sqlx::Error::Io(e))?;
+            .map_err(sqlx::Error::Io)?;
     }
 
     let db_url = format!("sqlite:{}?mode=rwc", db_path.display());

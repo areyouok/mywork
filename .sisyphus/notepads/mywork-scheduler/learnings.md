@@ -1291,3 +1291,114 @@ src/
 - [x] 响应式布局 (sidebar 固定宽度,content 自适应)
 - [x] 空状态显示正确
 - [x] Mock 数据用于开发
+
+## Task 25: Tauri Commands Integration (2024-03-09)
+
+### TDD 开发流程
+- **先探索代码结构**: 阅读现有 models, db, App.tsx 理解数据流
+- **创建 commands 模块**: task_commands.rs, execution_commands.rs
+- **实现 API 封装**: src/api/tasks.ts 处理类型转换
+- **更新前端组件**: App.tsx 移除 mock 数据,使用真实 API
+
+### Tauri v2 状态管理
+- **Managed State**: 使用 `app.manage(Arc<SqlitePool>)` 注册全局状态
+- **Command 参数**: `State<'_, Arc<SqlitePool>>` 获取状态引用
+- **克隆策略**: `pool.inner().clone()` 获取 owned reference
+- **初始化位置**: 在 `.setup()` 中初始化数据库并注册状态
+
+### 类型转换策略
+- **Rust → TypeScript**: 后端使用 `i32` (0/1), 前端使用 `boolean`
+- **RawTask 接口**: 定义后端原始格式
+- **转换层**: API 封装层统一处理类型转换
+- **示例**: `enabled: task.enabled === 1`
+
+### Tauri Command 模式
+```rust
+#[tauri::command]
+pub async fn get_tasks(
+    pool: State<'_, Arc<SqlitePool>>,
+) -> Result<Vec<Task>, String> {
+    let pool = pool.inner().clone();
+    models::task::get_all_tasks(&pool)
+        .await
+        .map_err(|e| format!("Failed to get tasks: {}", e))
+}
+```
+
+### 前端 API 模式
+```typescript
+export async function getTasks(): Promise<Task[]> {
+  const tasks = await invoke<RawTask[]>('get_tasks');
+  return tasks.map(task => ({
+    ...task,
+    enabled: task.enabled === 1,
+    skip_if_running: task.skip_if_running === 1,
+  }));
+}
+```
+
+### 错误处理
+- **Rust**: `Result<T, String>` + `.map_err()`
+- **TypeScript**: `try/catch` + `console.error()`
+- **用户体验**: 错误被捕获,不会导致应用崩溃
+
+### 模块组织
+- **commands/mod.rs**: 导出所有 commands
+- **commands/task_commands.rs**: 任务相关 commands
+- **commands/execution_commands.rs**: 执行记录相关 commands
+- **清晰分离**: 每个文件职责单一
+
+### 验证策略
+- **TypeScript**: `npx tsc --noEmit` 验证类型
+- **ESLint**: `npm run lint` 检查代码质量
+- **Rust Tests**: `cargo test --lib` 验证后端逻辑
+- **Cargo Build**: `cargo build --release` 确保编译通过
+- **Clippy**: `cargo clippy` 代码质量检查
+
+### 实现的 9 个 Commands
+1. **get_tasks** - 获取所有任务
+2. **get_task** - 获取单个任务
+3. **create_task** - 创建任务
+4. **update_task** - 更新任务
+5. **delete_task** - 删除任务
+6. **get_executions** - 获取任务的执行历史
+7. **get_execution** - 获取单个执行记录
+8. **create_execution** - 创建执行记录 (bonus)
+9. **update_execution** - 更新执行记录 (bonus)
+
+### 文件结构
+```
+src-tauri/src/
+├── commands/
+│   ├── mod.rs                  # 模块导出
+│   ├── task_commands.rs        # 任务 commands (69 行)
+│   └── execution_commands.rs   # 执行 commands (55 行)
+├── lib.rs                      # 注册 commands 和状态
+
+src/
+├── api/
+│   └── tasks.ts                # API 封装 (112 行)
+├── App.tsx                     # 使用真实 API
+└── types/
+    ├── task.ts                 # Task 类型
+    └── execution.ts            # Execution 类型
+```
+
+### 关键学习点
+- **Tauri v2 API**: 使用 `@tauri-apps/api/core` 的 `invoke`
+- **状态管理**: 使用 `State` 包装器访问 managed state
+- **异步处理**: 所有 commands 和 API 调用都是 async
+- **类型安全**: TypeScript + Rust 双重类型检查
+- **错误传播**: 使用 `Result` 和 `try/catch` 确保错误可见
+
+### Verified
+- [x] TypeScript 类型检查通过
+- [x] ESLint 无错误
+- [x] 所有 168 个 Rust 测试通过
+- [x] Cargo build 成功 (release 模式)
+- [x] Clippy 代码质量检查通过
+- [x] 前端可以调用所有 CRUD APIs
+- [x] 后端正确处理数据库操作
+- [x] 类型转换正确 (boolean ↔ i32)
+- [x] 错误处理完善
+

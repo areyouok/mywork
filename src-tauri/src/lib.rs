@@ -1,19 +1,16 @@
+use std::sync::Arc;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
 
+pub mod commands;
 pub mod db;
 pub mod models;
 pub mod opencode;
 pub mod scheduler;
 pub mod storage;
-
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
 
 fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -52,10 +49,28 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            let db_path = db::connection::get_database_path(app.handle())?;
+            let pool = tauri::async_runtime::block_on(async {
+                db::connection::init_database(&db_path).await
+            })
+            .expect("Failed to initialize database");
+
+            app.manage(Arc::new(pool));
+
             setup_tray(app)?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![
+            commands::get_tasks,
+            commands::get_task,
+            commands::create_task,
+            commands::update_task,
+            commands::delete_task,
+            commands::get_executions,
+            commands::get_execution,
+            commands::create_execution,
+            commands::update_execution,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
