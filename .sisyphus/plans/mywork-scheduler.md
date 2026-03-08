@@ -845,7 +845,7 @@ Max Concurrent: 7 (Waves 1 & 2)
 
 ### Wave 4: UI Components (React Frontend)
 
-- [ ] 18. 实现任务列表组件 (TDD)
+- [x] 18. 实现任务列表组件 (TDD)
   - **What**: 创建 `TaskList.tsx` 显示所有任务，支持启用/禁用、删除
   - **TDD**: React Testing Library 测试组件渲染和交互
   - **Category**: `visual-engineering`
