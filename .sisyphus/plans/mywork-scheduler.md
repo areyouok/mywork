@@ -3,8 +3,9 @@
 ## TL;DR
 
 > **Quick Summary**: 创建一个基于 Tauri + React 的 macOS 系统托盘应用，用于定时调度和执行 opencode 任务。支持 cron 表达式和简单时间选择器，具备超时控制、并发控制、历史记录查看等功能。
-> 
- > **Deliverables**:
+>
+> **Deliverables**:
+>
 > - macOS 系统托盘应用（Tauri + React）
 > - 定时任务调度系统（Rust: tokio-cron-scheduler + 内置队列）
 > - 任务管理界面（创建、编辑、查看）
@@ -13,7 +14,7 @@
 > - opencode CLI 集成（Rust 调用 opencode CLI binary）
 > - 自动化测试（TDD）
 > - Git 仓库管理
-> 
+>
 > **Estimated Effort**: Large
 > **Parallel Execution**: YES - 5 waves
 > **Critical Path**: Setup → Data Layer → Scheduler → Integration → UI → Testing
@@ -23,7 +24,9 @@
 ## Context
 
 ### Original Request
+
 创建一个基于 opencode 的调度、编排 GUI 应用，用于定时执行 opencode 任务。要求：
+
 - 仅支持 macOS
 - 常驻任务栏，自调度（不用 macOS 系统调度）
 - 定时任务管理（创建、查看、历史记录）
@@ -35,6 +38,7 @@
 ### Interview Summary
 
 **Key Discussions**:
+
 - **技术栈**: Tauri + React 18 (内存占用小，80MB vs Electron 200-500MB)
 - **后端架构**: 纯 Rust（单一技术栈，性能最优）
   - 调度器: `tokio-cron-scheduler` (async, production-ready)
@@ -48,6 +52,7 @@
 - **Git 管理**: 自动初始化，维护 .gitignore，定期提交
 
 **Research Findings**:
+
 - **opencode CLI**: 通过 `opencode serve` 启动本地服务器，SDK 通过 HTTP API 调用
 - **Session 模型**: 每个 session 可以处理多个 prompts（有状态），建议每个任务创建独立 session
 - **输出流**: 支持 SSE (Server-Sent Events) 用于实时流式输出
@@ -58,6 +63,7 @@
 ### Metis Review
 
 **Identified Gaps** (已解决):
+
 - ✅ **opencode SDK session 模型**: 确认每个任务创建独立 session
 - ✅ **Task 数据模型**: 定义了完整的 schema (id, name, prompt, cron, timeout, enabled, etc.)
 - ✅ **数据保留策略**: 默认保留 30 天执行历史，输出存储为文件
@@ -67,6 +73,7 @@
 - ✅ **测试策略**: 使用时间模拟库测试调度器
 
 **Guardrails Applied**:
+
 - MUST NOT: 多平台支持、实时协作、云同步、用户认证、插件系统
 - MUST: TDD、获取 SDK 文档、定义 schema、设置数据保留策略
 
@@ -75,11 +82,13 @@
 ## Work Objectives
 
 ### Core Objective
+
 构建一个生产级的 macOS 系统托盘应用，用于管理和定时执行 opencode 任务，具备完善的任务管理、历史记录、超时控制等功能，并保持高质量的代码和测试覆盖率。
 
 ### Concrete Deliverables
 
 **后端 (Rust + Node.js)**:
+
 - `src-tauri/` - Tauri 主进程
   - 系统托盘管理
   - SQLite 数据库操作
@@ -90,6 +99,7 @@
 - `src-tauri/src/opencode/` - opencode 集成模块
 
 **前端 (React + TypeScript)**:
+
 - `src/` - React 应用
   - 任务列表界面
   - 任务创建/编辑表单
@@ -101,11 +111,13 @@
 - `src/utils/` - 工具函数
 
 **测试**:
+
 - `src-tauri/src/**/*.rs` - Rust 单元测试
 - `src/**/*.test.ts` - React 组件测试
 - `tests/` - E2E 测试 (Playwright)
 
 **配置和文档**:
+
 - `package.json` - 依赖配置
 - `src-tauri/Cargo.toml` - Rust 依赖
 - `tsconfig.json` - TypeScript 配置
@@ -161,15 +173,17 @@
 > **ZERO HUMAN INTERVENTION** — ALL verification is agent-executed. No exceptions.
 
 ### Test Decision
+
 - **Infrastructure exists**: NO (需要从零搭建)
 - **Automated tests**: TDD (测试驱动开发)
-- **Framework**: 
+- **Framework**:
   - Rust: `cargo test` (内置)
   - React: `vitest` + `@testing-library/react`
   - E2E: `playwright` + `@playwright/test`
 - **TDD**: 每个任务遵循 RED (failing test) → GREEN (minimal impl) → REFACTOR
 
 ### QA Policy
+
 Every task MUST include agent-executed QA scenarios (see TODO template below).
 Evidence saved to `.sisyphus/evidence/task-{N}-{scenario-slug}.{ext}`.
 
@@ -241,14 +255,14 @@ Max Concurrent: 7 (Waves 1 & 2)
 
 ### Dependency Matrix
 
-| Task | Depends On | Blocks |
-|------|-----------|--------|
-| 1-6 | — | 7-30 |
-| 7-11 | 1-6 | 12-17, 18-24 |
-| 12-17 | 7-11 | 25-30 |
-| 18-24 | 7-11 | 25-30 |
-| 25-30 | 12-17, 18-24 | F1-F4 |
-| F1-F4 | 25-30 | — |
+| Task  | Depends On   | Blocks       |
+| ----- | ------------ | ------------ |
+| 1-6   | —            | 7-30         |
+| 7-11  | 1-6          | 12-17, 18-24 |
+| 12-17 | 7-11         | 25-30        |
+| 18-24 | 7-11         | 25-30        |
+| 25-30 | 12-17, 18-24 | F1-F4        |
+| F1-F4 | 25-30        | —            |
 
 ### Agent Dispatch Summary
 
@@ -272,32 +286,33 @@ Max Concurrent: 7 (Waves 1 & 2)
   - 选择 React + TypeScript 模板
   - 配置项目名称为 "mywork"
   - 验证项目可以成功运行 (`npm run tauri dev`)
-  
+
   **Must NOT do**:
   - 不要修改默认的 Vite 配置（留给 Task 2）
   - 不要添加额外依赖（留给 Task 5）
-  
+
   **Recommended Agent Profile**:
   - **Category**: `quick`
     - Reason: 标准的项目初始化，遵循官方模板
   - **Skills**: []
     - 无需特殊技能
-  
+
   **Parallelization**:
   - **Can Run In Parallel**: YES
   - **Parallel Group**: Wave 1 (with Tasks 2-6)
   - **Blocks**: All subsequent tasks
   - **Blocked By**: None
-  
+
   **References**:
   - Official docs: `https://tauri.app/v1/guides/getting-started/setup-vite/` - Tauri + Vite 设置指南
-  
+
   **Acceptance Criteria**:
   - [ ] 项目目录结构正确 (`src-tauri/`, `src/`, `package.json`)
   - [ ] `npm run tauri dev` 成功启动应用
   - [ ] React 应用在 http://localhost:1420 运行
-  
+
   **QA Scenarios**:
+
   ```
   Scenario: Project initialization succeeds
     Tool: Bash
@@ -309,7 +324,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       4. Check process is running: `pgrep -f "mywork"`
     Expected Result: Process running, no errors in output
     Evidence: .sisyphus/evidence/task-01-init.log
-  
+
   Scenario: React dev server starts
     Tool: Bash
     Steps:
@@ -331,30 +346,31 @@ Max Concurrent: 7 (Waves 1 & 2)
   - 配置 `vite.config.ts`（alias, build options）
   - 添加 `@types` 包（node, react, react-dom）
   - 验证 TypeScript 编译通过 (`tsc --noEmit`)
-  
+
   **Must NOT do**:
   - 不要添加路径别名（如果会导致复杂性）
-  
+
   **Recommended Agent Profile**:
   - **Category**: `quick`
     - Reason: 配置文件修改，简单快速
   - **Skills**: []
-  
+
   **Parallelization**:
   - **Can Run In Parallel**: YES
   - **Parallel Group**: Wave 1
   - **Blocks**: None (独立配置)
   - **Blocked By**: Task 1
-  
+
   **References**:
   - Vite docs: `https://vitejs.dev/config/` - Vite 配置选项
-  
+
   **Acceptance Criteria**:
   - [ ] `tsc --noEmit` 无错误
   - [ ] `npm run build` 成功
   - [ ] Path alias `@/*` 可用
-  
+
   **QA Scenarios**:
+
   ```
   Scenario: TypeScript compilation succeeds
     Tool: Bash
@@ -363,7 +379,7 @@ Max Concurrent: 7 (Waves 1 & 2)
     Expected Result: Exit code 0, no errors
     Evidence: .sisyphus/evidence/task-02-tsc.log
   ```
-  
+
   **Commit**: YES (with Task 1)
 
 - [x] 3. 配置 ESLint + Prettier
@@ -374,25 +390,26 @@ Max Concurrent: 7 (Waves 1 & 2)
   - 配置 `.prettierrc`（格式化规则）
   - 添加 `lint` 和 `format` npm scripts
   - 验证 `npm run lint` 通过
-  
+
   **Must NOT do**:
   - 不要添加过于严格的规则（影响开发效率）
-  
+
   **Recommended Agent Profile**:
   - **Category**: `quick`
   - **Skills**: []
-  
+
   **Parallelization**:
   - **Can Run In Parallel**: YES
   - **Parallel Group**: Wave 1
   - **Blocks**: None
   - **Blocked By**: Task 1
-  
+
   **Acceptance Criteria**:
   - [ ] `npm run lint` 通过
   - [ ] `npm run format` 成功
-  
+
   **QA Scenarios**:
+
   ```
   Scenario: Linting passes
     Tool: Bash
@@ -401,7 +418,7 @@ Max Concurrent: 7 (Waves 1 & 2)
     Expected Result: Exit code 0
     Evidence: .sisyphus/evidence/task-03-lint.log
   ```
-  
+
   **Commit**: YES (with Task 1)
 
 - [x] 4. 初始化 Git 仓库 + .gitignore
@@ -418,27 +435,28 @@ Max Concurrent: 7 (Waves 1 & 2)
     - `*.db` (SQLite 数据库文件)
     - `outputs/` (任务输出文件)
   - 初始提交: `git add . && git commit -m "Initial commit"`
-  
+
   **Must NOT do**:
   - 不要提交敏感文件
-  
+
   **Recommended Agent Profile**:
   - **Category**: `quick`
   - **Skills**: [`git-master`]
     - Git 操作最佳实践
-  
+
   **Parallelization**:
   - **Can Run In Parallel**: YES
   - **Parallel Group**: Wave 1
   - **Blocks**: None
   - **Blocked By**: Task 1
-  
+
   **Acceptance Criteria**:
   - [ ] Git 仓库已初始化
   - [ ] `.gitignore` 包含所有必要规则
   - [ ] 初始提交存在
-  
+
   **QA Scenarios**:
+
   ```
   Scenario: Git repository initialized
     Tool: Bash
@@ -446,7 +464,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       1. `git status`
     Expected Result: Shows "On branch main", initial commit exists
     Evidence: .sisyphus/evidence/task-04-git-status.txt
-  
+
   Scenario: .gitignore excludes build artifacts
     Tool: Bash
     Steps:
@@ -456,7 +474,7 @@ Max Concurrent: 7 (Waves 1 & 2)
     Expected Result: No files from dist/, target/, node_modules/ shown
     Evidence: .sisyphus/evidence/task-04-gitignore.txt
   ```
-  
+
   **Commit**: YES
   - Message: `chore: initialize git repository with .gitignore`
   - Files: `.gitignore`
@@ -481,31 +499,32 @@ Max Concurrent: 7 (Waves 1 & 2)
     tauri = { version = "1.5", features = ["shell-open", "system-tray"] }
     ```
   - 验证所有依赖安装成功: `npm install && cargo build`
-  
+
   **Must NOT do**:
   - 不要安装 Node.js 后端依赖（如 node-cron, better-sqlite3） - 后端纯 Rust
-  
+
   **Recommended Agent Profile**:
   - **Category**: `quick`
   - **Skills**: []
-  
+
   **Parallelization**:
   - **Can Run In Parallel**: YES
   - **Parallel Group**: Wave 1
   - **Blocks**: Wave 2-5
   - **Blocked By**: Task 1
-  
+
   **References**:
   - tokio-cron-scheduler: `https://docs.rs/tokio-cron-scheduler/`
   - sqlx: `https://docs.rs/sqlx/`
   - Tauri docs: `https://tauri.app/v1/guides/`
-  
+
   **Acceptance Criteria**:
   - [ ] `Cargo.toml` 包含所有 Rust 依赖
   - [ ] `npm install` 无错误
   - [ ] `cargo build` 无错误
-  
+
   **QA Scenarios**:
+
   ```
   Scenario: Rust dependencies compiled successfully
     Tool: Bash
@@ -513,7 +532,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       1. `cargo build --manifest-path=src-tauri/Cargo.toml`
     Expected Result: Exit code 0, no compilation errors
     Evidence: .sisyphus/evidence/task-05-cargo-build.log
-  
+
   Scenario: All crates are available
     Tool: Bash
     Steps:
@@ -521,7 +540,7 @@ Max Concurrent: 7 (Waves 1 & 2)
     Expected Result: Shows dependency tree with versions
     Evidence: .sisyphus/evidence/task-05-deps-tree.txt
   ```
-  
+
   **Commit**: YES (with Task 1)
 
 - [x] 6. 配置 Tauri 系统托盘
@@ -549,12 +568,13 @@ Max Concurrent: 7 (Waves 1 & 2)
     ```
   - 创建托盘图标（32x32 PNG）
   - 在 `src-tauri/src/main.rs` 添加托盘逻辑:
+
     ```rust
     use tauri::{Manager, SystemTray};
-    
+
     fn main() {
       let tray = SystemTray::new();
-      
+
       tauri::Builder::default()
         .system_tray(tray)
         .on_system_tray_event(|app, event| {
@@ -564,29 +584,31 @@ Max Concurrent: 7 (Waves 1 & 2)
         .expect("error while running tauri application");
     }
     ```
+
   - 验证托盘图标显示
-  
+
   **Must NOT do**:
   - 不要添加复杂的托盘菜单（留给后续）
-  
+
   **Recommended Agent Profile**:
   - **Category**: `quick`
   - **Skills**: []
-  
+
   **Parallelization**:
   - **Can Run In Parallel**: YES
   - **Parallel Group**: Wave 1
   - **Blocks**: None
   - **Blocked By**: Task 1
-  
+
   **References**:
   - Tauri tray docs: `https://tauri.app/v1/guides/features/system-tray/`
-  
+
   **Acceptance Criteria**:
   - [ ] 托盘图标在 macOS 菜单栏可见
   - [ ] 点击图标可以打开/关闭窗口
-  
+
   **QA Scenarios**:
+
   ```
   Scenario: System tray icon appears in menu bar
     Tool: interactive_bash (tmux)
@@ -598,7 +620,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       4. Take screenshot: `screencapture -x .sisyphus/evidence/task-06-menubar.png`
     Expected Result: osascript finds "mywork" process, screenshot shows tray icon
     Evidence: .sisyphus/evidence/task-06-menubar.png
-  
+
   Scenario: Clicking tray icon opens window
     Tool: interactive_bash (tmux)
     Steps:
@@ -609,7 +631,7 @@ Max Concurrent: 7 (Waves 1 & 2)
     Expected Result: Window visible = true
     Evidence: .sisyphus/evidence/task-06-window-open.txt
   ```
-  
+
   **Commit**: YES
   - Message: `feat: add system tray support`
   - Files: `src-tauri/tauri.conf.json`, `src-tauri/src/main.rs`, `src-tauri/icons/`
@@ -622,6 +644,7 @@ Max Concurrent: 7 (Waves 1 & 2)
 
   **What to do**:
   - 设计并文档化数据库 schema:
+
     ```sql
     CREATE TABLE tasks (
       id TEXT PRIMARY KEY,
@@ -635,7 +658,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
-    
+
     CREATE TABLE executions (
       id TEXT PRIMARY KEY,
       task_id TEXT NOT NULL,
@@ -647,31 +670,33 @@ Max Concurrent: 7 (Waves 1 & 2)
       error_message TEXT,
       FOREIGN KEY (task_id) REFERENCES tasks(id)
     );
-    
+
     CREATE INDEX idx_executions_task_id ON executions(task_id);
     CREATE INDEX idx_executions_started_at ON executions(started_at);
     ```
+
   - 创建 `src-tauri/src/db/schema.sql` 文件
   - 添加 schema 文档到 README
-  
+
   **Must NOT do**:
   - 不要实现数据库操作（留给 Task 8-11）
-  
+
   **Recommended Agent Profile**:
   - **Category**: `quick`
   - **Skills**: []
-  
+
   **Parallelization**:
   - **Can Run In Parallel**: YES
   - **Parallel Group**: Wave 2
   - **Blocks**: Task 8-11
   - **Blocked By**: Task 1-6
-  
+
   **Acceptance Criteria**:
   - [ ] `schema.sql` 文件存在且 SQL 语法正确
   - [ ] README 包含 schema 说明
-  
+
   **QA Scenarios**:
+
   ```
   Scenario: Schema is valid SQL
     Tool: Bash
@@ -680,7 +705,7 @@ Max Concurrent: 7 (Waves 1 & 2)
     Expected Result: Exit code 0, no syntax errors
     Evidence: .sisyphus/evidence/task-07-schema-valid.log
   ```
-  
+
   **Commit**: YES
   - Message: `docs: add database schema design`
   - Files: `src-tauri/src/db/schema.sql`, `README.md`
@@ -688,34 +713,31 @@ Max Concurrent: 7 (Waves 1 & 2)
 - [x] 8-11. 数据层实现 (数据库、Task CRUD、Execution CRUD、输出存储)
 
   **What to do**: 实现完整的数据持久化层，包括数据库连接、任务和执行记录的 CRUD 操作、输出文件存储。使用 TDD 开发。
-  
-  **详细任务**:
-  8. SQLite 数据库连接和初始化 (TDD)
-  9. Task CRUD 操作 (TDD)
-  10. Execution CRUD 操作 (TDD)
-  11. 输出文件存储 (TDD)
-  
+
+  **详细任务**: 8. SQLite 数据库连接和初始化 (TDD) 9. Task CRUD 操作 (TDD) 10. Execution CRUD 操作 (TDD) 11. 输出文件存储 (TDD)
+
   **Must NOT do**:
   - 不要在数据库中存储完整输出（仅存路径）
   - 不要跳过测试
-  
+
   **Recommended Agent Profile**:
   - **Category**: `deep` (T9), `unspecified-high` (T8, T10, T11)
   - **Skills**: []
-  
+
   **Parallelization**:
   - **Can Run In Parallel**: YES
   - **Parallel Group**: Wave 2
   - **Blocks**: Wave 3-5
   - **Blocked By**: Task 1-6, Task 7
-  
+
   **Acceptance Criteria**:
   - [ ] 所有数据层测试通过 (`cargo test db::`)
   - [ ] 数据库文件正确创建在 app data directory
   - [ ] CRUD 操作全部实现且测试覆盖
   - [ ] `.gitignore` 包含 `*.db` 和 `outputs/`
-  
+
   **QA Scenarios**:
+
   ```
   Scenario: All database tests pass
     Tool: Bash
@@ -723,7 +745,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       1. `cargo test db::`
     Expected Result: All tests pass, 0 failures
     Evidence: .sisyphus/evidence/task-08-11-db-tests.log
-  
+
   Scenario: Database file created in correct location
     Tool: interactive_bash
     Steps:
@@ -733,7 +755,7 @@ Max Concurrent: 7 (Waves 1 & 2)
     Expected Result: mywork.db file exists
     Evidence: .sisyphus/evidence/task-08-11-db-file.txt
   ```
-  
+
   **Commit**: YES
   - Message: `feat: implement data layer with SQLite and TDD`
   - Files: `src-tauri/src/db/**/*.rs`, `src-tauri/src/models/**/*.rs`, `src-tauri/src/storage/**/*.rs`
@@ -749,6 +771,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   - **Category**: `deep`
   - **Commit**: `feat: implement cron expression parser`
   - **QA Scenarios**:
+
     ```
     Scenario: Valid cron expressions are accepted
       Tool: Bash
@@ -756,7 +779,7 @@ Max Concurrent: 7 (Waves 1 & 2)
         1. `cargo test cron_parser::test_valid_cron -- --nocapture`
       Expected Result: All valid expressions ("*/5 * * * *", "0 9 * * 1-5") pass
       Evidence: .sisyphus/evidence/task-12-valid-cron.log
-    
+
     Scenario: Invalid cron expressions are rejected
       Tool: Bash
       Steps:
@@ -852,6 +875,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   - **Design**: 原生 macOS 风格（SF Pro 字体、系统色彩）
   - **Commit**: `feat: implement task list component`
   - **QA Scenarios**:
+
     ```
     Scenario: Task list renders with correct macOS styling
       Tool: Bash + Playwright
@@ -861,7 +885,7 @@ Max Concurrent: 7 (Waves 1 & 2)
         3. `npx playwright test tests/task-list.spec.ts`
       Expected Result: Component uses SF Pro font, system colors, no generic styling
       Evidence: .sisyphus/evidence/task-18-tasklist-screenshot.png
-    
+
     Scenario: User can toggle task enable/disable
       Tool: interactive_bash
       Steps:
@@ -878,6 +902,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   - **Category**: `visual-engineering`
   - **Commit**: `feat: implement task form component`
   - **QA Scenarios**:
+
     ```
     Scenario: Form validates required fields
       Tool: Playwright
@@ -887,7 +912,7 @@ Max Concurrent: 7 (Waves 1 & 2)
         3. Check error messages visible
       Expected Result: Shows "Name required", "Prompt required" errors
       Evidence: .sisyphus/evidence/task-19-form-validation.png
-    
+
     Scenario: Form creates task in database
       Tool: interactive_bash
       Steps:
@@ -898,12 +923,13 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-19-create-task.txt
     ```
 
-- [ ] 20. 实现 Cron 表达式输入组件 (TDD)
+- [x] 20. 实现 Cron 表达式输入组件 (TDD)
   - **What**: 创建 `CronInput.tsx` 支持 cron 表达式输入和预览
   - **TDD**: 测试输入验证
   - **Category**: `visual-engineering`
   - **Commit**: `feat: implement cron input component`
   - **QA Scenarios**:
+
     ```
     Scenario: Valid cron shows next run time
       Tool: Playwright
@@ -912,7 +938,7 @@ Max Concurrent: 7 (Waves 1 & 2)
         2. Check preview text
       Expected Result: Shows "Next run: in ~5 minutes"
       Evidence: .sisyphus/evidence/task-20-cron-preview.png
-    
+
     Scenario: Invalid cron shows error
       Tool: Playwright
       Steps:
@@ -979,6 +1005,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   - **Category**: `visual-engineering`
   - **Commit**: `feat: implement tray menu and main window`
   - **QA Scenarios**:
+
     ```
     Scenario: Tray menu shows task count
       Tool: interactive_bash
@@ -987,7 +1014,7 @@ Max Concurrent: 7 (Waves 1 & 2)
         2. Check tray menu item: `osascript -e 'tell application "System Events" to get title of menu bar item 1 of menu bar 2'`
       Expected Result: Menu shows "3 Tasks"
       Evidence: .sisyphus/evidence/task-24-tray-count.txt
-    
+
     Scenario: Clicking tray icon opens window
       Tool: interactive_bash
       Steps:
@@ -1042,6 +1069,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   - **Category**: `unspecified-high`
   - **Commit**: `test: add E2E test for task execution`
   - **QA Scenarios**:
+
     ```
     Scenario: Task executes and shows output
       Tool: interactive_bash + Playwright
@@ -1053,7 +1081,7 @@ Max Concurrent: 7 (Waves 1 & 2)
         5. Click to view output
       Expected Result: Output visible, status=success
       Evidence: .sisyphus/evidence/task-27-e2e-exec.png
-    
+
     Scenario: Task timeout kills process
       Tool: interactive_bash
       Steps:
@@ -1086,6 +1114,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   - **Category**: `deep`
   - **Commit**: `perf: optimize application performance`
   - **QA Scenarios**:
+
     ```
     Scenario: Memory usage under limit
       Tool: Bash
@@ -1094,7 +1123,7 @@ Max Concurrent: 7 (Waves 1 & 2)
         2. Check memory: `ps -o rss= -p $(pgrep -f mywork) | awk '{print $1/1024 "MB"}'`
       Expected Result: < 100MB
       Evidence: .sisyphus/evidence/task-29-memory.txt
-    
+
     Scenario: Startup time under limit
       Tool: Bash
       Steps:
@@ -1108,6 +1137,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   - **Category**: `writing`
   - **Commit**: `docs: add comprehensive README and cleanup`
   - **QA Scenarios**:
+
     ```
     Scenario: README contains all sections
       Tool: Bash
@@ -1116,7 +1146,7 @@ Max Concurrent: 7 (Waves 1 & 2)
         2. All code blocks are valid
       Expected Result: All sections present, no broken links
       Evidence: .sisyphus/evidence/task-30-readme-check.txt
-    
+
     Scenario: Gitignore excludes all artifacts
       Tool: Bash
       Steps:
@@ -1172,6 +1202,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   - **Category**: `unspecified-high`
   - **Commit**: `test: add E2E test for task execution`
   - **QA Scenarios**:
+
     ```
     Scenario: Task executes on schedule
       Tool: interactive_bash
@@ -1181,7 +1212,7 @@ Max Concurrent: 7 (Waves 1 & 2)
         3. Check execution history
       Expected Result: Execution record appears with "success" status
       Evidence: .sisyphus/evidence/task-27-execution.txt
-    
+
     Scenario: Task timeout kills process
       Tool: interactive_bash
       Steps:
@@ -1214,6 +1245,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   - **Category**: `deep`
   - **Commit**: `perf: optimize application performance`
   - **QA Scenarios**:
+
     ```
     Scenario: Memory usage under 100MB
       Tool: Bash
@@ -1223,7 +1255,7 @@ Max Concurrent: 7 (Waves 1 & 2)
         3. Check memory: `ps -o rss= -p $(pgrep -f mywork)`
       Expected Result: RSS < 100000 (100MB in KB)
       Evidence: .sisyphus/evidence/task-29-memory.txt
-    
+
     Scenario: App startup under 1 second
       Tool: Bash
       Steps:
@@ -1238,6 +1270,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   - **Category**: `writing`
   - **Commit**: `docs: add comprehensive README and cleanup`
   - **QA Scenarios**:
+
     ```
     Scenario: README contains required sections
       Tool: Bash
@@ -1245,7 +1278,7 @@ Max Concurrent: 7 (Waves 1 & 2)
         1. `grep -E "## Installation|## Usage|## Architecture" README.md`
       Expected Result: All 3 sections found
       Evidence: .sisyphus/evidence/task-30-readme-check.txt
-    
+
     Scenario: No build artifacts in git status
       Tool: Bash
       Steps:
@@ -1262,20 +1295,20 @@ Max Concurrent: 7 (Waves 1 & 2)
 > 4 review agents run in PARALLEL. ALL must APPROVE. Rejection → fix → re-run.
 
 - [ ] F1. **Plan Compliance Audit** — `oracle`
-  Read the plan end-to-end. For each "Must Have": verify implementation exists. For each "Must NOT Have": search codebase for forbidden patterns. Check evidence files exist. Compare deliverables against plan.
-  Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
+      Read the plan end-to-end. For each "Must Have": verify implementation exists. For each "Must NOT Have": search codebase for forbidden patterns. Check evidence files exist. Compare deliverables against plan.
+      Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
 
 - [ ] F2. **Code Quality Review** — `unspecified-high`
-  Run `cargo test` + `npm test` + `cargo clippy` + `npm run lint`. Review all changed files for: `as any`/`@ts-ignore`, empty catches, console.log in prod, commented-out code, unused imports. Check AI slop: excessive comments, over-abstraction, generic names.
-  Output: `Build [PASS/FAIL] | Lint [PASS/FAIL] | Tests [N pass/N fail] | Files [N clean/N issues] | VERDICT`
+      Run `cargo test` + `npm test` + `cargo clippy` + `npm run lint`. Review all changed files for: `as any`/`@ts-ignore`, empty catches, console.log in prod, commented-out code, unused imports. Check AI slop: excessive comments, over-abstraction, generic names.
+      Output: `Build [PASS/FAIL] | Lint [PASS/FAIL] | Tests [N pass/N fail] | Files [N clean/N issues] | VERDICT`
 
 - [ ] F3. **Real Manual QA** — `unspecified-high` (+ `playwright` skill)
-  Start from clean state. Execute EVERY QA scenario from EVERY task. Test cross-task integration. Test edge cases: empty state, invalid input, rapid actions. Save to `.sisyphus/evidence/final-qa/`.
-  Output: `Scenarios [N/N pass] | Integration [N/N] | Edge Cases [N tested] | VERDICT`
+      Start from clean state. Execute EVERY QA scenario from EVERY task. Test cross-task integration. Test edge cases: empty state, invalid input, rapid actions. Save to `.sisyphus/evidence/final-qa/`.
+      Output: `Scenarios [N/N pass] | Integration [N/N] | Edge Cases [N tested] | VERDICT`
 
 - [ ] F4. **Scope Fidelity Check** — `deep`
-  For each task: read "What to do", read actual diff. Verify 1:1 — everything in spec was built, nothing beyond spec was built. Check "Must NOT do" compliance. Detect cross-task contamination.
-  Output: `Tasks [N/N compliant] | Contamination [CLEAN/N issues] | Unaccounted [CLEAN/N files] | VERDICT`
+      For each task: read "What to do", read actual diff. Verify 1:1 — everything in spec was built, nothing beyond spec was built. Check "Must NOT do" compliance. Detect cross-task contamination.
+      Output: `Tasks [N/N compliant] | Contamination [CLEAN/N issues] | Unaccounted [CLEAN/N files] | VERDICT`
 
 ---
 
@@ -1310,6 +1343,7 @@ Max Concurrent: 7 (Waves 1 & 2)
 ## Success Criteria
 
 ### Verification Commands
+
 ```bash
 # Build
 npm run tauri build  # Expected: dist/bundle/macos/mywork.app
@@ -1332,6 +1366,7 @@ npm run lint        # Expected: No errors
 ```
 
 ### Final Checklist
+
 - [ ] All "Must Have" present
 - [ ] All "Must NOT Have" absent
 - [ ] All tests pass (cargo test + npm test + e2e)

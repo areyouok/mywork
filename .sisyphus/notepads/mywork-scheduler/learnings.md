@@ -749,3 +749,82 @@ src/
 - Input 使用系统边框和圆角
 - Focus ring 使用 accent-color
 - 禁用状态使用 opacity: 0.5
+
+## Task 20: CronInput 组件 (2024-03-09)
+
+### TDD 开发流程
+- **RED 阶段**: 先编写 26 个测试用例,覆盖:
+  - 渲染测试 (5个): 输入框、初始值、预览、标签、帮助文本
+  - 验证测试 (8个): 无效表达式、字段数量、有效表达式、范围、列表、步骤、aria-invalid、错误关联
+  - 预览测试 (4个): 下次运行时间、每分钟、每天、无效表达式
+  - 交互测试 (2个): onChange 回调、值更新
+  - 禁用状态测试 (2个): 禁用输入、禁用预览
+  - 错误状态测试 (3个): 自定义错误、错误优先级、aria-invalid
+  - 无障碍测试 (2个): label 关联、必填标记
+- **GREEN 阶段**: 实现最小代码使测试通过
+- **REFACTOR 阶段**: 添加 macOS 风格样式
+
+### Cron 库使用
+- **cron npm 包**: 用于计算下次运行时间
+- **5-field 格式**: 用户输入 5 字段 (minute hour dom month dow)
+- **6-field 转换**: cron 库需要 6 字段,需要 prepend "0 "
+- **CronJob 构造**: `new CronJob(expression, callback, null, false, ...)`
+- **nextDate()**: 获取下次运行的 Luxon DateTime 对象
+
+### 验证逻辑
+- **前端验证**: 简单验证 5 个字段、格式正确性
+- **错误消息**: 统一使用 "Invalid cron expression"
+- **后端验证**: 完整验证在后端 (cron_parser.rs)
+- **实时验证**: 每次输入都进行验证
+
+### 下次运行时间预览
+- **时间格式化**: formatTimeUntil 函数处理多种情况:
+  - "in less than 1 minute" (< 1分钟)
+  - "in 1 minute" (1分钟)
+  - "in X minutes" (多分钟)
+  - "in 1 hour" (1小时)
+  - "in X hours" (多小时)
+  - "in 1 day" (1天)
+  - "in X days" (多天)
+- **测试技巧**: 正则表达式需要匹配所有可能的格式
+
+### React Testing Library 技巧
+- **受控组件测试**: 创建 TestWrapper 组件管理状态
+- **useMemo**: 用于缓存验证结果和下次运行时间计算
+- **动态 ID**: 使用 Math.random() 生成唯一 inputId
+- **aria-describedby**: 错误消息通过 ID 关联到输入框
+
+### 组件设计模式
+- **Props 接口**: value, onChange, error (可选), disabled (可选)
+- **错误优先级**: externalError || internalError
+- **条件渲染**: 只有有效表达式且未禁用时才显示预览
+- **状态管理**: internalError 通过 useEffect 同步更新
+
+### macOS 原生风格
+- **设计系统变量**: 使用 --color-*, --spacing-*, --radius-* 等
+- **输入框样式**: 系统边框、圆角、focus ring
+- **预览区域**: 灰色背景、圆角边框
+- **Dark Mode**: 通过 CSS 变量自动支持
+
+### 测试修复
+- **时间格式匹配**: 正则表达式需要考虑 "less than 1 minute" 特殊情况
+- **正则表达式**: `/next run.*in (less than 1 minute|\d+ minutes?)/i`
+- **测试稳定性**: 时间相关测试需要考虑边界情况
+
+### 文件结构
+```
+src/components/
+├── CronInput.tsx         # 组件实现 (125 行)
+├── CronInput.test.tsx    # 测试文件 (272 行, 26 个测试)
+└── CronInput.css         # 样式文件 (110 行)
+```
+
+### Verified
+- [x] 所有 26 个 CronInput 测试通过
+- [x] 所有 63 个总测试通过
+- [x] ESLint 无错误
+- [x] TypeScript 类型检查通过
+- [x] 实时验证 cron 表达式
+- [x] 显示下次运行时间预览
+- [x] 支持 Dark Mode
+- [x] 无障碍访问 (aria labels、错误关联)
