@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useId } from 'react';
 import './SimpleScheduleInput.css';
 
 interface SimpleScheduleInputProps {
@@ -70,7 +70,7 @@ export function SimpleScheduleInput({
   error: externalError,
   disabled,
 }: SimpleScheduleInputProps) {
-  const inputId = useMemo(() => `simple-schedule-${Math.random().toString(36).substr(2, 9)}`, []);
+  const inputId = useId();
 
   const parsed = useMemo(() => parseSchedule(value), [value]);
   const [scheduleType, setScheduleType] = useState<ScheduleType>(parsed.type);
@@ -80,6 +80,7 @@ export function SimpleScheduleInput({
   const [weeklyDay, setWeeklyDay] = useState('monday');
   const [weeklyTime, setWeeklyTime] = useState('09:00');
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setScheduleType(parsed.type);
 
@@ -95,6 +96,7 @@ export function SimpleScheduleInput({
       }
     }
   }, [parsed]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newType = e.target.value as ScheduleType;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo, useId } from 'react';
 import { CronJob } from 'cron';
 import './CronInput.css';
 
@@ -43,7 +43,7 @@ function validateCronExpression(expression: string): ValidationResult {
       false
     );
     return { isValid: true };
-  } catch (error) {
+  } catch {
     return {
       isValid: false,
       error: 'Invalid cron expression',
@@ -94,8 +94,7 @@ function formatTimeUntil(date: Date): string {
 }
 
 export function CronInput({ value, onChange, error: externalError, disabled }: CronInputProps) {
-  const [internalError, setInternalError] = useState<string | undefined>();
-  const inputId = useMemo(() => `cron-input-${Math.random().toString(36).substr(2, 9)}`, []);
+  const inputId = useId();
 
   const validation = useMemo(() => {
     return validateCronExpression(value);
@@ -108,15 +107,8 @@ export function CronInput({ value, onChange, error: externalError, disabled }: C
     return getNextRunTime(value);
   }, [value, validation.isValid, disabled]);
 
-  useEffect(() => {
-    if (!value || value.trim() === '') {
-      setInternalError(undefined);
-    } else if (!validation.isValid) {
-      setInternalError(validation.error);
-    } else {
-      setInternalError(undefined);
-    }
-  }, [value, validation]);
+  const internalError =
+    !value || value.trim() === '' ? undefined : !validation.isValid ? validation.error : undefined;
 
   const displayError = externalError || internalError;
   const hasError = Boolean(displayError);

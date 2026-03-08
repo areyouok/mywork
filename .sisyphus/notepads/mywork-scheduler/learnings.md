@@ -1165,3 +1165,129 @@ src/components/
 - [x] 空状态显示
 - [x] macOS 风格样式 (Dark Mode 支持)
 - [x] 使用设计系统 CSS 变量
+
+## Task 24: App 主应用布局 (2024-03-09)
+
+### TDD 开发流程
+- **RED 阶段**: 先编写 15 个测试用例,覆盖:
+  - 渲染测试 (5个): header、sidebar、task count、empty state、任务列表
+  - 任务选择测试 (1个): 点击侧边栏任务项
+  - 视图切换测试 (4个): 创建任务、编辑任务、查看历史、返回列表
+  - 交互测试 (5个): toggle 启用/禁用、删除确认/取消、状态指示器、选中样式
+- **GREEN 阶段**: 实现最小代码使测试通过
+- **REFACTOR 阶段**: 优化布局和样式
+
+### 组件设计模式
+- **状态管理**:
+  - tasks: 任务列表 (mock 数据)
+  - executions: 执行历史 (mock 数据)
+  - selectedTaskId: 当前选中的任务 ID
+  - viewMode: 视图模式 ('list' | 'form' | 'history')
+  - editingTask: 正在编辑的任务 (null = 创建模式)
+- **布局结构**:
+  - Header: 标题栏 + 新建任务按钮
+  - Sidebar: 任务列表 (280px 固定宽度)
+  - Content: 根据视图模式显示不同内容
+    - form: TaskForm 组件
+    - list + selectedTask: 任务详情 (TaskList 组件)
+    - history + selectedTask: 执行历史 (ExecutionHistory 组件)
+    - list + !selectedTask: 空状态提示
+- **回调函数**:
+  - handleTaskSelect: 选择任务
+  - handleCreateTask: 创建新任务 (切换到 form 视图)
+  - handleEditTask: 编辑任务 (切换到 form 视图,设置 editingTask)
+  - handleViewHistory: 查看历史 (切换到 history 视图)
+  - handleToggleTask: 启用/禁用任务
+  - handleDeleteTask: 删除任务
+  - handleSubmitTask: 提交任务表单 (创建/更新)
+  - handleCancelForm: 取消表单
+  - handleViewOutput: 查看输出 (console.log placeholder)
+
+### React Testing Library 技巧
+- **多个相同元素问题**: 使用更精确的选择器
+  - 问题: 两个 Delete 按钮 (panel header + TaskList 内部)
+  - 解决方案: 移除 panel header 的 Delete 按钮,统一使用 TaskList 内部的删除逻辑
+  - 问题: 多个相同名称的 heading (h2 + h3)
+  - 解决方案: 使用 `getByRole('heading', { level: 2, name: /pattern/i })`
+- **异步测试**: 使用 `userEvent.setup()` 和 `await user.click()`
+- **状态更新**: 删除任务后验证任务计数更新
+- **选中状态**: 验证 CSS class (`toHaveClass('selected')`)
+
+### 布局实现细节
+- **Flexbox 布局**:
+  - `.app`: `flex-direction: column`, `height: 100vh`
+  - `.app-main`: `display: flex`, `flex: 1`
+  - `.app-sidebar`: 固定宽度 280px
+  - `.app-content`: `flex: 1` (占据剩余空间)
+- **侧边栏任务项**:
+  - 状态指示器: 8px 圆点 (绿色=启用,灰色=禁用)
+  - 选中样式: 蓝色背景,白色文字
+  - hover 效果: 背景色变化
+- **内容面板**:
+  - panel-header: 固定在顶部,显示标题和操作按钮
+  - panel-body: 可滚动区域,显示具体内容
+- **空状态**:
+  - 大图标 (64px)
+  - 居中布局
+  - 提示文字
+
+### macOS 原生风格
+- **设计系统变量**: 使用 `--font-*`, `--text-*`, `--bg-*`, `--space-*`, `--radius-*`, `--shadow-*` 等
+- **Header 样式**:
+  - 白色背景 (Dark Mode: 深灰)
+  - 底部边框和阴影
+  - 固定在顶部 (z-index)
+- **Sidebar 样式**:
+  - 浅灰色背景 (Dark Mode: 中灰)
+  - 右侧边框分隔
+  - 任务计数徽章 (圆角、背景色)
+- **Button 样式**:
+  - btn-primary: 蓝色背景 (系统蓝)
+  - btn-secondary: 灰色背景
+  - btn-danger: 红色背景 (系统红)
+  - hover/active 状态颜色变化
+
+### Mock 数据设计
+- **mockTasks**: 2 个示例任务
+  - Daily Code Review: simple_schedule, enabled, timeout=300
+  - Weekly Report: cron_expression, disabled, timeout=600
+- **mockExecutions**: 3 条执行记录
+  - success: 2 小时前,持续时间 5 分钟
+  - failed: 26 小时前,错误消息
+  - running: 5 分钟前,仍在运行
+- **目的**: 开发时提供测试数据,Task 25 将替换为真实 API
+
+### 文件结构
+```
+src/
+├── App.tsx               # 主应用组件 (260 行)
+├── App.css               # 应用样式 (274 行)
+├── App.test.tsx          # 测试文件 (160 行, 15 个测试)
+├── components/
+│   ├── TaskList.tsx      # 任务列表组件
+│   ├── TaskForm.tsx      # 任务表单组件
+│   └── ExecutionHistory.tsx  # 执行历史组件
+└── types/
+    ├── task.ts           # Task 类型定义
+    └── execution.ts      # Execution 类型定义
+```
+
+### 测试修复记录
+1. **多个 Delete 按钮问题**: 移除 panel header 的 Delete 按钮
+2. **多个 heading 问题**: 使用 `level: 2` 参数精确查询
+3. **选中状态验证**: 使用 `closest('.sidebar-task-item')` 获取父元素
+4. **删除确认测试**: 点击确认后验证任务数减少
+
+### Verified
+- [x] 所有 15 个 App 测试通过
+- [x] 所有 134 个总测试通过
+- [x] TypeScript 类型检查通过
+- [x] 主应用布局正确
+- [x] 任务选择功能正常
+- [x] 视图切换正常 (list/form/history)
+- [x] 任务启用/禁用功能正常
+- [x] 删除功能带确认
+- [x] macOS 风格样式 (Dark Mode 支持)
+- [x] 响应式布局 (sidebar 固定宽度,content 自适应)
+- [x] 空状态显示正确
+- [x] Mock 数据用于开发

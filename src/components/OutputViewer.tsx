@@ -33,7 +33,6 @@ export function OutputViewer({ content, isMarkdown = true }: OutputViewerProps) 
     <div className="output-viewer">
       <div className="output-viewer-content">
         <ReactMarkdown
-          children={content}
           components={{
             code({ className, children, ...props }) {
               const match = /language-(\w+)/.exec(className || '');
@@ -48,16 +47,15 @@ export function OutputViewer({ content, isMarkdown = true }: OutputViewerProps) 
               }
 
               return (
-                <SyntaxHighlighter
-                  style={vscDarkPlus}
-                  language={match[1]}
-                  PreTag="div"
-                  children={String(children).replace(/\n$/, '')}
-                />
+                <SyntaxHighlighter style={vscDarkPlus} language={match[1]} PreTag="div">
+                  {String(children).replace(/\n$/, '')}
+                </SyntaxHighlighter>
               );
             },
           }}
-        />
+        >
+          {content}
+        </ReactMarkdown>
       </div>
     </div>
   );
