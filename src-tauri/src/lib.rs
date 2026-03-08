@@ -6,6 +6,7 @@ use tauri::{
 
 pub mod db;
 pub mod models;
+pub mod opencode;
 pub mod scheduler;
 pub mod storage;
 

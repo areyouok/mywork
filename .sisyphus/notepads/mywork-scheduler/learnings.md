@@ -565,3 +565,56 @@
 - [x] Process output is captured correctly
 - [x] Error handling covers all edge cases
 - [x] Concurrent execution works correctly
+
+## Task 17: OpenCode CLI Integration
+
+### What was done:
+1. Created opencode module structure (`src-tauri/src/opencode/mod.rs`, `executor.rs`)
+2. Defined `OpenCodeError` enum with 5 variants: ExecutionFailed, Timeout, SpawnFailed, InvalidSession, OutputParseFailed
+3. Defined `OpenCodeOutput` struct with session_id, stdout, stderr, success, timed_out fields
+4. Defined `OpenCodeConfig` struct with binary_path and default_timeout_secs
+5. Implemented `SessionManager` struct for session lifecycle management
+6. Implemented `run_opencode_task(prompt, session_id, timeout_secs, config)` async function
+7. Implemented `create_session(config)` async function for creating new sessions
+8. Implemented `run_mock_opencode_task` for testing without real CLI
+9. Implemented `parse_session_from_output` helper for parsing session IDs
+10. Reused `run_with_timeout` from Task 16 for timeout control
+11. Wrote 18 comprehensive tests (17 pass, 1 ignored integration test)
+
+### Key Points:
+- **OpenCode CLI arguments**: `--session <id>` for session reuse, `--prompt <text>` for task prompt
+- **Session ID format**: `sess_<uuid>` (e.g., `sess_abc123-def456-...`)
+- **Session parsing**: OpenCode outputs session ID in format "Session: sess_xxx"
+- **Error conversion**: `From<TimeoutError>` trait implemented for seamless error handling
+- **Session lifecycle**: `SessionManager` provides create, get, set, clear, get_or_create operations
+- **Default config**: binary_path="opencode", default_timeout_secs=300
+- **Mock testing**: `run_mock_opencode_task` simulates execution without CLI
+
+### Implementation Details:
+- **Session reuse**: Pass `Some(session_id)` to reuse existing session, `None` creates new
+- **Output structure**: OpenCodeOutput serializable with serde for JSON storage
+- **Timeout integration**: Uses `run_with_timeout` from scheduler::timeout module
+- **Modular design**: executor.rs contains core logic, mod.rs exports public API
+
+### Testing Patterns:
+- **Session manager tests**: new, create, set, clear, get_or_create operations
+- **Mock task tests**: new session creation, existing session reuse
+- **Output parsing tests**: valid/invalid session formats
+- **Error handling tests**: TimeoutError conversion, error display formatting
+- **Serialization tests**: OpenCodeOutput JSON roundtrip
+- **Integration test**: Marked with `#[ignore]` as it requires real opencode binary
+
+### Module Structure:
+- `opencode/mod.rs` - Public API exports
+- `opencode/executor.rs` - Core implementation with types and functions (520+ lines)
+- Exports: `OpenCodeConfig`, `OpenCodeError`, `OpenCodeOutput`, `SessionManager`, `run_opencode_task`, `create_session`
+
+### Verified:
+- [x] All 17 opencode tests pass (1 ignored integration test)
+- [x] All 168 total lib tests pass
+- [x] Build succeeds without errors
+- [x] Doctests compile (except pre-existing job_scheduler issue)
+- [x] Session lifecycle management works correctly
+- [x] Mock task execution for testing
+- [x] Timeout integration working
+- [x] Error handling comprehensive
