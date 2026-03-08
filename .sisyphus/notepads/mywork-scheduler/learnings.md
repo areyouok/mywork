@@ -710,3 +710,42 @@ src/
 - [x] 删除功能带确认
 - [x] macOS 风格样式（Dark Mode 支持）
 - [x] 无障碍访问（aria labels、键盘导航）
+
+## Task 19 - TaskForm 组件 (2024-03-08)
+
+### TDD 开发流程
+- **RED 阶段**: 先编写全面的测试用例，包括：
+  - 渲染测试（所有字段、按钮）
+  - 验证测试（必填、格式、范围）
+  - 提交测试（成功、失败、loading）
+  - 编辑模式测试（预填充、更新）
+  - 交互测试（checkbox、radio切换）
+  - 可访问性测试（labels、aria）
+- **GREEN 阶段**: 实现最小代码使测试通过
+- **REFACTOR 阶段**: 优化样式，使用设计系统变量
+
+### Testing Library 技巧
+- **fireEvent vs userEvent**: 
+  - JSON 字符串包含特殊字符 `{}` 时，使用 `fireEvent.change` 而不是 `userEvent.type`
+  - `userEvent.type` 会解释花括号作为特殊按键
+- **异步测试**: 使用 `waitFor` 测试 Promise 和状态更新
+- **表单验证**: 测试时移除 HTML5 的 min/max 属性，用 JavaScript 验证代替
+
+### 组件设计模式
+- **状态管理**: 使用多个 useState 而不是表单库（避免过度工程化）
+- **编辑模式**: 通过 initialData prop 区分创建/编辑
+- **条件渲染**: 根据 scheduleType 显示不同的输入字段
+- **表单重置**: 创建成功后重置，编辑成功后调用 onCancel
+
+### 验证逻辑
+- **必填字段**: name、prompt、schedule（根据类型）
+- **Cron 验证**: 使用正则表达式验证格式（未来可调用后端）
+- **Timeout 范围**: 1-3600 秒
+- **错误状态**: aria-invalid、aria-describedby 关联错误消息
+
+### macOS 原生风格
+- 使用设计系统的 CSS 变量
+- Radio/Checkbox 使用 accent-color
+- Input 使用系统边框和圆角
+- Focus ring 使用 accent-color
+- 禁用状态使用 opacity: 0.5
