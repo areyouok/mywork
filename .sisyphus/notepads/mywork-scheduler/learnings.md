@@ -828,3 +828,70 @@ src/components/
 - [x] 显示下次运行时间预览
 - [x] 支持 Dark Mode
 - [x] 无障碍访问 (aria labels、错误关联)
+
+## Task 21: SimpleScheduleInput 组件 (2024-03-09)
+
+### TDD 开发流程
+- **RED 阶段**: 先编写 28 个测试用例，覆盖:
+  - 渲染测试 (6个): 类型选择器、选项、初始值、字段显示、标签
+  - Interval 类型测试 (3个): 5分钟、1小时、1天
+  - Daily 类型测试 (2个): 时间输入、初始值解析
+  - Weekly 类型测试 (3个): 星期+时间、7天选项、初始值解析
+  - 交互测试 (3个): onChange 回调、字段更新
+  - 错误状态测试 (2个): 自定义错误、aria-invalid
+  - 禁用状态测试 (4个): 所有输入、单独字段
+  - 无障碍测试 (2个): label 关联、必填标记
+  - 边界情况测试 (3个): 空值、无效 JSON、类型切换
+- **GREEN 阶段**: 实现最小代码使测试通过
+- **REFACTOR 阶段**: 添加 macOS 风格样式
+
+### 组件设计模式
+- **Props 接口**: value, onChange, error (可选), disabled (可选)
+- **三种调度类型**:
+  - **Interval**: 下拉选择预设间隔 (5/10/15/30 分钟, 1/2/6/12 小时, 1 天)
+  - **Daily**: 时间选择器 (24小时制)
+  - **Weekly**: 星期选择器 + 时间选择器 (Monday-Sunday)
+- **JSON 输出格式**:
+  - Interval: `{"type":"interval","value":5,"unit":"minutes"}`
+  - Daily: `{"type":"daily","time":"09:30"}`
+  - Weekly: `{"type":"weekly","day":"monday","time":"09:30"}`
+
+### React Testing Library 技巧
+- **Time input 问题**: `userEvent.type()` 对 `<input type="time">` 行为不一致
+  - 解决方案: 使用 `fireEvent.change()` 直接改变值
+  - 示例: `fireEvent.change(timeInput, { target: { value: '09:30' } })`
+- **Accessible name 查询**: `getByRole('combobox', { name: /pattern/i })`
+  - 使用关联 label 的文本作为 name
+  - 在本组件中，label 是 "Simple Schedule *"，所以使用 `/simple schedule/i`
+
+### 状态管理
+- **本地状态**: scheduleType, intervalValue, dailyTime, weeklyDay, weeklyTime
+- **派生状态**: 从 value prop 解析得到 parsed
+- **useEffect 同步**: 当 parsed 改变时同步更新本地状态
+- **初始值处理**: 通过 useEffect 从 value prop 初始化状态
+
+### JSON 解析
+- **parseSchedule 函数**: 解析 JSON 字符串为类型和调度对象
+- **错误处理**: 无效 JSON 返回 `{ type: '' }`
+- **类型定义**: IntervalSchedule, DailySchedule, WeeklySchedule 联合类型
+
+### macOS 原生风格
+- **设计系统变量**: 使用 `--color-*`, `--spacing-*`, `--radius-*` 等
+- **Select 样式**: 
+  - 自定义下拉箭头 (SVG background-image)
+  - padding-right 为图标留空间
+  - 系统边框和圆角
+  - focus ring 使用 accent-color
+- **Time input 样式**:
+  - calendar picker icon 透明度调整
+  - cursor: text / pointer
+- **嵌套字段**: schedule-fields 容器使用浅色背景
+
+### 文件结构
+```
+src/components/
+├── SimpleScheduleInput.tsx         # 组件实现 (245 行)
+├── SimpleScheduleInput.test.tsx    # 测试文件 (310 行, 28 个测试)
+└── SimpleScheduleInput.css         # 样式文件 (152 行)
+```
+

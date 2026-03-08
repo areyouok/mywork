@@ -948,7 +948,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-20-cron-error.png
     ```
 
-- [ ] 21. 实现简单时间选择器组件 (TDD)
+- [x] 21. 实现简单时间选择器组件 (TDD)
   - **What**: 创建 `SimpleScheduleInput.tsx` 支持下拉选择时间间隔
   - **TDD**: 测试选择器交互
   - **Category**: `visual-engineering`
