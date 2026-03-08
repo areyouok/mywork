@@ -1,0 +1,189 @@
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+}
+
+.task-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3xl);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: var(--space-lg);
+  opacity: 0.5;
+}
+
+.task-list-empty h3 {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.task-list-empty p {
+  margin: 0;
+  font-size: var(--font-size-base);
+}
+
+.task-item {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.task-item:hover {
+  border-color: var(--text-quaternary);
+  box-shadow: var(--shadow-md);
+}
+
+.task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-md);
+}
+
+.task-name {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: var(--text-quaternary);
+  border: none;
+  cursor: pointer;
+  transition: background-color var(--transition-base);
+  padding: 0;
+}
+
+.toggle-switch[aria-checked="true"],
+.toggle-switch.enabled {
+  background: var(--success-color);
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-base);
+}
+
+.toggle-switch[aria-checked="true"] .toggle-slider,
+.toggle-switch.enabled .toggle-slider {
+  transform: translateX(20px);
+}
+
+.task-body {
+  margin-bottom: var(--space-md);
+}
+
+.task-prompt {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  line-height: var(--line-height-normal);
+}
+
+.task-meta {
+  display: flex;
+  gap: var(--space-lg);
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+}
+
+.task-schedule {
+  font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+  background: var(--bg-secondary);
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+}
+
+.task-timeout {
+  color: var(--text-tertiary);
+}
+
+.task-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border-light);
+}
+
+.btn-delete,
+.btn-confirm,
+.btn-cancel {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid transparent;
+}
+
+.btn-delete {
+  background: transparent;
+  color: var(--error-color);
+  border-color: var(--error-color);
+}
+
+.btn-delete:hover {
+  background: var(--error-color);
+  color: white;
+}
+
+.confirm-delete {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+}
+
+.confirm-delete span {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-right: var(--space-sm);
+}
+
+.btn-confirm {
+  background: var(--error-color);
+  color: white;
+}
+
+.btn-confirm:hover {
+  opacity: 0.9;
+}
+
+.btn-cancel {
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
+.btn-cancel:hover {
+  background: var(--bg-secondary);
+}

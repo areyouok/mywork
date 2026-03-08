@@ -618,3 +618,95 @@
 - [x] Mock task execution for testing
 - [x] Timeout integration working
 - [x] Error handling comprehensive
+
+## Task 18: Task List Component (Frontend)
+
+### What was done:
+1. 配置测试环境：
+   - 创建 `vitest.config.ts` 配置 vitest
+   - 创建 `src/test/setup.ts` 配置 testing library
+   - 添加 test script 到 package.json
+   - 安装 @testing-library/user-event
+2. 创建设计系统基础：
+   - 创建 `src/styles/design-system.css`
+   - 定义 CSS 变量支持 Dark Mode
+   - 使用 SF Pro 字体系列（-apple-system）
+   - 定义颜色、间距、圆角、阴影等设计 tokens
+3. 定义类型接口：
+   - 创建 `src/types/task.ts`
+   - 定义 Task 接口匹配后端模型
+   - 定义 TaskListProps 接口
+4. 实现 TaskList 组件（TDD）：
+   - 编写 10 个测试用例（RED）
+   - 实现 TaskList.tsx 组件（GREEN）
+   - 创建 TaskList.css 样式（macOS 风格）
+5. 测试覆盖：
+   - 渲染测试：空状态、任务列表、显示内容
+   - 交互测试：启用/禁用、删除、取消删除
+   - 无障碍测试：aria labels、键盘导航
+
+### Key Points:
+- **设计系统优先**：遵循 DESIGN_SYSTEM_WORKFLOW_MANDATE，先创建 CSS 变量再实现组件
+- **TDD 流程**：先写测试（RED），实现最小代码（GREEN），确保所有测试通过
+- **macOS 原生风格**：
+  - 使用 SF Pro 字体：`-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text"`
+  - 系统色彩：支持 Dark Mode 的 CSS 变量
+  - Toggle 开关：macOS 风格的滑动开关（44px × 24px）
+  - 卡片式布局：圆角、阴影、边框
+- **React Testing Library**：
+  - 使用 `screen.getByRole()` 查询元素
+  - 使用 `userEvent.setup()` 模拟用户交互
+  - 测试 aria labels 和键盘导航
+- **组件设计**：
+  - 状态管理：`useState` 管理删除确认对话框
+  - Props 设计：`tasks`, `onToggle`, `onDelete` 回调
+  - 条件渲染：空状态、任务列表、删除确认
+  - 格式化：`formatSchedule` 辅助函数
+
+### Implementation Details:
+- **Toggle 开关**：
+  - 使用 `role="switch"` 和 `aria-checked`
+  - CSS transition 实现平滑动画
+  - 背景色：灰色（禁用）、绿色（启用）
+- **删除确认**：
+  - 点击删除按钮显示确认对话框
+  - 确认/取消按钮
+  - 确认后调用 `onDelete` 回调
+- **Schedule 显示**：
+  - Cron 表达式：直接显示
+  - Simple schedule：解析 JSON 显示友好格式
+  - 使用 SF Mono 等宽字体显示
+
+### Testing Patterns:
+- **渲染测试**：验证空状态、任务列表、各字段显示
+- **交互测试**：使用 userEvent 模拟点击，验证回调调用
+- **无障碍测试**：验证 aria-label 格式，测试键盘导航
+- **测试修复**：`toHaveAttribute` 不支持正则，改用 `getAttribute() + toMatch()`
+
+### File Structure:
+```
+src/
+├── components/
+│   ├── TaskList.tsx         # 组件实现（140 行）
+│   ├── TaskList.test.tsx    # 测试文件（135 行）
+│   └── TaskList.css         # 样式文件（200+ 行）
+├── types/
+│   └── task.ts              # TypeScript 类型定义
+├── styles/
+│   └── design-system.css    # 设计系统（CSS 变量）
+└── test/
+    └── setup.ts             # 测试配置
+```
+
+### Dependencies Added:
+- `@testing-library/user-event` - 用于模拟用户交互（点击、键盘等）
+
+### Verified:
+- [x] 所有 10 个测试通过
+- [x] ESLint 无错误
+- [x] TypeScript 类型检查通过
+- [x] 组件支持空状态
+- [x] 启用/禁用功能正常
+- [x] 删除功能带确认
+- [x] macOS 风格样式（Dark Mode 支持）
+- [x] 无障碍访问（aria labels、键盘导航）

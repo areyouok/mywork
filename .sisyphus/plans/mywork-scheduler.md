@@ -743,7 +743,7 @@ Max Concurrent: 7 (Waves 1 & 2)
 
 ### Wave 3: Backend Core (Scheduler & Process Management)
 
-- [ ] 12. 实现 Cron 表达式解析和验证 (TDD)
+- [x] 12. 实现 Cron 表达式解析和验证 (TDD)
   - **What**: 使用 `tokio-cron-scheduler` 的 JobScheduler 解析和验证 cron 表达式
   - **TDD**: 测试用例覆盖合法/非法 cron 表达式
   - **Category**: `deep`
@@ -765,7 +765,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-12-invalid-cron.log
     ```
 
-- [ ] 13. 实现简单时间选择器逻辑 (TDD)
+- [x] 13. 实现简单时间选择器逻辑 (TDD)
   - **What**: 解析 JSON 格式的简单调度规则（每N分钟、每天HH:MM）
   - **TDD**: 测试各种时间格式
   - **Category**: `quick`
@@ -780,7 +780,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-13-interval.log
     ```
 
-- [ ] 14. 实现调度器核心 (tokio-cron-scheduler) (TDD)
+- [x] 14. 实现调度器核心 (tokio-cron-scheduler) (TDD)
   - **What**: 使用 `tokio-cron-scheduler` 实现定时触发
   - **TDD**: 使用 tokio::time::pause 测试调度逻辑
   - **Category**: `deep`
@@ -795,7 +795,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-14-scheduler.log
     ```
 
-- [ ] 15. 实现任务队列和并发控制 (TDD)
+- [x] 15. 实现任务队列和并发控制 (TDD)
   - **What**: 使用 Tokio Semaphore 实现任务队列，确保 skip_if_running 生效
   - **TDD**: 测试并发场景
   - **Category**: `unspecified-high`
@@ -810,7 +810,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-15-skip-if-running.log
     ```
 
-- [ ] 16. 实现超时控制和进程杀死 (TDD)
+- [x] 16. 实现超时控制和进程杀死 (TDD)
   - **What**: 使用 `tokio::time::timeout` + `kill` 实现超时控制
   - **TDD**: 测试超时场景
   - **Category**: `unspecified-high`
@@ -825,7 +825,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-16-timeout.log
     ```
 
-- [ ] 17. 实现 opencode CLI 集成 (TDD)
+- [x] 17. 实现 opencode CLI 集成 (TDD)
   - **What**: 通过 Tauri shell 执行 opencode CLI，管理 session 生命周期
   - **TDD**: Mock CLI 测试
   - **Category**: `deep`
