@@ -193,3 +193,62 @@
 - [x] UUID auto-generation working
 - [x] Timestamp auto-setting working
 - [x] Default values applied correctly
+
+## Task 10: Execution CRUD Operations
+
+### What was done:
+1. Created execution module structure (`src-tauri/src/models/execution.rs`)
+2. Defined ExecutionStatus enum with 6 variants: pending, running, success, failed, timeout, skipped
+3. Defined Execution model struct matching schema.sql:
+   - `Execution` - Full execution representation with all fields
+   - `NewExecution` - For creating new executions (task_id required, others optional)
+   - `UpdateExecution` - For partial updates (all fields optional)
+4. Implemented CRUD operations:
+   - `create_execution(pool, new_execution)` - Creates execution with auto-generated UUID and started_at timestamp
+   - `get_execution(pool, id)` - Fetches single execution by ID
+   - `get_executions_by_task(pool, task_id)` - Fetches all executions for a task ordered by started_at DESC
+   - `update_execution(pool, id, update)` - Partial update preserving unspecified fields
+5. Wrote 15 comprehensive tests covering all operations and status variants
+6. Used sqlx::query_as for type-safe database queries
+7. Used chrono::DateTime<Utc> for timestamp handling
+
+### Key Points:
+- ExecutionStatus enum: Custom enum with as_str() and from_str() methods for DB storage
+- UUID generation: `Uuid::new_v4().to_string()` for unique execution IDs
+- Timestamp format: RFC 3339 (`chrono::Utc::now().to_rfc3339()`)
+- Default values: status defaults to "pending", started_at auto-set, finished_at is NULL
+- Update strategy: Merge pattern - preserve existing values when update field is None
+- Foreign key relationship: task_id references tasks(id)
+- Status variants stored as lowercase strings: "pending", "running", "success", "failed", "timeout", "skipped"
+- Optional fields: session_id, finished_at, output_file, error_message can all be NULL
+
+### Testing Patterns:
+- TDD approach: Wrote all 15 tests first, then implemented functionality
+- Test coverage includes:
+  - Success cases for all CRUD operations
+  - Error cases (not found)
+  - Default value verification
+  - Partial update behavior
+  - Full lifecycle integration test
+  - Multiple executions per task
+  - All status variants
+  - Order verification (DESC by started_at)
+- Tests create parent task before creating execution (foreign key requirement)
+- Isolated test databases using tempfile::TempDir
+
+### Module Structure:
+- `models/execution.rs` - Execution model, status enum, and CRUD operations
+- `models/mod.rs` - Updated to export execution module and types
+- Clean separation: db module for connections, models for data
+
+### Verified:
+- [x] All 15 Execution CRUD tests pass
+- [x] All 31 total tests pass (including task and db tests)
+- [x] Build succeeds without errors or warnings
+- [x] Type-safe queries with sqlx::query_as
+- [x] Proper async/await implementation
+- [x] UUID auto-generation working
+- [x] Timestamp auto-setting working
+- [x] Default status "pending" applied correctly
+- [x] Foreign key relationship working
+- [x] ExecutionStatus enum conversions working
