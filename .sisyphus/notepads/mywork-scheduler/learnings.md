@@ -138,3 +138,58 @@
 - [x] Idempotent initialization (can run multiple times)
 - [x] Build passes without errors
 - [x] Module structure follows Rust conventions
+
+## Task 9: Task CRUD Operations
+
+### What was done:
+1. Created models module structure (`src-tauri/src/models/mod.rs`, `task.rs`)
+2. Defined Task model struct matching schema.sql:
+   - `Task` - Full task representation with all fields
+   - `NewTask` - For creating new tasks (required fields only, optional with defaults)
+   - `UpdateTask` - For partial updates (all fields optional)
+3. Implemented CRUD operations:
+   - `create_task(pool, new_task)` - Creates task with auto-generated UUID and timestamps
+   - `get_task(pool, id)` - Fetches single task by ID
+   - `get_all_tasks(pool)` - Fetches all tasks ordered by created_at DESC
+   - `update_task(pool, id, update)` - Partial update preserving unspecified fields
+   - `delete_task(pool, id)` - Soft deletion returning success boolean
+4. Wrote 12 comprehensive tests covering all operations
+5. Used sqlx::query_as for type-safe database queries
+6. Used chrono::DateTime<Utc> for timestamp handling
+
+### Key Points:
+- UUID generation: `Uuid::new_v4().to_string()` for unique task IDs
+- Timestamp format: RFC 3339 (`chrono::Utc::now().to_rfc3339()`)
+- Default values: enabled=1, timeout_seconds=300, skip_if_running=1
+- Update strategy: Merge pattern - preserve existing values when update field is None
+- TempDir lifecycle: Must keep TempDir alive during test execution
+  - Solution: Return (SqlitePool, TempDir) tuple from setup function
+  - Use `_temp_dir` prefix to indicate intentionally unused variable
+- sqlx::FromRow derive macro enables automatic struct mapping
+- Async/await throughout with `tokio::test` macro
+
+### Testing Patterns:
+- TDD approach: Write tests first, implement functionality to pass
+- Test coverage includes:
+  - Success cases for all operations
+  - Error cases (not found, invalid operations)
+  - Default value verification
+  - Partial update behavior
+  - Full lifecycle integration test
+- Isolated test databases using tempfile::TempDir
+- Each test is independent and can run in parallel
+
+### Module Structure:
+- `models/mod.rs` - Public API exports
+- `models/task.rs` - Task model and CRUD operations
+- Clean separation: db module for connections, models for data
+
+### Verified:
+- [x] All 12 Task CRUD tests pass
+- [x] All 16 total tests pass (including db tests)
+- [x] Build succeeds without errors
+- [x] Type-safe queries with sqlx::query_as
+- [x] Proper async/await implementation
+- [x] UUID auto-generation working
+- [x] Timestamp auto-setting working
+- [x] Default values applied correctly
