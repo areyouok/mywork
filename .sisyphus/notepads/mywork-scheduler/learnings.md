@@ -451,3 +451,62 @@
 - [x] Comprehensive error handling
 - [x] Job addition, removal, start, stop all working
 - [x] Can add/remove jobs while scheduler is running
+
+## Task 15: Task Queue and Concurrency Control
+
+### What was done:
+1. Created task_queue module (`src-tauri/src/scheduler/task_queue.rs`)
+2. Defined `TaskQueueError` enum with 3 variants: NoAvailableSlots, TaskAlreadyRunning, TaskNotFound
+3. Defined `SkipResult` enum: Execute, Skipped
+4. Implemented `SlotGuard` struct for automatic slot release on drop
+5. Implemented `TaskQueue` struct with:
+   - `semaphore: Arc<Semaphore>` - Tokio semaphore for concurrency control
+   - `running_tasks: Arc<Mutex<HashMap<String, OwnedSemaphorePermit>>>` - Track running tasks
+   - `max_concurrent: usize` - Maximum concurrent tasks
+6. Implemented core methods:
+   - `new(max_concurrent)` - Create queue with concurrency limit
+   - `acquire_slot(task_id)` - Non-blocking slot acquisition, returns SlotGuard
+   - `acquire_slot_with_skip(task_id)` - Acquire with skip_if_running behavior
+   - `release_slot(task_id)` - Manual slot release
+   - `skip_if_running(task_id)` - Check if task should be skipped
+   - `is_running(task_id)` - Check if task is currently running
+   - `running_count()` - Get count of running tasks
+   - `available_slots()` - Get count of available slots
+7. Wrote 19 comprehensive tests covering all operations
+8. Updated `scheduler/mod.rs` to export new module and types
+
+### Key Points:
+- **Tokio Semaphore**: `tokio::sync::Semaphore` provides efficient async concurrency control
+- **OwnedSemaphorePermit**: Use `try_acquire_owned()` to get permits that can be stored in HashMap
+- **SlotGuard pattern**: Guard drops automatically release semaphore permits via tokio runtime handle
+- **Non-blocking acquisition**: `try_acquire_owned()` returns immediately if no slots available
+- **skip_if_running logic**: First check if task is running, then try to acquire slot
+- **Thread-safe access**: Using `Arc<Mutex<T>>` for all shared state
+
+### Implementation Details:
+- **SlotGuard Drop**: Uses `tokio::runtime::Handle::try_current()` to spawn cleanup task
+- **Error types**: Comprehensive TaskQueueError with descriptive messages
+- **SkipResult**: Distinguishes between "execute" and "skipped" states clearly
+- **API design**: `acquire_slot` returns error for running tasks, `acquire_slot_with_skip` returns SkipResult
+
+### Testing Patterns:
+- **Concurrent limit test**: Spawns multiple async tasks, verifies max concurrent never exceeded
+- **Auto-release test**: Verifies guard drop releases slot correctly
+- **Skip behavior tests**: Tests both skip_if_running true/false cases
+- **Full lifecycle test**: Complete workflow from acquire to release
+- **Error cases**: Tests NoAvailableSlots, TaskAlreadyRunning, TaskNotFound errors
+
+### Module Structure:
+- `scheduler/task_queue.rs` - Task queue implementation (560+ lines)
+- `scheduler/mod.rs` - Updated to export task_queue types
+- Exports: `TaskQueue`, `TaskQueueError`, `SkipResult`, `SlotGuard`
+
+### Verified:
+- [x] All 19 task_queue tests pass
+- [x] All 135 total tests pass (116 existing + 19 new)
+- [x] Build succeeds without errors
+- [x] Semaphore limits concurrent execution correctly
+- [x] skip_if_running returns correct SkipResult
+- [x] SlotGuard auto-releases on drop
+- [x] Manual release_slot works correctly
+- [x] Thread-safe concurrent access verified
