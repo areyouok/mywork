@@ -895,3 +895,151 @@ src/components/
 └── SimpleScheduleInput.css         # 样式文件 (152 行)
 ```
 
+
+## Task 22: ExecutionHistory 组件 (2024-03-09)
+
+### TDD 开发流程
+- **RED 阶段**: 先编写 28 个测试用例,覆盖:
+  - 渲染测试 (6个): 空状态、列表显示、执行时间、状态显示、持续时间、未完成执行
+  - 状态显示测试 (7个): pending(灰)、running(蓝)、success(绿)、failed(红)、timeout(橙)、skipped(黄)、错误消息
+  - 交互测试 (4个): onSelect 回调、无回调、可点击样式、不可点击样式
+  - 时间格式化测试 (5个): 相对时间、绝对时间、秒、分钟、小时
+  - 加载状态测试 (3个): loading 显示、空状态隐藏、loading spinner
+  - 无障碍测试 (3个): 列表结构、accessible name、状态标识
+- **GREEN 阶段**: 实现最小代码使测试通过
+- **REFACTOR 阶段**: 添加 macOS 风格样式
+
+### 组件设计模式
+- **Props 接口**: executions, onSelect (可选), loading (可选)
+- **条件渲染**: 
+  - loading 优先级最高
+  - 然后是空状态
+  - 最后是执行历史列表
+- **时间格式化**: 
+  - < 1小时: 显示相对时间 ("X minutes ago")
+  - < 7天: 显示星期+时间 ("Mon 10:00 AM")
+  - >= 7天: 显示日期 ("Mar 9, 2024")
+- **持续时间格式化**:
+  - < 1分钟: 显示秒 ("45s")
+  - < 1小时: 显示分钟 ("5m")
+  - >= 1小时: 显示小时+分钟 ("2h 30m")
+- **错误消息显示**: failed 状态时显示 error_message
+
+### 状态颜色系统 (macOS System Colors)
+- **pending**: #999 (灰色)
+- **running**: #007AFF (蓝色,系统蓝)
+- **success**: #34C759 (绿色,系统绿)
+- **failed**: #FF3B30 (红色,系统红)
+- **timeout**: #FF9500 (橙色,系统橙)
+- **skipped**: #FFCC00 (黄色,系统黄)
+
+### Dark Mode 支持
+- 使用 `@media (prefers-color-scheme: dark)` 媒体查询
+- 调整状态颜色为 Dark Mode 变体 (更亮的颜色)
+- 例如: #007AFF → #0A84FF (Dark Mode 蓝)
+
+### React Testing Library 技巧
+- **时间测试**: 测试相对时间时需要考虑当前时间,使用正则匹配多种格式
+- **正则表达式**: `/2024-03-09|Mar 9, 2024|ago/i` 匹配多种时间显示格式
+- **Mock 数据工厂**: 创建 `createMockExecution()` 函数生成测试数据
+- **状态样式测试**: 使用 `toHaveClass('status-success')` 验证 CSS 类
+
+### 组件实现细节
+- **formatTime 函数**: 根据时间差返回不同格式
+  - 计算时间差 (diffMs, diffHours, diffDays)
+  - 边界条件处理 (< 1分钟、1分钟、多分钟、1小时、多小时)
+  - 使用 toLocaleString/toLocaleDateString 格式化
+- **formatDuration 函数**: 格式化持续时间
+  - 计算秒、分钟、小时
+  - 组合格式 ("2h 30m")
+- **可访问性**: 
+  - role="list" 和 role="listitem"
+  - aria-label 包含状态和时间信息
+  - loading spinner 使用 role="status"
+
+### macOS 原生风格
+- **设计系统变量**: 使用 `--color-*`, `--spacing-*`, `--radius-*` 等
+- **状态徽章**: 
+  - 大写字母 (text-transform: uppercase)
+  - 字间距 (letter-spacing: 0.5px)
+  - 白色文字 + 彩色背景
+- **可点击项**: 
+  - cursor: pointer
+  - hover 时背景色变化
+  - active 时缩放 (transform: scale(0.98))
+- **错误消息**: 
+  - 左侧红色边框
+  - 浅红色背景 (rgba)
+  - word-wrap: break-word
+
+### 文件结构
+```
+src/
+├── components/
+│   ├── ExecutionHistory.tsx         # 组件实现 (115 行)
+│   ├── ExecutionHistory.test.tsx    # 测试文件 (300 行, 28 个测试)
+│   └── ExecutionHistory.css         # 样式文件 (180 行)
+└── types/
+    └── execution.ts                 # TypeScript 类型定义 (18 行)
+```
+
+### Verified
+- [x] 所有 28 个 ExecutionHistory 测试通过
+- [x] 所有 119 个总测试通过
+- [x] TypeScript 类型检查通过
+- [x] 组件支持空状态
+- [x] 显示所有 6 种状态 (不同颜色)
+- [x] 时间格式化 (相对/绝对)
+- [x] 持续时间显示
+- [x] 错误消息显示
+- [x] 点击选择功能
+- [x] Loading 状态
+- [x] macOS 风格样式 (Dark Mode 支持)
+- [x] 无障碍访问 (aria labels、role)
+
+
+## Task 22: 历史记录列表组件 (ExecutionHistory.tsx)
+
+### What was done:
+1. 更新了类型定义 (src/types/execution.ts):
+   - 将 `onSelect` 回调改为 `onViewOutput`
+   - 添加了可选的 `taskId` 参数用于筛选
+2. 编写了完整的测试覆盖 (ExecutionHistory.test.tsx):
+   - 渲染测试、状态显示、时间格式化、持续时间显示
+   - 点击交互测试 (只有 output_file 的记录才能点击)
+   - 筛选功能测试
+   - 无障碍访问测试
+3. 实现了组件功能 (ExecutionHistory.tsx):
+   - 支持 taskId 筛选
+   - 点击行为仅对有 output_file 的执行记录有效
+   - 正在运行的执行显示 "Running..."
+   - 持续时间格式化 (支持小时、分钟、秒)
+   - 键盘访问支持 (tabIndex + onKeyPress)
+4. 更新了样式文件 (ExecutionHistory.css):
+   - 使用设计系统的 CSS 变量 (--space-*, --text-*, --bg-* 等)
+   - 状态颜色使用设计系统的语义化颜色 (--success-color, --error-color 等)
+   - 添加了 focus 状态样式
+
+### Key Points:
+- TDD 开发流程:先写测试,再实现功能
+- 点击交互只在有 output_file 的情况下触发 onViewOutput 回调
+- 持续时间格式化支持多种单位组合 (2h 30m, 5m 30s, 45s, <1s)
+- 使用设计系统的 CSS 变量保持样式一致性
+- 无障碍访问:clickable 项有 tabIndex,支持键盘导航
+
+### Design System Variables Used:
+- Spacing: --space-xs, --space-sm, --space-md, --space-lg, --space-3xl
+- Colors: --text-*, --bg-*, --border-*, --success-color, --error-color, --warning-color, --accent-color
+- Typography: --font-family, --font-size-*, --font-weight-*
+- Border: --radius-sm, --radius-lg
+- Effects: --shadow-md, --transition-fast
+
+### Verified:
+- [x] 所有 31 个测试通过
+- [x] TypeScript 类型检查通过 (npx tsc --noEmit)
+- [x] 组件使用设计系统的 CSS 变量
+- [x] 支持空状态显示
+- [x] 支持加载状态
+- [x] 状态颜色符合设计规范
+- [x] 无障碍访问支持
+

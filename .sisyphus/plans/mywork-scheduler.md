@@ -965,7 +965,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-21-interval-select.txt
     ```
 
-- [ ] 22. 实现历史记录列表组件 (TDD)
+- [x] 22. 实现历史记录列表组件 (TDD)
   - **What**: 创建 `ExecutionHistory.tsx` 显示任务执行历史
   - **TDD**: 测试列表渲染
   - **Category**: `visual-engineering`
