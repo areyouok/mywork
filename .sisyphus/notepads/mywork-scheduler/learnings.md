@@ -27,3 +27,73 @@
 - [x] npm install succeeded
 - [x] Vite dev server runs on http://localhost:1420
 - [x] Tauri dev command starts (compiles Rust code)
+
+## Task 2: Configure TypeScript + Vite
+
+### What was done:
+1. Installed `@types/node` (was missing)
+2. Added path alias `@/*` -> `./src/*` to:
+   - `tsconfig.json` (baseUrl + paths)
+   - `vite.config.ts` (resolve.alias)
+3. Added `types: ["node"]` to `tsconfig.node.json` for vite.config.ts
+4. Verified strict mode already enabled (was already in template)
+
+### Key Points:
+- TypeScript strict mode was already enabled in template
+- Path alias allows imports like `import X from "@/components/..."`
+- @types/react and @types/react-dom were already installed
+
+### Verified:
+- [x] `npx tsc --noEmit` passes
+- [x] `npm run build` succeeds
+- [x] Path alias `@/*` configured
+
+## Task 3: Install Rust Dependencies
+
+### What was done:
+1. Added Rust dependencies to `src-tauri/Cargo.toml`:
+   - tokio with "full" features
+   - tokio-cron-scheduler 0.9
+   - sqlx with runtime-tokio-native-tls and sqlite features
+   - uuid with "v4" feature
+   - chrono with "serde" feature
+   - tauri with "tray-icon" feature (macos-private-api removed due to config requirement)
+2. Ran `cargo build` to verify all dependencies install correctly
+3. Fixed build error: removed `macos-private-api` feature as it requires special allowlist config
+
+### Key Points:
+- Using Tauri v2 (not v1)
+- Backend is pure Rust (no Node.js backend)
+- sqlx 0.7 with SQLite for task storage
+- tokio-cron-scheduler for cron job scheduling
+
+### Verified:
+- [x] Cargo.toml contains all required Rust dependencies
+- [x] `cargo build` succeeds (with 1 deprecation warning)
+
+## Task 4: Configure ESLint + Prettier
+
+### What was done:
+1. Installed ESLint 9, Prettier, and TypeScript ESLint packages:
+   - `eslint`, `prettier`
+   - `@typescript-eslint/parser`, `@typescript-eslint/eslint-plugin`
+   - `eslint-plugin-react`, `eslint-plugin-react-hooks`
+   - `eslint-config-prettier`
+2. Created `eslint.config.js` (flat config for ESLint 9)
+3. Created `.prettierrc` with sensible defaults
+4. Added npm scripts:
+   - `lint`: `eslint src --ext ts,tsx`
+   - `format`: `prettier --write src`
+5. Fixed existing lint errors (missing `rel="noreferrer"` on anchor tags)
+
+### Key Points:
+- ESLint 9 requires flat config format (`eslint.config.js`, not `.eslintrc.*`)
+- Config includes: TypeScript parser, React rules, React Hooks rules
+- Relaxed rules: disabled `react/prop-types`, `explicit-function-return-type`, `explicit-module-boundary-types`
+- Warnings only for: `no-unused-vars`, `no-explicit-any`
+- Prettier config: single quotes, 2 spaces, 100 char line width
+
+### Verified:
+- [x] `npm run lint` passes (no errors)
+- [x] `npm run format` runs successfully
+

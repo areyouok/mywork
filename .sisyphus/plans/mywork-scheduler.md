@@ -265,7 +265,7 @@ Max Concurrent: 7 (Waves 1 & 2)
 
 ### Wave 1: Foundation (Project Setup)
 
-- [ ] 1. 初始化 Tauri + React 项目
+- [x] 1. 初始化 Tauri + React 项目
 
   **What to do**:
   - 使用 `npm create tauri-app@latest` 创建项目
@@ -324,7 +324,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   - Files: All initial project files
   - Pre-commit: None
 
-- [ ] 2. 配置 TypeScript + Vite
+- [x] 2. 配置 TypeScript + Vite
 
   **What to do**:
   - 配置 `tsconfig.json`（strict mode, paths）
@@ -366,7 +366,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   
   **Commit**: YES (with Task 1)
 
-- [ ] 3. 配置 ESLint + Prettier
+- [x] 3. 配置 ESLint + Prettier
 
   **What to do**:
   - 安装 `eslint`, `prettier`, `@typescript-eslint/*`
@@ -404,7 +404,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   
   **Commit**: YES (with Task 1)
 
-- [ ] 4. 初始化 Git 仓库 + .gitignore
+- [x] 4. 初始化 Git 仓库 + .gitignore
 
   **What to do**:
   - 初始化 git: `git init`
@@ -461,7 +461,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   - Message: `chore: initialize git repository with .gitignore`
   - Files: `.gitignore`
 
-- [ ] 5. 安装依赖
+- [x] 5. 安装依赖
 
   **What to do**:
   - 安装前端依赖:
@@ -524,7 +524,7 @@ Max Concurrent: 7 (Waves 1 & 2)
   
   **Commit**: YES (with Task 1)
 
-- [ ] 6. 配置 Tauri 系统托盘
+- [x] 6. 配置 Tauri 系统托盘
 
   **What to do**:
   - 在 `src-tauri/tauri.conf.json` 配置系统托盘:
