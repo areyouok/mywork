@@ -510,3 +510,58 @@
 - [x] SlotGuard auto-releases on drop
 - [x] Manual release_slot works correctly
 - [x] Thread-safe concurrent access verified
+
+## Task 16: Timeout Control and Process Killing
+
+### What was done:
+1. Created timeout module (`src-tauri/src/scheduler/timeout.rs`)
+2. Added `nix` crate dependency with signal and process features
+3. Defined `TimeoutError` enum with 4 variants: Timeout, SpawnFailed, KillFailed, ExecutionFailed
+4. Defined `ProcessOutput` struct with status, stdout, stderr, timed_out fields
+5. Implemented `kill_process(pid)` - Kills process using SIGKILL via nix crate
+6. Implemented `run_with_timeout(program, args, timeout_secs)` - Executes command with timeout
+7. Wrote 16 comprehensive tests covering all operations
+8. Updated `scheduler/mod.rs` to export new module and types
+
+### Key Points:
+- **Process execution**: Uses `tokio::process::Command` for async process spawning
+- **Timeout control**: Uses `tokio::time::timeout` wrapper for timeout enforcement
+- **Process killing**: Uses `nix::sys::signal::kill` with SIGKILL for process termination
+- **ExitStatus handling**: Unix processes killed by signal return `None` for `code()`, use `signal()` instead
+- **Exit code 137**: 128 + SIGKILL(9) indicates process was killed by SIGKILL
+- **Output capture**: Uses `AsyncBufReadExt::lines()` to read stdout/stderr line by line
+- **Concurrent execution**: Multiple `run_with_timeout` calls can run concurrently with `tokio::join!`
+
+### Implementation Details:
+- **Timeout behavior**: When timeout occurs:
+  1. Process is killed via `kill_process(pid)`
+  2. Process is reaped via `child.wait()`
+  3. Returns `ProcessOutput` with `timed_out: true`
+- **Error handling**: Comprehensive TimeoutError enum with descriptive messages
+- **Stdout/Stderr capture**: Lines are joined with `\n` separator
+- **ExitStatusExt trait**: Required on Unix to use `from_raw()` method
+
+### Testing Patterns:
+- **Timeout test**: Uses `sleep 30` with 2s timeout to verify timeout behavior
+- **Process kill test**: Verifies process is actually killed after timeout
+- **Concurrent test**: Uses `tokio::join!` for multiple concurrent executions
+- **Edge cases**: Tests 0-second timeout, invalid commands, command failures
+- **Output capture tests**: Verifies stdout/stderr are captured correctly
+
+### Module Structure:
+- `scheduler/timeout.rs` - Timeout control implementation (450+ lines)
+- `scheduler/mod.rs` - Updated to export timeout types
+- Exports: `TimeoutError`, `ProcessOutput`, `run_with_timeout`, `kill_process`
+
+### Dependencies Added:
+- `nix = { version = "0.27", features = ["signal", "process"] }` - Unix signal handling
+- `futures = "0.3"` (dev-dependency) - For concurrent test utilities
+
+### Verified:
+- [x] All 16 timeout tests pass
+- [x] All 151 total lib tests pass
+- [x] Build succeeds without warnings (except pre-existing doc-test)
+- [x] Timeout correctly kills long-running processes
+- [x] Process output is captured correctly
+- [x] Error handling covers all edge cases
+- [x] Concurrent execution works correctly
