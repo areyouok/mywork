@@ -383,3 +383,71 @@
 - [x] All 100 total tests pass (including all previous tasks)
 - [x] Doc-tests pass for parse_simple_schedule
 - [x] Build succeeds without warnings
+
+## Task 14: Job Scheduler Core (TDD)
+
+### What was done:
+1. Created job_scheduler module (`src-tauri/src/scheduler/job_scheduler.rs`)
+2. Defined `SchedulerError` enum with 9 error variants for comprehensive error handling
+3. Defined `JobCallback` type alias for async callback functions
+4. Defined `JobInfo` struct to store job metadata (task_id, job_id, cron_expression)
+5. Defined `SchedulerState` enum with Stopped/Running states
+6. Implemented `Scheduler` struct with:
+   - `scheduler: Arc<Mutex<Option<JobScheduler>>>` - tokio-cron-scheduler instance
+   - `jobs: Arc<Mutex<HashMap<String, JobInfo>>>` - task_id to job mapping
+   - `state: Arc<Mutex<SchedulerState>>` - scheduler state tracking
+7. Implemented 5 core methods:
+   - `new()` - Create scheduler instance
+   - `add_job(task_id, cron_expression, callback)` - Add job with 5-field cron
+   - `remove_job(task_id)` - Remove job by task_id
+   - `start()` - Start scheduler
+   - `stop()` - Stop scheduler
+8. Implemented helper methods:
+   - `get_state()` - Get current scheduler state
+   - `job_count()` - Get number of scheduled jobs
+   - `has_job(task_id)` - Check if job exists
+   - `get_job_info(task_id)` - Get job metadata
+9. Wrote 16 comprehensive tests covering all operations
+10. Updated `scheduler/mod.rs` to export new module and types
+
+### Key Points:
+- **tokio-cron-scheduler uses 6-field format** (includes seconds): `sec min hour dom mon dow`
+- **Conversion strategy**: Prepend "0 " to user's 5-field expression before passing to Job::new_async
+- **Job callback type**: `Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>`
+  - Must explicitly cast async blocks to `Pin<Box<dyn Future<Output = ()> + Send>>` in tests
+  - Using `as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>` in tests
+- **Thread-safe access**: Using `Arc<Mutex<T>>` for all shared state
+- **Lazy scheduler initialization**: JobScheduler created on first add_job call
+- **State management**: Separate SchedulerState enum prevents start/stop errors
+- **Job tracking**: HashMap<String, JobInfo> maps task_id to job metadata for removal
+
+### Implementation Details:
+- **Error handling**: Comprehensive SchedulerError enum with descriptive messages
+- **Cron validation**: Reuses existing validate_cron from cron_parser module
+- **Job removal**: Requires both scheduler.remove(&job_id) and HashMap removal
+- **Shutdown**: Uses scheduler.shutdown() method, requires mutable borrow
+- **UUID handling**: tokio-cron-scheduler provides Uuid for each job via job.guid()
+
+### Testing Patterns:
+- **Callback type annotation**: Tests must use explicit type annotation for JobCallback
+- **Example**: `let callback: JobCallback = Arc::new(|| Box::pin(async {}) as Pin<Box<dyn Future<Output = ()> + Send>>);`
+- **Lifecycle testing**: test_scheduler_full_lifecycle covers complete workflow
+- **State testing**: Tests verify SchedulerState transitions (Stopped -> Running -> Stopped)
+- **Error cases**: Tests verify JobNotFound, AlreadyRunning, NotRunning errors
+- **Cron validation**: Tests verify InvalidCronExpression errors
+
+### Module Structure:
+- `scheduler/job_scheduler.rs` - Job scheduler core implementation (600+ lines)
+- `scheduler/mod.rs` - Updated to export job_scheduler types
+- Exports: `Scheduler`, `SchedulerError`, `SchedulerState`, `JobInfo`, `JobCallback`
+
+### Verified:
+- [x] All 16 job_scheduler tests pass
+- [x] All 116 total tests pass (including all previous tasks)
+- [x] Build succeeds without errors
+- [x] Module structure follows Rust conventions
+- [x] Type-safe async callback handling
+- [x] Thread-safe scheduler management
+- [x] Comprehensive error handling
+- [x] Job addition, removal, start, stop all working
+- [x] Can add/remove jobs while scheduler is running
