@@ -125,12 +125,15 @@ impl Scheduler {
     /// # Example
     /// ```no_run
     /// use tauri_app_lib::scheduler::job_scheduler::{Scheduler, SchedulerError};
+    /// use tauri_app_lib::scheduler::JobCallback;
     /// use std::sync::Arc;
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), SchedulerError> {
     ///     let scheduler = Scheduler::new();
-    ///     let callback = Arc::new(|| Box::pin(async { println!("Job executed!"); }));
+    ///     let callback: JobCallback = Arc::new(|| {
+    ///         Box::pin(async { println!("Job executed!"); }) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+    ///     });
     ///     let job_id = scheduler.add_job("task-1", "*/5 * * * *", callback).await?;
     ///     Ok(())
     /// }
