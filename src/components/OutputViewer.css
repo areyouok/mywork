@@ -1,0 +1,152 @@
+/* OutputViewer Styles */
+.output-viewer {
+  padding: var(--space-lg);
+  background-color: var(--bg-primary);
+  border-radius: var(--radius-md);
+  min-height: 200px;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.output-viewer-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.output-viewer-content {
+  line-height: var(--line-height-relaxed);
+  color: var(--text-primary);
+}
+
+/* Markdown Typography */
+.output-viewer-content h1,
+.output-viewer-content h2,
+.output-viewer-content h3,
+.output-viewer-content h4,
+.output-viewer-content h5,
+.output-viewer-content h6 {
+  margin-top: var(--space-xl);
+  margin-bottom: var(--space-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.output-viewer-content h1 {
+  font-size: var(--font-size-3xl);
+  line-height: var(--line-height-tight);
+}
+
+.output-viewer-content h2 {
+  font-size: var(--font-size-2xl);
+  line-height: var(--line-height-tight);
+}
+
+.output-viewer-content h3 {
+  font-size: var(--font-size-xl);
+  line-height: var(--line-height-tight);
+}
+
+.output-viewer-content h4 {
+  font-size: var(--font-size-lg);
+}
+
+.output-viewer-content p {
+  margin-bottom: var(--space-md);
+}
+
+/* Markdown Lists */
+.output-viewer-content ul,
+.output-viewer-content ol {
+  margin-bottom: var(--space-md);
+  padding-left: var(--space-xl);
+}
+
+.output-viewer-content li {
+  margin-bottom: var(--space-sm);
+}
+
+.output-viewer-content ul {
+  list-style-type: disc;
+}
+
+.output-viewer-content ol {
+  list-style-type: decimal;
+}
+
+/* Markdown Code Blocks */
+.output-viewer-content pre {
+  margin: var(--space-md) 0;
+  padding: var(--space-md);
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.output-viewer-content code {
+  font-family:
+    'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+.output-viewer-content pre code {
+  display: block;
+  background: none;
+  padding: 0;
+}
+
+/* Inline Code */
+.output-viewer-content p code,
+.output-viewer-content li code {
+  padding: 2px 6px;
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: 0.85em;
+}
+
+/* Markdown Blockquotes */
+.output-viewer-content blockquote {
+  margin: var(--space-md) 0;
+  padding: var(--space-md);
+  padding-left: var(--space-lg);
+  border-left: 4px solid var(--accent-color);
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.output-viewer-content blockquote p {
+  margin-bottom: 0;
+}
+
+/* Markdown Links */
+.output-viewer-content a {
+  color: var(--accent-color);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.output-viewer-content a:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+/* Markdown Strong and Emphasis */
+.output-viewer-content strong {
+  font-weight: var(--font-weight-semibold);
+}
+
+.output-viewer-content em {
+  font-style: italic;
+}
+
+/* Syntax Highlighting Enhancements */
+.output-viewer-content .linenumber {
+  padding-right: var(--space-sm);
+  color: var(--text-quaternary);
+  user-select: none;
+}

@@ -1043,3 +1043,125 @@ src/
 - [x] 状态颜色符合设计规范
 - [x] 无障碍访问支持
 
+
+## Task 23: OutputViewer 组件 (2024-03-09)
+
+### TDD 开发流程
+- **RED 阶段**: 先编写 21 个测试用例,覆盖:
+  - 渲染测试 (3个): 基础渲染、纯文本模式、默认 Markdown 模式
+  - Markdown 渲染测试 (9个): 标题、有序/无序列表、代码块、内联代码、粗体/斜体、链接、引用
+  - 语法高亮测试 (3个): JavaScript、Python、无语言指定
+  - 空状态测试 (3个): 空字符串、空白字符、有内容
+  - Props 测试 (3个): content、isMarkdown=true、isMarkdown=false
+- **GREEN 阶段**: 实现最小代码使测试通过
+- **REFACTOR 阶段**: 优化代码,移除不必要的注释
+
+### 依赖库使用
+- **react-markdown**: 用于渲染 Markdown 内容
+  - 支持 CommonMark 规范
+  - 通过 `components` prop 自定义渲染器
+  - 自动处理 HTML 转义
+- **react-syntax-highlighter**: 用于代码块语法高亮
+  - 使用 Prism 语法高亮器
+  - vscDarkPlus 主题 (VS Code 深色主题)
+  - 支持多种语言 (JavaScript, Python, Rust, etc.)
+  - 自动检测语言并应用高亮
+
+### 组件设计模式
+- **Props 接口**: 
+  - `content: string` - 要显示的内容
+  - `isMarkdown?: boolean` - 是否渲染为 Markdown (默认 true)
+- **条件渲染**: 
+  - 空状态 → 纯文本模式 → Markdown 模式
+  - 代码块检测: `language-(\w+)` 正则匹配
+  - 内联代码 vs 代码块: 根据 className 判断
+- **组件结构**: 
+  - 外层容器 (`.output-viewer`)
+  - 内容容器 (`.output-viewer-content`)
+  - ReactMarkdown 组件 + 自定义 code 渲染器
+
+### React Testing Library 技巧
+- **语法高亮测试**: react-syntax-highlighter 会将代码分解为多个 `<span>` 元素
+  - 问题: `screen.getByText(/const greeting/)` 找不到文本
+  - 解决方案: 使用 `container.querySelector()` 查找 code 元素
+  - 验证: 检查 `codeBlock?.textContent` 包含关键词
+  - 示例: 
+    ```typescript
+    const { container } = render(<OutputViewer content={markdown} />);
+    const codeBlock = container.querySelector('code.language-javascript');
+    expect(codeBlock?.textContent).toContain('const');
+    ```
+- **避免不必要的注释**: 测试代码应该自解释,避免冗余注释
+
+### Markdown 渲染实现
+- **ReactMarkdown 配置**:
+  ```typescript
+  <ReactMarkdown
+    children={content}
+    components={{
+      code({ className, children, ...props }) {
+        const match = /language-(\w+)/.exec(className || '');
+        const isInline = !match;
+        
+        if (isInline) {
+          return <code className={className} {...props}>{children}</code>;
+        }
+
+        return (
+          <SyntaxHighlighter
+            style={vscDarkPlus}
+            language={match[1]}
+            PreTag="div"
+            children={String(children).replace(/\n$/, '')}
+          />
+        );
+      }
+    }}
+  />
+  ```
+- **关键点**:
+  - 正则提取语言名称: `/language-(\w+)/.exec(className)`
+  - 内联代码 vs 代码块判断: 根据 match 结果
+  - 移除末尾换行符: `replace(/\n$/, '')`
+
+### macOS 原生风格
+- **设计系统变量**: 使用 `--font-*`, `--text-*`, `--bg-*`, `--space-*` 等
+- **Markdown 样式**:
+  - 标题: 不同字号 (3xl, 2xl, xl, lg)
+  - 段落: 底部间距 (--space-md)
+  - 列表: 默认样式 (disc/decimal)
+  - 代码块: 深色背景 (--bg-tertiary)、圆角、等宽字体
+  - 内联代码: 浅色背景、小字号 (0.85em)
+  - 引用块: 左侧蓝色边框、浅色背景
+  - 链接: 系统蓝色、hover 效果
+- **代码块字体**: SF Mono + Monaco + Cascadia Code + Consolas fallback
+- **滚动容器**: max-height: 600px, overflow-y: auto
+
+### 空状态设计
+- **检测逻辑**: `!content || content.trim() === ''`
+- **视觉效果**: 
+  - 居中布局 (flexbox)
+  - 灰色文字 (--text-tertiary)
+  - 斜体字体
+  - 最小高度 (min-height: 200px)
+
+### 文件结构
+```
+src/components/
+├── OutputViewer.tsx         # 组件实现 (64 行)
+├── OutputViewer.test.tsx    # 测试文件 (207 行, 21 个测试)
+└── OutputViewer.css         # 样式文件 (152 行)
+```
+
+### Verified
+- [x] 所有 21 个 OutputViewer 测试通过
+- [x] 所有 143 个总测试通过
+- [x] TypeScript 类型检查通过 (npx tsc --noEmit)
+- [x] 组件支持 Markdown 渲染
+- [x] 组件支持纯文本模式
+- [x] 代码块语法高亮 (JavaScript, Python)
+- [x] 内联代码样式
+- [x] 列表、标题、引用、链接等 Markdown 元素
+- [x] 空状态显示
+- [x] macOS 风格样式 (Dark Mode 支持)
+- [x] 使用设计系统 CSS 变量

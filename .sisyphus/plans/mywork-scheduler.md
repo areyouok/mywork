@@ -982,7 +982,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-22-history-list.png
     ```
 
-- [ ] 23. 实现输出查看器组件 (TDD)
+- [x] 23. 实现输出查看器组件 (TDD)
   - **What**: 创建 `OutputViewer.tsx` 显示任务输出，支持 Markdown 渲染
   - **TDD**: 测试文本和 Markdown 显示
   - **Category**: `visual-engineering`
