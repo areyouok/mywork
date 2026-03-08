@@ -298,3 +298,88 @@
 - [x] Output directory created in app data directory
 - [x] File naming convention followed
 - [x] Cleanup respects file age and type
+
+## Task 12: Cron Expression Parser
+
+### What was done:
+1. Created scheduler module structure (`src-tauri/src/scheduler/mod.rs`, `cron_parser.rs`)
+2. Added `cron = "0.12"` dependency to Cargo.toml
+3. Defined `CronError` enum with 4 variants: InvalidFieldCount, OutOfRange, InvalidSyntax, EmptyExpression
+4. Defined `CronSchedule` struct with parsed field information
+5. Implemented `validate_cron(expression)` - validates 5-field cron expression
+6. Implemented `parse_cron(expression)` - parses and returns field details
+7. Wrote 29 comprehensive tests covering valid/invalid expressions and edge cases
+
+### Key Points:
+- `cron` crate uses 6-field format (includes seconds): `sec min hour dom mon dow`
+- Conversion: prepend "0 " to user's 5-field expression before passing to cron crate
+- Day of week uses 1-7 range (1=Monday, 7=Sunday), NOT 0-6 like standard cron
+- `?` is supported as "any value" for day fields
+- Supports ranges (1-5), lists (1,3,5), steps (*/5), and combinations
+
+### Cron Expression Format (5-field user input):
+```
+┌───────────── minute (0 - 59)
+│ ┌───────────── hour (0 - 23)
+│ │ ┌───────────── day of month (1 - 31)
+│ │ │ ┌───────────── month (1 - 12)
+│ │ │ │ ┌───────────── day of week (1 - 7, 1=Mon, 7=Sun)
+* * * * *
+```
+
+### Module Structure:
+- `scheduler/mod.rs` - Public API exports
+- `scheduler/cron_parser.rs` - Cron parsing logic, error types, and tests
+- Clean separation: scheduler module for cron parsing, storage for files, models for database
+
+### Testing Patterns:
+- Valid expressions: simple, ranges, lists, steps, complex combinations
+- Invalid expressions: wrong field count, out of range values, malformed syntax
+- Edge cases: boundary values, common scheduling patterns
+- Serialization tests for CronSchedule and CronError
+
+### Verified:
+- [x] All 29 cron_parser tests pass
+- [x] All 71 total tests pass (including db, models, storage, scheduler tests)
+- [x] Doc-tests pass for validate_cron and parse_cron
+- [x] Build succeeds without errors
+- [x] Proper error handling with descriptive messages
+- [x] Serde serialization support for structs
+
+## Task 13: Simple Schedule Parser
+
+### What was done:
+1. Created `scheduler/simple_schedule.rs` module
+2. Implemented `parse_simple_schedule(json: &str) -> Result<String, ScheduleError>` function
+3. Added module exports to `scheduler/mod.rs`
+4. Wrote 29 comprehensive tests covering all schedule types and error cases
+
+### Supported JSON Formats:
+- **interval**: `{"type": "interval", "value": 5, "unit": "minutes"}` → `"*/5 * * * *"`
+  - units: "minutes", "hours", "days"
+- **daily**: `{"type": "daily", "time": "09:30"}` → `"30 9 * * *"`
+- **weekly**: `{"type": "weekly", "day": "monday", "time": "09:30"}` → `"30 9 * * 1"`
+  - days: full names (monday, tuesday...) and short names (mon, tue...)
+  - case insensitive
+
+### Key Points:
+- Uses `serde_json` for parsing JSON input
+- Converts simple schedule to standard 5-field cron expression
+- Error types: InvalidJson, InvalidScheduleType, InvalidIntervalValue, InvalidIntervalUnit, InvalidTimeFormat, InvalidDayOfWeek, MissingField
+- Day of week mapping: Sunday=0, Monday=1, ..., Saturday=6
+
+### Module Structure:
+- `scheduler/mod.rs` - Updated to export simple_schedule module
+- `scheduler/simple_schedule.rs` - Parser implementation with tests
+
+### Testing Coverage:
+- Interval: valid values (1, 5, etc.), units (minutes, hours, days), invalid (0, missing, wrong unit)
+- Daily: valid times (00:00, 09:30, 23:59), invalid (24:00, 12:60, wrong format, missing)
+- Weekly: all 7 days, short names, case insensitive, invalid day, missing fields
+- General: invalid JSON, unknown schedule type, missing type field
+
+### Verified:
+- [x] All 29 simple_schedule tests pass
+- [x] All 100 total tests pass (including all previous tasks)
+- [x] Doc-tests pass for parse_simple_schedule
+- [x] Build succeeds without warnings
