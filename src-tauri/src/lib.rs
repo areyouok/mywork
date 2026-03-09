@@ -4,6 +4,8 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
+use tokio::sync::Mutex;
+use scheduler::job_scheduler::Scheduler;
 
 pub mod commands;
 pub mod db;
@@ -56,6 +58,9 @@ pub fn run() {
             .expect("Failed to initialize database");
 
             app.manage(Arc::new(pool));
+            
+            let scheduler = Arc::new(Mutex::new(Scheduler::new()));
+            app.manage(scheduler);
 
             setup_tray(app)?;
             Ok(())
@@ -70,6 +75,12 @@ pub fn run() {
             commands::get_execution,
             commands::create_execution,
             commands::update_execution,
+            commands::start_scheduler,
+            commands::stop_scheduler,
+            commands::get_scheduler_status,
+            commands::run_task,
+            commands::get_output,
+            commands::delete_output,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

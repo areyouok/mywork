@@ -1402,3 +1402,134 @@ src/
 - [x] 类型转换正确 (boolean ↔ i32)
 - [x] 错误处理完善
 
+
+## Task 26: Complete Tauri Commands Integration (2024-03-09)
+
+### What was done:
+1. 创建了 3 个新的 command 模块文件：
+   - `scheduler_commands.rs` - 调度器控制 commands (start, stop, status)
+   - `task_runner_commands.rs` - 任务执行 command (run_task with full flow)
+   - `output_commands.rs` - 输出文件管理 commands (get, delete)
+2. 更新了 `commands/mod.rs` 导出新模块
+3. 更新了 `lib.rs`：
+   - 导入 `tokio::sync::Mutex` 和 `Scheduler`
+   - 添加 scheduler state 管理 (`Arc<Mutex<Scheduler>>`)
+   - 在 setup 中初始化 scheduler
+   - 注册所有 6 个新 commands
+4. 运行 cargo build 和 cargo test 验证
+
+### 实现的 6 个新 Commands:
+1. **start_scheduler** - 启动调度器
+2. **stop_scheduler** - 停止调度器
+3. **get_scheduler_status** - 获取调度器状态 ("running" / "stopped")
+4. **run_task** - 立即执行任务（完整流程）
+5. **get_output** - 读取执行输出文件内容
+6. **delete_output** - 删除输出文件
+
+### run_task 完整执行流程:
+1. 接收 task_id 参数
+2. 从数据库获取 task 信息
+3. 创建 execution record (status=running)
+4. 调用 run_opencode_task 执行任务（带 timeout）
+5. 创建输出目录
+6. 保存输出到文件（包含 session_id、stdout、stderr）
+7. 更新 execution 状态：
+   - success: opencode_output.success && !timed_out
+   - timeout: opencode_output.timed_out
+   - failed: !opencode_output.success
+8. 返回 execution_id 或错误消息
+
+### Tauri State 管理模式:
+```rust
+// lib.rs - 初始化和注册
+use tokio::sync::Mutex;
+use scheduler::job_scheduler::Scheduler;
+
+let scheduler = Arc::new(Mutex::new(Scheduler::new()));
+app.manage(scheduler);
+
+// commands - 使用 State 参数
+pub async fn start_scheduler(
+    scheduler: State<'_, Arc<Mutex<Scheduler>>>,
+) -> Result<String, String> {
+    let scheduler = scheduler.inner().clone();
+    let scheduler_guard = scheduler.lock().await;
+    scheduler_guard.start().await
+        .map_err(|e| format!("Failed to start scheduler: {}", e))?;
+    Ok("Scheduler started successfully".to_string())
+}
+```
+
+### 错误处理策略:
+- **Task 不存在**: `get_task()` 返回错误，立即返回 friendly error message
+- **Execution 创建失败**: 捕获错误，返回 descriptive message
+- **OpenCode 执行失败**: 保存错误到文件，更新状态为 failed
+- **文件操作失败**: 尽可能保存部分输出，仍然更新 execution 状态
+- **所有错误**: 使用 `Result<T, String>` 统一返回格式
+
+### AppHandle vs State:
+- **AppHandle**: 用于访问 Tauri 应用功能（如 app data directory）
+- **State**: 用于访问 managed state（如 pool, scheduler）
+- **组合使用**: `run_task` 同时需要 pool (State) 和 app (AppHandle)
+
+### 输出文件格式:
+```
+Session ID: sess_xxx
+
+=== STDOUT ===
+[opencode stdout content]
+
+=== STDERR ===
+[opencode stderr content]
+```
+
+### 编译器警告修复:
+1. **unused import Manager**: 移除未使用的 Manager 导入
+2. **unnecessary mut**: scheduler_guard 不需要 mutable（只调用 &self 方法）
+
+### 模块组织:
+```
+src-tauri/src/commands/
+├── mod.rs                      # 导出所有 commands
+├── task_commands.rs            # 任务 CRUD
+├── execution_commands.rs       # 执行记录 CRUD
+├── scheduler_commands.rs       # 调度器控制 (new)
+├── task_runner_commands.rs     # 任务执行 (new)
+└── output_commands.rs          # 输出管理 (new)
+```
+
+### 关键设计决策:
+1. **Scheduler State**: 使用 `Arc<Mutex<Scheduler>>` 确保线程安全
+2. **run_task 错误恢复**: 即使文件保存失败，仍然更新 execution 状态
+3. **输出文件保存**: 即使执行失败，也保存错误信息到文件（便于调试）
+4. **State 参数顺序**: 遵循 Tauri 惯例，State 参数在前，普通参数在后
+
+### 前端调用示例:
+```typescript
+// 启动调度器
+await invoke('start_scheduler');
+
+// 立即执行任务
+const executionId = await invoke('run_task', { taskId: 'xxx' });
+
+// 获取输出
+const output = await invoke('get_output', { executionId: 'yyy' });
+
+// 删除输出
+await invoke('delete_output', { executionId: 'yyy' });
+```
+
+### Verified:
+- [x] 所有 168 个 Rust 测试通过
+- [x] Cargo build 成功（无错误、无警告）
+- [x] scheduler_commands.rs 创建完成 (58 行)
+- [x] task_runner_commands.rs 创建完成 (122 行)
+- [x] output_commands.rs 创建完成 (35 行)
+- [x] lib.rs 更新完成（scheduler state + 6 个新 commands 注册）
+- [x] commands/mod.rs 更新完成（导出 3 个新模块）
+- [x] 所有新 commands 返回 Result<T, String> 格式
+- [x] run_task 实现完整流程（创建 execution → 执行 → 保存 → 更新）
+- [x] 错误处理全面，返回友好错误消息
+- [x] 前端可以调用 invoke('run_task', {taskId})
+- [x] 前端可以调用 invoke('start_scheduler')
+- [x] 前端可以调用 invoke('get_output', {executionId})

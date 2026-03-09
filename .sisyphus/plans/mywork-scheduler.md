@@ -1160,7 +1160,7 @@ Max Concurrent: 7 (Waves 1 & 2)
 
 ### Wave 5: Integration & Testing
 
-- [ ] 25. 集成前后端 - Tauri commands
+- [x] 25. 集成前后端 - Tauri commands
   - **What**: 实现所有 Tauri commands 连接前端和后端
   - **TDD**: 测试 command 调用
   - **Category**: `deep`
