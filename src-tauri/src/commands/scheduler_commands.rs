@@ -160,16 +160,6 @@ pub async fn reload_scheduler(
     }
 }
 
-use crate::task_executor::execute_task;
-use crate::models::execution::ExecutionStatus;
-use crate::opencode::executor::run_opencode_task;
-use crate::storage::output;
-use crate::db::connection;
-use chrono::Utc;
-use sqlx::SqlitePool;
-use std::sync::Arc;
-use tauri::AppHandle;
-
 /// Internal function to execute a task (used by scheduler callbacks)
 pub async fn execute_task_internal(
     task_id: String,
@@ -178,6 +168,11 @@ pub async fn execute_task_internal(
     timeout_seconds: u64,
     task_queue: Arc<Mutex<TaskQueue>>,
 ) -> Result<(), String> {
+    use crate::models::execution::ExecutionStatus;
+    use crate::opencode::executor::run_opencode_task;
+    use crate::storage::output;
+    use chrono::Utc;
+
     // Check if task is already running (always enforce skip if running)
     let queue = task_queue.lock().await;
     let skip_result = queue.skip_if_running(&task_id).await;
@@ -188,50 +183,6 @@ pub async fn execute_task_internal(
             eprintln!("Task '{}' is already running, skipping execution", task_id);
             return Ok(());
         }
-        SkipResult::Execute => {}
-    }
-
-    // Acquire slot for this task (guard will be dropped when function ends, releasing the slot)
-    let queue = task_queue.lock().await;
-    let _guard = match queue.acquire_slot(&task_id).await {
-        Ok(guard) => guard,
-        Err(e) => {
-            eprintln!("Failed to acquire slot for task '{}': {}", task_id, e);
-            return Ok(());
-        }
-    };
-    drop(queue);
-
-    // Use shared executor
-    let result = execute_task(task_id.clone(), pool.clone(), app.clone(), timeout_seconds).await
-        .map_err(|e| format!("Task execution failed: {}", e))?;
-    
-    Ok(())
-}
-        SkipResult::Execute => {}
-    }
-
-    // Acquire slot for this task (guard will be dropped when function ends, releasing the slot)
-    let queue = task_queue.lock().await;
-    let _guard = match queue.acquire_slot(&task_id).await {
-        Ok(guard) => guard,
-        Err(e) => {
-            eprintln!("Failed to acquire slot for task '{}': {}", task_id, e);
-            return Ok(());
-        }
-    };
-    drop(queue);
-
-    // Use shared executor - wrap result to handle errors internally
-    let result = execute_task(task_id, &pool, &app, timeout_seconds).await;
-    
-    match result {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            eprintln!("Task execution failed: {}", e);
-        }
-    }
-}
         SkipResult::Execute => {}
     }
 
