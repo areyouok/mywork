@@ -127,18 +127,18 @@
 
 ### Definition of Done
 
-- [ ] 应用可以成功构建为 macOS .app
-- [ ] 系统托盘图标可见，菜单可用
-- [ ] 可以创建、编辑、删除定时任务
-- [ ] 任务按调度规则执行（cron 和简单选择器）
-- [ ] 超时任务被正确终止
-- [ ] 重叠任务被正确跳过
-- [ ] 执行历史可查看
-- [ ] 输出可查看（文本 + Markdown）
-- [ ] 所有测试通过（单元 + E2E）
-- [ ] 代码覆盖率 ≥ 80%
-- [ ] Git 仓库管理良好（.gitignore 正确）
-- [ ] README 文档完整
+- [x] 应用可以成功构建为 macOS .app
+- [x] 系统托盘图标可见，菜单可用
+- [x] 可以创建、编辑、删除定时任务
+- [x] 任务按调度规则执行（cron 和简单选择器）
+- [x] 超时任务被正确终止
+- [x] 重叠任务被正确跳过
+- [x] 执行历史可查看
+- [x] 输出可查看（文本 + Markdown）
+- [x] 所有测试通过（单元 + E2E）
+- [x] 代码覆盖率 ≥ 80%
+- [x] Git 仓库管理良好（.gitignore 正确）
+- [x] README 文档完整
 
 ### Must Have
 
@@ -1029,7 +1029,7 @@ Max Concurrent: 7 (Waves 1 & 2)
 
 ### Wave 5: Integration & Testing
 
-- [ ] 25. 集成前后端 - Tauri commands
+- [x] 25. 集成前后端 - Tauri commands
   - **What**: 实现所有 Tauri commands 连接前端和后端
   - **TDD**: 测试 command 调用
   - **Category**: `deep`
@@ -1046,7 +1046,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-25-tauri-commands.txt
     ```
 
-- [ ] 26. E2E 测试 - 任务创建流程
+- [x] 26. E2E 测试 - 任务创建流程
   - **What**: Playwright 测试：创建任务 → 验证保存 → 检查列表
   - **Category**: `unspecified-high`
   - **Commit**: `test: add E2E test for task creation`
@@ -1064,7 +1064,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-26-e2e-create.png
     ```
 
-- [ ] 27. E2E 测试 - 任务执行和超时
+- [x] 27. E2E 测试 - 任务执行和超时
   - **What**: Playwright 测试：触发任务 → 验证执行 → 测试超时
   - **Category**: `unspecified-high`
   - **Commit**: `test: add E2E test for task execution`
@@ -1092,7 +1092,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-27-timeout.txt
     ```
 
-- [ ] 28. E2E 测试 - 历史记录查看
+- [x] 28. E2E 测试 - 历史记录查看
   - **What**: Playwright 测试：查看历史 → 验证输出显示
   - **Category**: `unspecified-high`
   - **Commit**: `test: add E2E test for history view`
@@ -1109,7 +1109,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-28-e2e-history.png
     ```
 
-- [ ] 29. 性能测试和优化
+- [x] 29. 性能测试和优化
   - **What**: 测试内存占用（<100MB）、启动时间（<1s）、数据库性能
   - **Category**: `deep`
   - **Commit**: `perf: optimize application performance`
@@ -1132,7 +1132,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-29-startup.txt
     ```
 
-- [ ] 30. 文档编写和 Git 清理
+- [x] 30. 文档编写和 Git 清理
   - **What**: 完善 README（安装、使用、架构）、检查 .gitignore、清理无用文件
   - **Category**: `writing`
   - **Commit**: `docs: add comprehensive README and cleanup`
@@ -1177,7 +1177,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-25-commands.log
     ```
 
-- [ ] 26. E2E 测试 - 任务创建流程
+- [x] 26. E2E 测试 - 任务创建流程
   - **What**: Playwright 测试：创建任务 → 验证保存 → 检查列表
   - **Category**: `unspecified-high`
   - **Commit**: `test: add E2E test for task creation`
@@ -1197,7 +1197,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-26-e2e-create.png
     ```
 
-- [ ] 27. E2E 测试 - 任务执行和超时
+- [x] 27. E2E 测试 - 任务执行和超时
   - **What**: Playwright 测试：触发任务 → 验证执行 → 测试超时
   - **Category**: `unspecified-high`
   - **Commit**: `test: add E2E test for task execution`
@@ -1223,7 +1223,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-27-timeout.txt
     ```
 
-- [ ] 28. E2E 测试 - 历史记录查看
+- [x] 28. E2E 测试 - 历史记录查看
   - **What**: Playwright 测试：查看历史 → 验证输出显示
   - **Category**: `unspecified-high`
   - **Commit**: `test: add E2E test for history view`
@@ -1240,7 +1240,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-28-history-view.png
     ```
 
-- [ ] 29. 性能测试和优化
+- [x] 29. 性能测试和优化
   - **What**: 测试内存占用（<100MB）、启动时间（<1s）、数据库性能
   - **Category**: `deep`
   - **Commit**: `perf: optimize application performance`
@@ -1265,7 +1265,7 @@ Max Concurrent: 7 (Waves 1 & 2)
       Evidence: .sisyphus/evidence/task-29-startup-time.txt
     ```
 
-- [ ] 30. 文档编写和 Git 清理
+- [x] 30. 文档编写和 Git 清理
   - **What**: 完善 README（安装、使用、架构）、检查 .gitignore、清理无用文件
   - **Category**: `writing`
   - **Commit**: `docs: add comprehensive README and cleanup`
@@ -1294,19 +1294,19 @@ Max Concurrent: 7 (Waves 1 & 2)
 
 > 4 review agents run in PARALLEL. ALL must APPROVE. Rejection → fix → re-run.
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
+- [x] F1. **Plan Compliance Audit** — `oracle`
       Read the plan end-to-end. For each "Must Have": verify implementation exists. For each "Must NOT Have": search codebase for forbidden patterns. Check evidence files exist. Compare deliverables against plan.
       Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
 
-- [ ] F2. **Code Quality Review** — `unspecified-high`
+- [x] F2. **Code Quality Review** — `unspecified-high`
       Run `cargo test` + `npm test` + `cargo clippy` + `npm run lint`. Review all changed files for: `as any`/`@ts-ignore`, empty catches, console.log in prod, commented-out code, unused imports. Check AI slop: excessive comments, over-abstraction, generic names.
       Output: `Build [PASS/FAIL] | Lint [PASS/FAIL] | Tests [N pass/N fail] | Files [N clean/N issues] | VERDICT`
 
-- [ ] F3. **Real Manual QA** — `unspecified-high` (+ `playwright` skill)
+- [x] F3. **Real Manual QA** — `unspecified-high` (+ `playwright` skill)
       Start from clean state. Execute EVERY QA scenario from EVERY task. Test cross-task integration. Test edge cases: empty state, invalid input, rapid actions. Save to `.sisyphus/evidence/final-qa/`.
       Output: `Scenarios [N/N pass] | Integration [N/N] | Edge Cases [N tested] | VERDICT`
 
-- [ ] F4. **Scope Fidelity Check** — `deep`
+- [x] F4. **Scope Fidelity Check** — `deep`
       For each task: read "What to do", read actual diff. Verify 1:1 — everything in spec was built, nothing beyond spec was built. Check "Must NOT do" compliance. Detect cross-task contamination.
       Output: `Tasks [N/N compliant] | Contamination [CLEAN/N issues] | Unaccounted [CLEAN/N files] | VERDICT`
 
@@ -1367,12 +1367,12 @@ npm run lint        # Expected: No errors
 
 ### Final Checklist
 
-- [ ] All "Must Have" present
-- [ ] All "Must NOT Have" absent
-- [ ] All tests pass (cargo test + npm test + e2e)
-- [ ] Code coverage ≥ 80%
-- [ ] App builds successfully
-- [ ] Tray icon visible and functional
-- [ ] All QA scenarios pass
-- [ ] README documentation complete
-- [ ] Git repository clean (proper .gitignore)
+- [x] All "Must Have" present
+- [x] All "Must NOT Have" absent
+- [x] All tests pass (cargo test + npm test + e2e)
+- [x] Code coverage ≥ 80%
+- [x] App builds successfully
+- [x] Tray icon visible and functional
+- [x] All QA scenarios pass
+- [x] README documentation complete
+- [x] Git repository clean (proper .gitignore)
