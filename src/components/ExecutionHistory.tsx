@@ -30,6 +30,18 @@ export function ExecutionHistory({
     );
   }
 
+  const handleClick = (execution: Execution) => {
+    if (onViewOutput && execution.output_file) {
+      onViewOutput(execution);
+    }
+  };
+
+  const handleKeyPress = (event: React.KeyboardEvent, execution: Execution) => {
+    if (event.key === 'Enter' && onViewOutput && execution.output_file) {
+      onViewOutput(execution);
+    }
+  };
+
   const formatTime = (dateString: string): string => {
     const date = new Date(dateString);
     const now = new Date();
@@ -37,17 +49,15 @@ export function ExecutionHistory({
     const diffHours = diffMs / (1000 * 60 * 60);
     const diffDays = diffMs / (1000 * 60 * 60 * 24);
 
-    if (diffHours < 24) {
-      if (diffHours < 1) {
-        const diffMinutes = Math.floor(diffMs / (1000 * 60));
-        if (diffMinutes < 1) {
-          return 'less than 1 minute ago';
-        }
-        return diffMinutes === 1 ? '1 minute ago' : `${diffMinutes} minutes ago`;
-      }
-      return diffHours < 2 ? '1 hour ago' : `${Math.floor(diffHours)} hours ago`;
+    if (diffHours < 1) {
+      return 'less than 1 minute ago';
     }
-
+    if (diffHours < 2) {
+      return '1 hour ago';
+    }
+    if (diffHours < 24) {
+      return `${Math.floor(diffHours)} hours ago`;
+    }
     if (diffDays < 7) {
       return date.toLocaleString('en-US', {
         weekday: 'short',
@@ -89,18 +99,6 @@ export function ExecutionHistory({
     return `${diffSeconds}s`;
   };
 
-  const handleClick = (execution: Execution) => {
-    if (onViewOutput && execution.output_file) {
-      onViewOutput(execution);
-    }
-  };
-
-  const handleKeyPress = (event: React.KeyboardEvent, execution: Execution) => {
-    if (event.key === 'Enter' && onViewOutput && execution.output_file) {
-      onViewOutput(execution);
-    }
-  };
-
   const getStatusLabel = (status: Execution['status']): string => {
     return status;
   };
@@ -116,18 +114,11 @@ export function ExecutionHistory({
             key={execution.id}
             className={`execution-item ${isClickable ? 'clickable' : ''}`}
             role="listitem"
-            aria-label={`Execution ${getStatusLabel(execution.status)} at ${formatTime(execution.started_at)}`}
             tabIndex={isClickable ? 0 : undefined}
             onClick={() => handleClick(execution)}
             onKeyPress={(e) => handleKeyPress(e, execution)}
+            aria-label={`Execution ${getStatusLabel(execution.status)} at ${formatTime(execution.started_at)}`}
           >
-            <div className="execution-header">
-              <span className={`execution-status status-${execution.status}`}>
-                {execution.status}
-              </span>
-              <span className="execution-time">{formatTime(execution.started_at)}</span>
-            </div>
-
             <div className="execution-duration">
               {isRunning
                 ? 'Running...'
