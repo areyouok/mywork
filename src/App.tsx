@@ -39,7 +39,8 @@ function App() {
     async function initScheduler() {
       try {
         const currentStatus = await api.getSchedulerStatus();
-        if (currentStatus === 'stopped') {
+        console.log('Scheduler status:', currentStatus);
+        if (currentStatus.startsWith('stopped')) {
           await api.startScheduler();
         }
         setSchedulerStatus('running');
@@ -67,7 +68,7 @@ function App() {
     }
 
     loadExecutions();
-  }, [selectedTaskId]);
+  }, [selectedTaskId, viewMode]);
 
   const handleTaskSelect = (task: Task) => {
     setSelectedTaskId(task.id);
@@ -138,6 +139,9 @@ function App() {
           enabled: 1,
         });
         setTasks((prev) => [...prev, newTask]);
+
+        // Reload scheduler to pick up the new task
+        await api.reloadScheduler();
       }
 
       setViewMode('list');

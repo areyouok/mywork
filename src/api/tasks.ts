@@ -123,6 +123,10 @@ export async function getSchedulerStatus(): Promise<string> {
   return await invoke<string>('get_scheduler_status');
 }
 
+export async function reloadScheduler(): Promise<string> {
+  return await invoke<string>('reload_scheduler');
+}
+
 export async function getOutput(executionId: string): Promise<string> {
   return await invoke<string>('get_output', { executionId });
 }

@@ -46,13 +46,14 @@ pub async fn get_scheduler_status(
     let scheduler_guard = scheduler.lock().await;
     
     let state = scheduler_guard.get_state().await;
+    let job_count = scheduler_guard.job_count().await;
     
     let status = match state {
         SchedulerState::Running => "running",
         SchedulerState::Stopped => "stopped",
     };
     
-    Ok(status.to_string())
+    Ok(format!("{} ({} jobs)", status, job_count))
 }
 
 /// Get cron expression from task
