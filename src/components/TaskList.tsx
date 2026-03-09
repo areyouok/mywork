@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { TaskListProps, Task } from '@/types/task';
 import './TaskList.css';
 
-export function TaskList({ tasks, onToggle, onDelete, onRun }: TaskListProps) {
+export function TaskList({ tasks, onToggle, onDelete, onRun, onEdit, onHistory }: TaskListProps) {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   if (tasks.length === 0) {
@@ -94,32 +94,50 @@ export function TaskList({ tasks, onToggle, onDelete, onRun }: TaskListProps) {
           </div>
 
           <div className="task-actions">
-            <button
-              className="btn-run"
-              aria-label={`Run ${task.name}`}
-              onClick={() => onRun?.(task.id)}
-            >
-              Run
-            </button>
-            {confirmDelete === task.id ? (
-              <div className="confirm-delete">
-                <span>Are you sure?</span>
-                <button className="btn-confirm" onClick={() => handleConfirmDelete(task.id)}>
-                  Confirm
-                </button>
-                <button className="btn-cancel" onClick={handleCancelDelete}>
-                  Cancel
-                </button>
-              </div>
-            ) : (
+            <div className="action-group primary">
               <button
-                className="btn-delete"
-                aria-label={`Delete ${task.name}`}
-                onClick={() => handleDeleteClick(task.id)}
+                className="btn-run"
+                aria-label={`Run ${task.name}`}
+                onClick={() => onRun?.(task.id)}
               >
-                Delete
+                Run
               </button>
-            )}
+              <button
+                className="btn-edit"
+                aria-label={`Edit ${task.name}`}
+                onClick={() => onEdit?.(task)}
+              >
+                Edit
+              </button>
+              <button
+                className="btn-history"
+                aria-label={`View history for ${task.name}`}
+                onClick={() => onHistory?.(task)}
+              >
+                History
+              </button>
+            </div>
+            <div className="action-group secondary">
+              {confirmDelete === task.id ? (
+                <div className="confirm-delete">
+                  <span>Are you sure?</span>
+                  <button className="btn-confirm" onClick={() => handleConfirmDelete(task.id)}>
+                    Confirm
+                  </button>
+                  <button className="btn-cancel" onClick={handleCancelDelete}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="btn-delete"
+                  aria-label={`Delete ${task.name}`}
+                  onClick={() => handleDeleteClick(task.id)}
+                >
+                  Delete
+                </button>
+              )}
+            </div>
           </div>
         </div>
       ))}

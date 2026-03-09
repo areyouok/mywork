@@ -16,4 +16,6 @@ export interface TaskListProps {
   onToggle?: (taskId: string, enabled: boolean) => void;
   onDelete?: (taskId: string) => void;
   onRun?: (taskId: string) => void;
+  onEdit?: (task: Task) => void;
+  onHistory?: (task: Task) => void;
 }

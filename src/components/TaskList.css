@@ -127,10 +127,24 @@
 
 .task-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: var(--space-sm);
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
   padding-top: var(--space-md);
   border-top: 1px solid var(--border-light);
+}
+
+.action-group {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.action-group.primary {
+  flex: 1;
+}
+
+.action-group.secondary {
+  flex-shrink: 0;
 }
 
 .btn-run {
@@ -147,6 +161,25 @@
 
 .btn-run:hover {
   opacity: 0.9;
+}
+
+.btn-edit,
+.btn-history {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.btn-edit:hover,
+.btn-history:hover {
+  background: var(--bg-secondary);
+  border-color: var(--text-quaternary);
 }
 
 .btn-delete,
