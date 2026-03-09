@@ -15,7 +15,7 @@ pub mod opencode;
 pub mod scheduler;
 pub mod storage;
 
-use commands::{get_tasks, get_task, create_task, update_task, delete_task};
+use commands::{get_tasks, get_task, create_task, update_task, delete_task, run_task};
 use commands::{get_executions, get_execution};
 use commands::{get_scheduler_status, start_scheduler, stop_scheduler, reload_scheduler};
 use commands::{get_output, delete_output};
@@ -105,6 +105,7 @@ pub fn run() {
             create_task,
             update_task,
             delete_task,
+            run_task,
             get_executions,
             get_execution,
             get_scheduler_status,

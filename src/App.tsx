@@ -115,6 +115,19 @@ function App() {
     }
   };
 
+  const handleRunTask = async (taskId: string) => {
+    try {
+      await api.runTask(taskId);
+      // Reload executions if viewing history
+      if (selectedTaskId === taskId && viewMode === 'history') {
+        const loadedExecutions = await api.getExecutions(taskId);
+        setExecutions(loadedExecutions);
+      }
+    } catch (error) {
+      console.error('Failed to run task:', error);
+    }
+  };
+
   const handleSubmitTask = async (data: TaskFormData) => {
     try {
       if (editingTask) {
@@ -237,6 +250,7 @@ function App() {
                   tasks={[selectedTask]}
                   onToggle={handleToggleTask}
                   onDelete={handleDeleteTask}
+                  onRun={handleRunTask}
                 />
               </div>
             </div>

@@ -133,6 +133,22 @@
   border-top: 1px solid var(--border-light);
 }
 
+.btn-run {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid transparent;
+  background: var(--success-color);
+  color: white;
+}
+
+.btn-run:hover {
+  opacity: 0.9;
+}
+
 .btn-delete,
 .btn-confirm,
 .btn-cancel {

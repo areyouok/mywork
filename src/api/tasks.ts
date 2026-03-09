@@ -95,6 +95,10 @@ export async function deleteTask(id: string): Promise<boolean> {
   return await invoke<boolean>('delete_task', { id });
 }
 
+export async function runTask(taskId: string): Promise<string> {
+  return await invoke<string>('run_task', { taskId });
+}
+
 export async function getExecutions(taskId: string): Promise<Execution[]> {
   return await invoke<Execution[]>('get_executions', { taskId });
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { TaskListProps, Task } from '@/types/task';
 import './TaskList.css';
 
-export function TaskList({ tasks, onToggle, onDelete }: TaskListProps) {
+export function TaskList({ tasks, onToggle, onDelete, onRun }: TaskListProps) {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   if (tasks.length === 0) {
@@ -94,6 +94,13 @@ export function TaskList({ tasks, onToggle, onDelete }: TaskListProps) {
           </div>
 
           <div className="task-actions">
+            <button
+              className="btn-run"
+              aria-label={`Run ${task.name}`}
+              onClick={() => onRun?.(task.id)}
+            >
+              Run
+            </button>
             {confirmDelete === task.id ? (
               <div className="confirm-delete">
                 <span>Are you sure?</span>
