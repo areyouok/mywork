@@ -149,7 +149,7 @@ async fn add_task_to_scheduler(
     let _job_id = scheduler_guard
         .add_job(&task.id, cron_expression, callback)
         .await
-        .map_err(|e| format!("Failed to add job to scheduler: {}", e.to_string()))?;
+        .map_err(|e| format!("Failed to add job to scheduler: {}", e))?;
     
     Ok(())
 }

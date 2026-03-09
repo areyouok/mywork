@@ -106,7 +106,7 @@ pub async fn reload_scheduler(
         }
         
         // Get cron expression
-        let cron_expr = match get_task_cron_expression(&task) {
+        let cron_expr = match get_task_cron_expression(task) {
         Some(expr) => expr,
         None => {
             errors.push(format!("Task '{}' has no valid schedule", task.id));

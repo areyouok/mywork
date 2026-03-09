@@ -149,7 +149,7 @@ pub fn run() {
             let pool_clone = pool_arc.clone();
             let task_queue_clone = task_queue.clone();
             
-            let _ = tauri::async_runtime::block_on(async {
+            tauri::async_runtime::block_on(async {
                 let scheduler = scheduler_clone.lock().await;
                 
                 let tasks = crate::models::task::get_all_tasks(&pool_clone)

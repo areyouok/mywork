@@ -1,7 +1,7 @@
 use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
@@ -46,7 +46,7 @@ pub fn running_count() -> usize {
     }
 }
 
-pub fn cleanup_orphan_processes(app_data_dir: &PathBuf) {
+pub fn cleanup_orphan_processes(app_data_dir: &Path) {
     let workdir = app_data_dir.to_string_lossy().to_string();
 
     let output = Command::new("ps").args(["-eo", "pid,comm"]).output();

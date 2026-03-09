@@ -66,29 +66,17 @@ export async function getTasks(): Promise<Task[]> {
 
 export async function getTask(id: string): Promise<Task> {
   const task = await invoke<RawTask>('get_task', { id });
-  return {
-    ...task,
-    enabled: task.enabled === 1,
-    skip_if_running: task.skip_if_running === 1,
-  };
+  return convertTask(task);
 }
 
 export async function createTask(newTask: NewTask): Promise<Task> {
   const task = await invoke<RawTask>('create_task', { newTask });
-  return {
-    ...task,
-    enabled: task.enabled === 1,
-    skip_if_running: task.skip_if_running === 1,
-  };
+  return convertTask(task);
 }
 
 export async function updateTask(id: string, update: UpdateTask): Promise<Task> {
   const task = await invoke<RawTask>('update_task', { id, update });
-  return {
-    ...task,
-    enabled: task.enabled === 1,
-    skip_if_running: task.skip_if_running === 1,
-  };
+  return convertTask(task);
 }
 
 export async function deleteTask(id: string): Promise<boolean> {
