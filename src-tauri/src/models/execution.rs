@@ -176,6 +176,32 @@ pub async fn get_executions_by_task(
     .await
 }
 
+/// Get all executions with a specific status
+///
+/// # Arguments
+/// * `pool` - SQLite connection pool
+/// * `status` - Execution status to filter by
+///
+/// # Returns
+/// * `Ok(Vec<Execution>)` - List of executions with the specified status
+/// * `Err(sqlx::Error)` - Database error
+pub async fn get_executions_by_status(
+    pool: &SqlitePool,
+    status: ExecutionStatus,
+) -> Result<Vec<Execution>, sqlx::Error> {
+    sqlx::query_as::<_, Execution>(
+        r#"
+        SELECT id, task_id, session_id, status, started_at, finished_at, output_file, error_message
+        FROM executions
+        WHERE status = ?
+        ORDER BY started_at DESC
+        "#,
+    )
+    .bind(status.as_str())
+    .fetch_all(pool)
+    .await
+}
+
 /// Update an existing execution
 ///
 /// # Arguments

@@ -225,9 +225,13 @@ pub async fn execute_task_internal(
             let error_msg = format!("{}", e);
             let content = format!("Error: {}", error_msg);
             
-            let _ = output::write_output_file(&output_dir, &execution.id, &content).await;
+            let file_path = output::write_output_file(&output_dir, &execution.id, &content)
+                .await
+                .ok();
             
-            (ExecutionStatus::Failed, Utc::now().to_rfc3339(), None, Some(error_msg))
+            let file_path_str = file_path.map(|p| p.to_string_lossy().to_string());
+            
+            (ExecutionStatus::Failed, Utc::now().to_rfc3339(), file_path_str, Some(error_msg))
         }
     };
     

@@ -3,7 +3,7 @@ use sqlx::SqlitePool;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager,
+    Manager, RunEvent,
 };
 use tokio::sync::Mutex;
 use scheduler::job_scheduler::Scheduler;
@@ -19,6 +19,46 @@ use commands::{get_tasks, get_task, create_task, update_task, delete_task};
 use commands::{get_executions, get_execution};
 use commands::{get_scheduler_status, start_scheduler, stop_scheduler, reload_scheduler};
 use commands::{get_output, delete_output};
+use models::execution::{get_executions_by_status, ExecutionStatus, UpdateExecution};
+use chrono::Utc;
+
+fn mark_running_as_failed_blocking(pool: &SqlitePool) {
+    let runtime = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+    let count = runtime.block_on(async {
+        let running_executions = match get_executions_by_status(pool, ExecutionStatus::Running).await {
+            Ok(execs) => execs,
+            Err(e) => {
+                eprintln!("Failed to get running executions: {}", e);
+                return 0;
+            }
+        };
+
+        let mut updated_count = 0;
+        let now = Utc::now().to_rfc3339();
+
+        for execution in running_executions {
+            let update = UpdateExecution {
+                session_id: None,
+                status: Some(ExecutionStatus::Failed),
+                finished_at: Some(now.clone()),
+                output_file: execution.output_file,
+                error_message: Some("Application was terminated unexpectedly".to_string()),
+            };
+
+            if let Err(e) = models::execution::update_execution(pool, &execution.id, update).await {
+                eprintln!("Failed to mark execution {} as failed: {}", execution.id, e);
+            } else {
+                updated_count += 1;
+            }
+        }
+
+        updated_count
+    });
+
+    if count > 0 {
+        println!("Marked {} running executions as failed", count);
+    }
+}
 
 fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -30,6 +70,9 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| {
             if event.id.as_ref() == "quit" {
+                if let Some(pool_state) = app.try_state::<Arc<SqlitePool>>() {
+                    mark_running_as_failed_blocking(pool_state.inner());
+                }
                 app.exit(0);
             }
         })
@@ -54,7 +97,7 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_tasks,
@@ -78,15 +121,18 @@ pub fn run() {
             })
             .expect("Failed to initialize database");
 
-            app.manage(Arc::new(pool));
+            mark_running_as_failed_blocking(&pool);
+
+            let pool_arc = Arc::new(pool);
+            app.manage(pool_arc.clone());
             
             let scheduler = Arc::new(Mutex::new(Scheduler::new()));
-            app.manage(scheduler);
+            app.manage(scheduler.clone());
 
             setup_tray(app)?;
             
-            let scheduler_clone = app.state::<Arc<Mutex<Scheduler>>>().inner().clone();
-            let pool_clone = app.state::<Arc<SqlitePool>>().inner().clone();
+            let scheduler_clone = scheduler.clone();
+            let pool_clone = pool_arc.clone();
             
             let _ = tauri::async_runtime::block_on(async {
                 let scheduler = scheduler_clone.lock().await;
@@ -125,7 +171,7 @@ pub fn run() {
                         let timeout_secs = timeout;
                         
                         Box::pin(async move {
-                            let _ = crate::commands::execute_task_internal(task_id, pool.clone(), app, timeout_secs).await;
+                            let _ = crate::commands::execute_task_internal(task_id, pool, app, timeout_secs).await;
                         }) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
                     });
                     
@@ -145,6 +191,12 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|_app_handle, event| {
+        if let RunEvent::Exit = event {
+            println!("Application exiting...");
+        }
+    });
 }
