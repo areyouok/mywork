@@ -15,6 +15,11 @@ pub mod opencode;
 pub mod scheduler;
 pub mod storage;
 
+use commands::{get_tasks, get_task, create_task, update_task, delete_task};
+use commands::{get_executions, get_execution};
+use commands::{get_scheduler_status, start_scheduler, stop_scheduler, reload_scheduler};
+use commands::{get_output, delete_output};
+
 fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&quit])?;
@@ -51,6 +56,21 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![
+            get_tasks,
+            get_task,
+            create_task,
+            update_task,
+            delete_task,
+            get_executions,
+            get_execution,
+            get_scheduler_status,
+            start_scheduler,
+            stop_scheduler,
+            reload_scheduler,
+            get_output,
+            delete_output
+        ])
         .setup(|app| {
             let db_path = db::connection::get_database_path(app.handle())?;
             let pool = tauri::async_runtime::block_on(async {

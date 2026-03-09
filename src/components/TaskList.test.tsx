@@ -66,44 +66,44 @@ describe('TaskList', () => {
     it('toggles task enabled state', async () => {
       const onToggle = vi.fn();
       const user = userEvent.setup();
-      
+
       render(<TaskList tasks={mockTasks} onToggle={onToggle} />);
-      
+
       const firstSwitch = screen.getAllByRole('switch')[0];
       await user.click(firstSwitch);
-      
+
       expect(onToggle).toHaveBeenCalledWith('1', false);
     });
 
     it('deletes task after confirmation', async () => {
       const onDelete = vi.fn();
       const user = userEvent.setup();
-      
+
       render(<TaskList tasks={mockTasks} onDelete={onDelete} />);
-      
+
       const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
       await user.click(deleteButtons[0]);
-      
+
       expect(screen.getByText(/are you sure/i)).toBeInTheDocument();
-      
+
       const confirmButton = screen.getByRole('button', { name: /confirm/i });
       await user.click(confirmButton);
-      
+
       expect(onDelete).toHaveBeenCalledWith('1');
     });
 
     it('cancels deletion', async () => {
       const onDelete = vi.fn();
       const user = userEvent.setup();
-      
+
       render(<TaskList tasks={mockTasks} onDelete={onDelete} />);
-      
+
       const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
       await user.click(deleteButtons[0]);
-      
+
       const cancelButton = screen.getByRole('button', { name: /cancel/i });
       await user.click(cancelButton);
-      
+
       expect(onDelete).not.toHaveBeenCalled();
       expect(screen.queryByText(/are you sure/i)).not.toBeInTheDocument();
     });
@@ -112,11 +112,11 @@ describe('TaskList', () => {
   describe('Accessibility', () => {
     it('has proper aria labels', () => {
       render(<TaskList tasks={mockTasks} />);
-      
+
       const switches = screen.getAllByRole('switch');
       const switchLabel = switches[0].getAttribute('aria-label');
       expect(switchLabel).toMatch(/toggle.*daily report/i);
-      
+
       const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
       const deleteLabel = deleteButtons[0].getAttribute('aria-label');
       expect(deleteLabel).toMatch(/delete.*daily report/i);
@@ -124,12 +124,12 @@ describe('TaskList', () => {
 
     it('supports keyboard navigation', async () => {
       const user = userEvent.setup();
-      
+
       render(<TaskList tasks={mockTasks} />);
-      
+
       await user.tab();
       expect(screen.getAllByRole('switch')[0]).toHaveFocus();
-      
+
       await user.tab();
       expect(screen.getAllByRole('button', { name: /delete/i })[0]).toHaveFocus();
     });

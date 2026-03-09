@@ -38,26 +38,18 @@ function App() {
   useEffect(() => {
     async function initScheduler() {
       try {
-        await api.startScheduler();
+        const currentStatus = await api.getSchedulerStatus();
+        if (currentStatus === 'stopped') {
+          await api.startScheduler();
+        }
         setSchedulerStatus('running');
       } catch (error) {
-        console.error('Failed to start scheduler:', error);
+        console.error('Failed to init scheduler:', error);
         setSchedulerStatus('error');
       }
     }
 
     initScheduler();
-
-    return () => {
-      async function stopSchedulerOnUnmount() {
-        try {
-          await api.stopScheduler();
-        } catch (error) {
-          console.error('Failed to stop scheduler:', error);
-        }
-      }
-      stopSchedulerOnUnmount();
-    };
   }, []);
 
   useEffect(() => {

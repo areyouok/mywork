@@ -3,7 +3,8 @@
 
 :root {
   /* Typography - SF Pro Family */
-  --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
   --font-size-xs: 11px;
   --font-size-sm: 13px;
   --font-size-base: 15px;
@@ -11,42 +12,42 @@
   --font-size-xl: 20px;
   --font-size-2xl: 24px;
   --font-size-3xl: 28px;
-  
+
   /* Font Weights */
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
-  
+
   /* Line Heights */
   --line-height-tight: 1.2;
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.75;
-  
+
   /* Colors - Light Mode */
   --bg-primary: #ffffff;
   --bg-secondary: #f5f5f7;
   --bg-tertiary: #e8e8ed;
   --bg-elevated: #ffffff;
-  
+
   --text-primary: #1d1d1f;
   --text-secondary: #86868b;
   --text-tertiary: #aeaeb2;
   --text-quaternary: #c7c7cc;
-  
+
   --accent-color: #007aff;
   --accent-hover: #0051d5;
   --accent-active: #003d99;
-  
+
   --success-color: #34c759;
   --warning-color: #ff9500;
   --error-color: #ff3b30;
   --info-color: #5ac8fa;
-  
+
   --border-color: #d2d2d7;
   --border-light: #e5e5ea;
   --divider-color: #c6c6c8;
-  
+
   /* Spacing */
   --space-xs: 4px;
   --space-sm: 8px;
@@ -55,25 +56,25 @@
   --space-xl: 24px;
   --space-2xl: 32px;
   --space-3xl: 48px;
-  
+
   /* Border Radius */
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
   --radius-full: 9999px;
-  
+
   /* Shadows */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.15);
   --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.2);
-  
+
   /* Transitions */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
-  
+
   /* Z-Index */
   --z-base: 0;
   --z-dropdown: 100;
@@ -89,25 +90,25 @@
     --bg-secondary: #2c2c2e;
     --bg-tertiary: #3a3a3c;
     --bg-elevated: #2c2c2e;
-    
+
     --text-primary: #f5f5f7;
     --text-secondary: #8e8e93;
     --text-tertiary: #636366;
     --text-quaternary: #48484a;
-    
+
     --accent-color: #0a84ff;
     --accent-hover: #409cff;
     --accent-active: #0040dd;
-    
+
     --success-color: #30d158;
     --warning-color: #ff9f0a;
     --error-color: #ff453a;
     --info-color: #64d2ff;
-    
+
     --border-color: #38383a;
     --border-light: #48484a;
     --divider-color: #545456;
-    
+
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
@@ -127,15 +128,31 @@ body {
 }
 
 /* Utility Classes */
-.text-primary { color: var(--text-primary); }
-.text-secondary { color: var(--text-secondary); }
-.text-accent { color: var(--accent-color); }
-.text-success { color: var(--success-color); }
-.text-warning { color: var(--warning-color); }
-.text-error { color: var(--error-color); }
+.text-primary {
+  color: var(--text-primary);
+}
+.text-secondary {
+  color: var(--text-secondary);
+}
+.text-accent {
+  color: var(--accent-color);
+}
+.text-success {
+  color: var(--success-color);
+}
+.text-warning {
+  color: var(--warning-color);
+}
+.text-error {
+  color: var(--error-color);
+}
 
-.bg-primary { background-color: var(--bg-primary); }
-.bg-secondary { background-color: var(--bg-secondary); }
+.bg-primary {
+  background-color: var(--bg-primary);
+}
+.bg-secondary {
+  background-color: var(--bg-secondary);
+}
 
 /* Focus Ring */
 :focus-visible {
