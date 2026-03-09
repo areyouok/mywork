@@ -97,7 +97,7 @@ impl TaskQueue {
     ///
     /// # Example
     /// ```
-    /// use tauri_app_lib::scheduler::task_queue::TaskQueue;
+    /// use mywork_lib::scheduler::task_queue::TaskQueue;
     ///
     /// let queue = TaskQueue::new(3);
     /// assert_eq!(queue.max_concurrent(), 3);

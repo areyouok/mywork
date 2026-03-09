@@ -124,8 +124,8 @@ impl Scheduler {
     ///
     /// # Example
     /// ```no_run
-    /// use tauri_app_lib::scheduler::job_scheduler::{Scheduler, SchedulerError};
-    /// use tauri_app_lib::scheduler::JobCallback;
+    /// use mywork_lib::scheduler::job_scheduler::{Scheduler, SchedulerError};
+    /// use mywork_lib::scheduler::JobCallback;
     /// use std::sync::Arc;
     ///
     /// #[tokio::main]

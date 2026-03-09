@@ -46,13 +46,13 @@ impl std::error::Error for ScheduleError {}
 /// # Examples
 ///
 /// ```
-/// use tauri_app_lib::scheduler::simple_schedule::parse_simple_schedule;
+/// use mywork_lib::scheduler::simple_schedule::parse_simple_schedule;
 ///
 /// // Interval - every 5 minutes
 /// let result = parse_simple_schedule(r#"{"type": "interval", "value": 5, "unit": "minutes"}"#);
 /// assert_eq!(result.unwrap(), "*/5 * * * *");
 /// ```
-/// use tauri_app_lib::scheduler::simple_schedule::parse_simple_schedule;
+/// use mywork_lib::scheduler::simple_schedule::parse_simple_schedule;
 ///
 /// // Interval - every 5 minutes
 /// let result = parse_simple_schedule(r#"{"type": "interval", "value": 5, "unit": "minutes"}"#);

@@ -92,7 +92,7 @@ impl CronSchedule {
 ///
 /// # Example
 /// ```
-/// use tauri_app_lib::scheduler::cron_parser::validate_cron;
+/// use mywork_lib::scheduler::cron_parser::validate_cron;
 ///
 /// assert!(validate_cron("*/5 * * * *").is_ok());
 /// assert!(validate_cron("invalid").is_err());
@@ -132,7 +132,7 @@ pub fn validate_cron(expression: &str) -> Result<(), CronError> {
 ///
 /// # Example
 /// ```
-/// use tauri_app_lib::scheduler::cron_parser::parse_cron;
+/// use mywork_lib::scheduler::cron_parser::parse_cron;
 ///
 /// let schedule = parse_cron("0 9 * * 1-5").unwrap();
 /// assert_eq!(schedule.minute, "0");

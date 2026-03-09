@@ -26,7 +26,6 @@ describe('TaskForm', () => {
       expect(screen.getByRole('radio', { name: /cron/i })).toBeInTheDocument();
       expect(screen.getByRole('radio', { name: /simple/i })).toBeInTheDocument();
       expect(screen.getByLabelText(/timeout/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/skip if running/i)).toBeInTheDocument();
     });
 
     it('shows Create button in create mode', () => {
@@ -45,7 +44,6 @@ describe('TaskForm', () => {
       expect(screen.getByLabelText(/task name/i)).toHaveValue('Daily Report');
       expect(screen.getByLabelText(/prompt/i)).toHaveValue('Generate daily report');
       expect(screen.getByLabelText(/timeout/i)).toHaveValue(300);
-      expect(screen.getByLabelText(/skip if running/i)).toBeChecked();
     });
 
     it('shows Cancel button when onCancel is provided', () => {
@@ -172,7 +170,6 @@ describe('TaskForm', () => {
             prompt: 'New task description',
             schedule_type: 'simple',
             timeout_seconds: 300,
-            skip_if_running: false,
           })
         );
       });
@@ -308,17 +305,6 @@ describe('TaskForm', () => {
 
       await user.click(screen.getByRole('button', { name: /cancel/i }));
       expect(onCancel).toHaveBeenCalled();
-    });
-
-    it('toggles skip_if_running checkbox', async () => {
-      const user = userEvent.setup();
-      render(<TaskForm onSubmit={vi.fn()} />);
-
-      const checkbox = screen.getByLabelText(/skip if running/i);
-      expect(checkbox).not.toBeChecked();
-
-      await user.click(checkbox);
-      expect(checkbox).toBeChecked();
     });
 
     it('switches between schedule types', async () => {
