@@ -1,6 +1,188 @@
 # MyWork Scheduler
 
-A Tauri-based desktop application for scheduling and managing AI task executions.
+A Tauri-based desktop application for scheduling and managing AI task executions. This macOS system tray application allows you to schedule and run OpenCode tasks automatically using cron expressions or simple time intervals.
+
+## Features
+
+- **System Tray Application**: Runs in the macOS menu bar for easy access
+- **Flexible Scheduling**: Support for both cron expressions and simple time intervals
+- **Task Management**: Create, edit, enable/disable, and delete scheduled tasks
+- **Execution History**: View detailed history of all task executions
+- **Output Viewer**: View task outputs with Markdown rendering support
+- **Timeout Control**: Automatically kill long-running tasks
+- **Concurrency Control**: Skip task execution if previous run is still in progress
+- **SQLite Persistence**: All data stored locally in SQLite database
+
+## Installation
+
+### Prerequisites
+
+- macOS only
+- Node.js 18+
+- Rust 1.70+
+- npm or yarn
+
+### Setup
+
+1. Clone the repository:
+
+```bash
+git clone <repository-url>
+cd mywork
+```
+
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+3. Build and run in development mode:
+
+```bash
+npm run tauri dev
+```
+
+4. For production build:
+
+```bash
+npm run tauri build
+```
+
+The built application will be available in `src-tauri/target/release/bundle/macos/`.
+
+## Usage
+
+### Creating a Task
+
+1. Click the tray icon or open the main window
+2. Click "New Task" button
+3. Fill in the task details:
+   - **Name**: A descriptive name for your task
+   - **Prompt**: The AI prompt or command to execute
+   - **Schedule**: Choose between:
+     - **Cron Expression**: e.g., `*/5 * * * *` (every 5 minutes)
+     - **Simple Schedule**: Select from dropdown (e.g., "Every 5 minutes")
+   - **Timeout**: Maximum execution time in seconds (default: 300)
+   - **Skip if Running**: Enable to prevent overlapping executions
+4. Click "Save"
+
+### Viewing Task History
+
+1. Click on a task in the task list
+2. Navigate to the "History" tab
+3. View all execution records with status, timestamps, and outputs
+4. Click on an execution to view detailed output
+
+### Managing Tasks
+
+- **Enable/Disable**: Toggle the switch next to task name
+- **Edit**: Click the edit button to modify task settings
+- **Delete**: Click the delete button (requires confirmation)
+
+## Architecture
+
+### Technology Stack
+
+- **Frontend**: React 19 + TypeScript + Vite
+- **Backend**: Rust + Tauri 2
+- **Database**: SQLite with sqlx (async)
+- **Scheduler**: tokio-cron-scheduler
+- **Testing**: Vitest (frontend), cargo test (backend), Playwright (E2E)
+
+### Project Structure
+
+```
+mywork/
+├── src/                    # React frontend
+│   ├── components/         # UI components
+│   │   ├── TaskList.tsx    # Task list display
+│   │   ├── TaskForm.tsx    # Task creation/editing
+│   │   ├── CronInput.tsx   # Cron expression input
+│   │   ├── SimpleScheduleInput.tsx  # Simple schedule selector
+│   │   ├── ExecutionHistory.tsx    # Execution history list
+│   │   └── OutputViewer.tsx        # Output viewer with Markdown
+│   ├── api/               # Tauri API wrappers
+│   ├── types/             # TypeScript types
+│   └── App.tsx            # Main application component
+├── src-tauri/             # Rust backend
+│   └── src/
+│       ├── commands/      # Tauri command handlers
+│       │   ├── task_commands.rs      # Task CRUD operations
+│       │   ├── execution_commands.rs # Execution queries
+│       │   ├── scheduler_commands.rs # Scheduler control
+│       │   └── output_commands.rs    # Output file operations
+│       ├── db/            # Database layer
+│       │   └── connection.rs  # SQLite connection pool
+│       ├── models/        # Data models
+│       │   ├── task.rs    # Task model
+│       │   └── execution.rs # Execution model
+│       ├── scheduler/     # Scheduling logic
+│       │   ├── cron_parser.rs     # Cron expression parsing
+│       │   ├── simple_schedule.rs # Simple schedule parsing
+│       │   ├── job_scheduler.rs   # Job scheduler core
+│       │   ├── task_queue.rs      # Concurrency control
+│       │   └── timeout.rs         # Timeout handling
+│       ├── opencode/      # OpenCode integration
+│       │   └── executor.rs    # CLI executor
+│       └── storage/       # File storage
+│           └── output.rs  # Output file management
+└── tests/                 # E2E tests
+    └── *.spec.ts
+```
+
+### Data Flow
+
+1. **Task Creation**:
+   - User fills form → Frontend validates → Tauri command → Database insert → Scheduler adds job
+
+2. **Task Execution**:
+   - Scheduler triggers → Task queue checks concurrency → OpenCode executor runs → Output saved to file → Execution record created
+
+3. **History Viewing**:
+   - User clicks task → Frontend queries executions → Tauri command → Database query → Results displayed
+
+## Development
+
+### Running Tests
+
+```bash
+# Frontend tests
+npm test
+
+# Backend tests
+cargo test
+
+# E2E tests
+npm run test:e2e
+```
+
+### Code Quality
+
+```bash
+# Lint frontend
+npm run lint
+
+# Format code
+npm run format
+
+# Rust linter
+cargo clippy
+```
+
+### Database Management
+
+The SQLite database is stored at:
+
+```
+~/Library/Application Support/com.mywork.app/mywork.db
+```
+
+Task outputs are stored in:
+
+```
+~/Library/Application Support/com.mywork.app/outputs/
+```
 
 ## Recommended IDE Setup
 
@@ -39,5 +221,6 @@ The application uses SQLite for data persistence. The schema is defined in `src-
 | error_message | TEXT | Error message if failed |
 
 ### Indexes
+
 - `idx_executions_task_id` - For querying executions by task
 - `idx_executions_started_at` - For querying executions by time

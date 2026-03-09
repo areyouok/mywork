@@ -26,6 +26,10 @@ outputs/
 # Sisyphus
 .sisyphus/evidence/
 
+# Test reports
+playwright-report/
+test-results/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
