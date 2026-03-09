@@ -13,6 +13,7 @@ export interface Task {
 
 export interface TaskListProps {
   tasks: Task[];
+  runningTaskIds?: Set<string>;
   onToggle?: (taskId: string, enabled: boolean) => void;
   onDelete?: (taskId: string) => void;
   onRun?: (taskId: string) => void;

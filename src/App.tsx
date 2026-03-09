@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { TaskList } from './components/TaskList';
 import { TaskForm, type TaskFormData } from './components/TaskForm';
 import { ExecutionHistory } from './components/ExecutionHistory';
@@ -19,8 +19,34 @@ function App() {
   const [schedulerStatus, setSchedulerStatus] = useState<string>('unknown');
   const [outputContent, setOutputContent] = useState<string>('');
   const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
+  const [runningTaskIds, setRunningTaskIds] = useState<Set<string>>(new Set());
+
+  const selectedTaskIdRef = useRef<string | null>(selectedTaskId);
+  const executionsRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    selectedTaskIdRef.current = selectedTaskId;
+  }, [selectedTaskId]);
 
   const selectedTask = selectedTaskId ? tasks.find((t) => t.id === selectedTaskId) || null : null;
+
+  const loadExecutions = useCallback(async (taskId: string | null) => {
+    const requestId = ++executionsRequestIdRef.current;
+
+    if (!taskId) {
+      setExecutions([]);
+      return;
+    }
+
+    try {
+      const loadedExecutions = await api.getExecutions(taskId);
+      if (executionsRequestIdRef.current === requestId) {
+        setExecutions(loadedExecutions);
+      }
+    } catch (error) {
+      console.error('Failed to load executions:', error);
+    }
+  }, []);
 
   useEffect(() => {
     async function loadTasks() {
@@ -54,21 +80,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    async function loadExecutions() {
-      if (selectedTaskId) {
-        try {
-          const loadedExecutions = await api.getExecutions(selectedTaskId);
-          setExecutions(loadedExecutions);
-        } catch (error) {
-          console.error('Failed to load executions:', error);
-        }
-      } else {
-        setExecutions([]);
-      }
-    }
-
-    loadExecutions();
-  }, [selectedTaskId, viewMode]);
+    loadExecutions(selectedTaskId);
+  }, [selectedTaskId, viewMode, loadExecutions]);
 
   const handleTaskSelect = (task: Task) => {
     setSelectedTaskId(task.id);
@@ -116,15 +129,26 @@ function App() {
   };
 
   const handleRunTask = async (taskId: string) => {
+    setRunningTaskIds((prev) => {
+      const next = new Set(prev);
+      next.add(taskId);
+      return next;
+    });
+
     try {
       await api.runTask(taskId);
-      // Reload executions if viewing history
-      if (selectedTaskId === taskId && viewMode === 'history') {
-        const loadedExecutions = await api.getExecutions(taskId);
-        setExecutions(loadedExecutions);
-      }
     } catch (error) {
       console.error('Failed to run task:', error);
+    } finally {
+      setRunningTaskIds((prev) => {
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
+
+      if (selectedTaskIdRef.current === taskId) {
+        loadExecutions(taskId);
+      }
     }
   };
 
@@ -240,6 +264,7 @@ function App() {
               <div className="panel-body">
                 <TaskList
                   tasks={[selectedTask]}
+                  runningTaskIds={runningTaskIds}
                   onToggle={handleToggleTask}
                   onDelete={handleDeleteTask}
                   onRun={handleRunTask}

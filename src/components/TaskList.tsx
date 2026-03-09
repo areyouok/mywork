@@ -2,7 +2,15 @@ import { useState } from 'react';
 import type { TaskListProps, Task } from '@/types/task';
 import './TaskList.css';
 
-export function TaskList({ tasks, onToggle, onDelete, onRun, onEdit, onHistory }: TaskListProps) {
+export function TaskList({
+  tasks,
+  runningTaskIds,
+  onToggle,
+  onDelete,
+  onRun,
+  onEdit,
+  onHistory,
+}: TaskListProps) {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   if (tasks.length === 0) {
@@ -96,11 +104,19 @@ export function TaskList({ tasks, onToggle, onDelete, onRun, onEdit, onHistory }
           <div className="task-actions">
             <div className="action-group primary">
               <button
-                className="btn-run"
+                className={`btn-run ${runningTaskIds?.has(task.id) ? 'running' : ''}`}
                 aria-label={`Run ${task.name}`}
                 onClick={() => onRun?.(task.id)}
+                disabled={runningTaskIds?.has(task.id)}
               >
-                Run
+                {runningTaskIds?.has(task.id) ? (
+                  <>
+                    <span className="spinner"></span>
+                    Running...
+                  </>
+                ) : (
+                  'Run'
+                )}
               </button>
               <button
                 className="btn-edit"
