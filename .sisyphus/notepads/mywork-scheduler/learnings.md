@@ -1533,3 +1533,127 @@ await invoke('delete_output', { executionId: 'yyy' });
 - [x] 前端可以调用 invoke('run_task', {taskId})
 - [x] 前端可以调用 invoke('start_scheduler')
 - [x] 前端可以调用 invoke('get_output', {executionId})
+
+
+## Task 29: Performance Testing and Optimization (2026-03-09)
+
+### Performance Test Results
+
+#### Memory Test
+- **Result**: FAIL (112 MB vs 100 MB threshold)
+- **Measurement**: 112,688 KB (30s) → 112,256 KB (60s)
+- **Status**: Memory exceeds threshold by 9.6%
+- **Process**: tauri-app (main process only)
+
+#### Startup Time Test
+- **Result**: PASS (107ms vs 1000ms threshold)
+- **Measurement**: 107ms from launch to process start
+- **Status**: Well within acceptable range (10.7% of threshold)
+
+### Memory Analysis
+
+#### Potential Memory Consumers
+1. **Frontend (React)**:
+   - React 19 + ReactDOM (~35KB gzip, but runtime overhead)
+   - react-markdown + react-syntax-highlighter (heavy for Markdown rendering)
+   - cron library (cron expression parsing)
+   - Vite build output: 206.93 KB JS + 15.87 KB CSS
+
+2. **Backend (Rust)**:
+   - tokio runtime (async runtime with thread pool)
+   - sqlx with SQLite (connection pool + prepared statements cache)
+   - tokio-cron-scheduler (job scheduling system)
+   - Tauri WebView wrapper
+
+3. **System WebView**:
+   - macOS WebKit framework (not counted in app memory, but affects total system memory)
+
+### Optimization Recommendations
+
+#### High Priority (Could reduce 10-20MB)
+1. **Lazy load Markdown libraries**:
+   ```typescript
+   // Use dynamic import for OutputViewer
+   const OutputViewer = lazy(() => import('./components/OutputViewer'));
+   ```
+   - Benefit: React-markdown + syntax-highlighter only loaded when viewing output
+   - Estimated savings: 5-10MB
+
+2. **Optimize Rust build**:
+   ```toml
+   [profile.release]
+   lto = true              # Link Time Optimization
+   strip = true            # Strip symbols
+   panic = "abort"         # Smaller panic handling
+   codegen-units = 1       # Better optimization (slower build)
+   ```
+   - Benefit: Smaller binary, potentially less memory fragmentation
+   - Estimated savings: 2-5MB
+
+3. **Optimize tokio runtime**:
+   ```rust
+   // In lib.rs, configure runtime with minimal threads
+   let runtime = tokio::runtime::Builder::new_multi_thread()
+       .worker_threads(2)  // Reduce from default (usually 4-8)
+       .enable_all()
+       .build()?;
+   ```
+   - Benefit: Fewer threads = less stack memory
+   - Estimated savings: 2-4MB per thread
+
+#### Medium Priority (Could reduce 5-10MB)
+4. **Lazy database initialization**:
+   - Initialize SQLite pool on first use, not at startup
+   - Benefit: Lower initial memory footprint
+
+5. **Use lighter Markdown parser**:
+   - Consider `marked` or `markdown-it` instead of `react-markdown`
+   - Benefit: Smaller bundle, less runtime overhead
+
+6. **Optimize sqlx connection pool**:
+   ```rust
+   SqlitePoolOptions::new()
+       .max_connections(3)  // Reduce from default (usually 10)
+       .connect(&database_url)
+       .await?
+   ```
+   - Benefit: Fewer cached connections
+
+#### Low Priority (Future improvements)
+7. **Implement code splitting**:
+   - Split React app into chunks by route/feature
+   - Benefit: Lower initial memory, on-demand loading
+
+8. **Review Tauri window configuration**:
+   ```json
+  ```
+   - Consider reducing default window size if appropriate
+   - Disable unused WebView features (devtools, plugins)
+
+9. **Profile memory in development**:
+   - Use Chrome DevTools Memory Profiler
+   - Identify memory leaks in React components
+   - Use `rc -c "profile"` in Rust to identify allocations
+
+### Implementation Strategy
+1. **Phase 1 (Immediate)**: Add LTO + strip to Cargo.toml (low risk, quick win)
+2. **Phase 2 (Short-term)**: Lazy load OutputViewer component
+3. **Phase 3 (Medium-term)**: Optimize tokio runtime and sqlx pool
+4. **Phase 4 (Long-term)**: Consider lighter Markdown library if needed
+
+### Notes
+- Memory usage is stable (no leaks detected)
+- Startup time is excellent (107ms)
+- Memory target is aggressive for a modern desktop app with React + Rust
+- macOS WebKit memory is not counted in app's RSS
+- Consider if 100MB threshold is realistic for feature-rich desktop app
+
+### Verified
+- [x] Production build created successfully
+- [x] Memory test completed (FAIL: 112MB vs 100MB target)
+- [x] Startup time test completed (PASS: 107ms vs 1000ms target)
+- [x] Evidence files created:
+  - `.sisyphus/evidence/task-29-memory.txt`
+  - `.sisyphus/evidence/task-29-startup-time.txt`
+- [x] Optimization recommendations documented
+- [x] No code changes made (as per task requirements)
