@@ -58,6 +58,11 @@ npm run lint          # ESLint
 npm run format        # Prettier
 ```
 
+## GIT WORKFLOW
+
+- Review changes with `git diff` before committing
+- Never commit: `dist/`, `build/`, `target/`, `*.log`, `*.tmp`, `node_modules/`, `.env`
+
 ## DATA STORAGE
 
 - DB: `~/Library/Application Support/com.mywork/mywork.db`
