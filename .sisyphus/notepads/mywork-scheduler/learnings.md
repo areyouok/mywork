@@ -1891,3 +1891,161 @@ await invoke('delete_output', { executionId: 'yyy' });
 - [x] Optimization recommendations documented
 - [x] No code changes made (as per task requirements)
 ```
+
+## Task 27: E2E 测试 - 任务执行和超时 (2024-03-09)
+
+### TDD 开发流程
+
+- **测试策略**: 不创建真实任务，而是直接 mock `get_tasks` 返回已有任务
+- **Mock 设置**: 每个测试都需要在 `page.addInitScript()` 中完整设置所有 mock
+- **表单填写**: 必须填写 cron 或 simple schedule 才能提交表单
+
+### Playwright E2E 测试模式
+
+- **Mock 注入**: 使用 `page.addInitScript()` 注入 `window.__TAURI_INTERNALS__` 对象
+- **避免 beforeEach**: 不要使用 `beforeEach` + 测试内 `addInitScript` 组合，会导致冲突
+- **完整 Mock**: 每个测试必须独立设置完整的 mock，包括 `get_tasks`, `create_task`, `get_executions`
+
+### 测试场景覆盖
+
+1. **空执行历史**: 创建任务，查看历史，验证空状态
+2. **成功执行**: Mock success 状态的 execution，验证显示
+3. **超时执行**: Mock timeout 状态的 execution，验证状态显示（不显示错误消息）
+4. **失败执行**: Mock failed 状态的 execution，验证错误消息显示
+5. **多个执行记录**: Mock 3 个不同状态的 execution，验证全部显示
+
+### 关键发现
+
+- **Timeout 状态**: 只显示状态标签，不显示错误消息（ExecutionHistory 组件逻辑）
+- **Failed 状态**: 显示状态标签 + 错误消息
+- **状态样式**: 每个状态有不同的 CSS 类 (`status-success`, `status-timeout`, `status-failed`)
+
+### 表单验证规则
+
+- **必填字段**: name, prompt, schedule (根据类型)
+- **Schedule 类型**: 必须选择 cron 或 simple，并填写相应字段
+- **Cron 表达式**: 填写 cron 表达式输入框
+- **Simple Schedule**: 填写 JSON 格式的调度配置
+
+### 测试文件结构
+
+```
+tests/e2e/task-execution.spec.ts
+├── Mock get_tasks
+├── Mock create_task
+├── Mock get_executions (每个测试不同)
+├── 测试 1: 空历史
+├── 测试 2: 成功执行
+├── 测试 3: 超时执行
+├── 测试 4: 失败执行
+└── 测试 5: 多个执行记录
+```
+
+### Evidence 文件
+
+- `task-27-empty-history.png` - 空执行历史状态
+- `task-27-success-execution.png` - 成功执行状态
+- `task-27-timeout-execution.png` - 超时执行状态
+- `task-27-failed-execution.png` - 失败执行状态
+- `task-27-multiple-executions.png` - 多个执行记录
+- `task-27-evidence.md` - Evidence 总结文档
+
+### Verified
+
+- [x] 所有 5 个测试通过
+- [x] Mock 模式正确工作（不依赖 beforeEach）
+- [x] 表单正确填写并提交
+- [x] 执行历史正确显示
+- [x] 不同状态正确渲染
+- [x] Evidence 文件已创建
+- [x] 测试通过 `npm run test:e2e`
+
+## Task 28: E2E 测试 - 历史记录查看 (2024-03-09)
+
+### What was done:
+
+1. 创建 E2E 测试文件 `tests/e2e/history-view.spec.ts`
+2. 编写 5 个测试用例，覆盖：
+   - 可点击的执行项（有 output_file）
+   - 不可点击的执行项（无 output_file）
+   - 多个执行记录显示
+   - 键盘导航（focus + Enter）
+   - 执行信息显示（状态、时间、持续时间）
+3. Mock Tauri commands: `get_tasks`, `create_task`, `get_executions`
+4. 运行测试通过（13 个 E2E 测试全部通过）
+5. 生成 5 张 evidence 截图
+
+### E2E 测试模式:
+
+- **Playwright 测试结构**:
+  - `test.describe()` - 测试套件
+  - `test.beforeEach()` - 每个测试前执行
+  - `test()` - 单个测试用例
+  - `expect()` - 断言
+- **Mock Tauri internals**:
+  - 使用 `page.addInitScript()` 注入 `window.__TAURI_INTERNALS__`
+  - 实现 `invoke` 函数 mock 不同的 command
+  - 根据 `cmd` 参数返回不同数据
+- **Playwright API**:
+  - `page.goto('/')` - 导航到页面
+  - `page.click()` - 点击元素
+  - `page.fill()` - 填充输入框
+  - `page.locator()` - 选择元素
+  - `expect(locator).toBeVisible()` - 断言可见性
+  - `expect(locator).toHaveCount()` - 断言数量
+  - `expect(locator).toHaveAttribute()` - 断言属性
+  - `page.screenshot()` - 截图
+
+### 测试场景覆盖:
+
+- **可点击性测试**:
+  - 有 `output_file` 的执行项应该有 `.clickable` class
+  - 应该有 `tabindex="0"` 支持键盘导航
+  - 可以 focus 和按 Enter
+- **不可点击测试**:
+  - 无 `output_file` 的执行项不应有 `.clickable` class
+  - 不应有 `tabindex` 属性
+- **多个执行记录**:
+  - 验证执行项数量正确
+  - 验证可点击/不可点击项数量正确
+- **信息显示**:
+  - 验证状态显示（success, failed, timeout）
+  - 验证时间显示
+  - 验证持续时间显示
+
+### Lint 错误修复:
+
+- **不必要注释**: 移除所有简单的步骤注释
+  - 如 `// Create task`, `// Navigate to history` 等
+  - 代码本身应该自解释
+- **语法错误**: 修复 `.not.toBeVisible()` 语法
+  - 错误: `expect(locator.not.toBeVisible())`
+  - 正确: `expect(locator).not.toBeVisible()`
+
+### Mock 数据模式:
+
+- **时间计算**: 使用 `Date` 对象计算相对时间
+  - `const now = new Date()`
+  - `const startedAt = new Date(now.getTime() - 5 * 60 * 1000)`
+  - `startedAt.toISOString()`
+- **执行状态**: 支持所有 6 种状态
+  - pending, running, success, failed, timeout, skipped
+- **output_file**: 有值时可以点击，null 时不可点击
+
+### Evidence 文件:
+
+- `task-28-clickable-execution.png` - 可点击执行项截图
+- `task-28-non-clickable-execution.png` - 不可点击执行项截图
+- `task-28-multiple-executions.png` - 多个执行记录截图
+- `task-28-keyboard-nav.png` - 键盘导航截图
+- `task-28-info-display.png` - 信息显示截图
+
+### Verified:
+
+- [x] 所有 5 个 history-view 测试通过
+- [x] 所有 13 个 E2E 测试通过（包括 task-creation, task-execution）
+- [x] TypeScript 类型检查通过
+- [x] ESLint 无错误
+- [x] 5 张 evidence 截图生成
+- [x] Mock 模式复用现有测试
+- [x] 测试覆盖所有关键场景
