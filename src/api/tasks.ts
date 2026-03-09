@@ -110,3 +110,23 @@ export async function createExecution(newExecution: NewExecution): Promise<Execu
 export async function updateExecution(id: string, update: UpdateExecution): Promise<Execution> {
   return await invoke<Execution>('update_execution', { id, update });
 }
+
+export async function startScheduler(): Promise<string> {
+  return await invoke<string>('start_scheduler');
+}
+
+export async function stopScheduler(): Promise<string> {
+  return await invoke<string>('stop_scheduler');
+}
+
+export async function getSchedulerStatus(): Promise<string> {
+  return await invoke<string>('get_scheduler_status');
+}
+
+export async function getOutput(executionId: string): Promise<string> {
+  return await invoke<string>('get_output', { executionId });
+}
+
+export async function deleteOutput(executionId: string): Promise<boolean> {
+  return await invoke<boolean>('delete_output', { executionId });
+}

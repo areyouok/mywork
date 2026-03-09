@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { TaskList } from './components/TaskList';
 import { TaskForm, type TaskFormData } from './components/TaskForm';
 import { ExecutionHistory } from './components/ExecutionHistory';
+import { OutputViewer } from './components/OutputViewer';
 import type { Task } from './types/task';
 import type { Execution } from './types/execution';
 import * as api from './api/tasks';
 import './App.css';
 
-type ViewMode = 'list' | 'form' | 'history';
+type ViewMode = 'list' | 'form' | 'history' | 'output';
 
 function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -15,6 +16,9 @@ function App() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [schedulerStatus, setSchedulerStatus] = useState<string>('unknown');
+  const [outputContent, setOutputContent] = useState<string>('');
+  const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
 
   const selectedTask = selectedTaskId ? tasks.find((t) => t.id === selectedTaskId) || null : null;
 
@@ -29,6 +33,31 @@ function App() {
     }
 
     loadTasks();
+  }, []);
+
+  useEffect(() => {
+    async function initScheduler() {
+      try {
+        await api.startScheduler();
+        setSchedulerStatus('running');
+      } catch (error) {
+        console.error('Failed to start scheduler:', error);
+        setSchedulerStatus('error');
+      }
+    }
+
+    initScheduler();
+
+    return () => {
+      async function stopSchedulerOnUnmount() {
+        try {
+          await api.stopScheduler();
+        } catch (error) {
+          console.error('Failed to stop scheduler:', error);
+        }
+      }
+      stopSchedulerOnUnmount();
+    };
   }, []);
 
   useEffect(() => {
@@ -130,8 +159,16 @@ function App() {
     setViewMode('list');
   };
 
-  const handleViewOutput = (execution: Execution) => {
-    console.log('View output for execution:', execution.id);
+  const handleViewOutput = async (execution: Execution) => {
+    try {
+      const content = await api.getOutput(execution.id);
+      setOutputContent(content);
+      setSelectedExecutionId(execution.id);
+      setViewMode('output');
+    } catch (error) {
+      console.error('Failed to load output:', error);
+      setOutputContent('');
+    }
   };
 
   return (
@@ -139,6 +176,9 @@ function App() {
       <header className="app-header">
         <h1>MyWork Scheduler</h1>
         <div className="header-actions">
+          <span className={`scheduler-status status-${schedulerStatus}`}>
+            Scheduler: {schedulerStatus}
+          </span>
           <button className="btn-primary" onClick={handleCreateTask}>
             + New Task
           </button>
@@ -222,6 +262,22 @@ function App() {
                   onViewOutput={handleViewOutput}
                   taskId={selectedTask.id}
                 />
+              </div>
+            </div>
+          )}
+
+          {viewMode === 'output' && selectedTask && (
+            <div className="content-panel">
+              <div className="panel-header">
+                <h2>Output - Execution {selectedExecutionId}</h2>
+                <div className="panel-actions">
+                  <button className="btn-secondary" onClick={() => setViewMode('history')}>
+                    Back to History
+                  </button>
+                </div>
+              </div>
+              <div className="panel-body">
+                <OutputViewer content={outputContent} isMarkdown={true} />
               </div>
             </div>
           )}

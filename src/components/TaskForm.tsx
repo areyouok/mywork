@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Task } from '@/types/task';
+import { CronInput } from './CronInput';
+import { SimpleScheduleInput } from './SimpleScheduleInput';
 import './TaskForm.css';
 
 export interface TaskFormData {
@@ -33,18 +35,10 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
   const [scheduleType, setScheduleType] = useState<'cron' | 'simple'>(
     initialData?.cron_expression ? 'cron' : 'simple'
   );
-  const [cronExpression, setCronExpression] = useState(
-    initialData?.cron_expression || ''
-  );
-  const [simpleSchedule, setSimpleSchedule] = useState(
-    initialData?.simple_schedule || ''
-  );
-  const [timeoutSeconds, setTimeoutSeconds] = useState(
-    initialData?.timeout_seconds || 300
-  );
-  const [skipIfRunning, setSkipIfRunning] = useState(
-    initialData?.skip_if_running || false
-  );
+  const [cronExpression, setCronExpression] = useState(initialData?.cron_expression || '');
+  const [simpleSchedule, setSimpleSchedule] = useState(initialData?.simple_schedule || '');
+  const [timeoutSeconds, setTimeoutSeconds] = useState(initialData?.timeout_seconds || 300);
+  const [skipIfRunning, setSkipIfRunning] = useState(initialData?.skip_if_running || false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -61,7 +55,8 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
   }, [initialData]);
 
   const validateCronExpression = (expression: string): boolean => {
-    const cronRegex = /^(\*|([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])) (\*|([0-9]|1[0-9]|2[0-3])) (\*|([1-9]|[12][0-9]|3[01])) (\*|([1-9]|1[0-2])) (\*|([0-6]))$/;
+    const cronRegex =
+      /^(\*|([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])) (\*|([0-9]|1[0-9]|2[0-3])) (\*|([1-9]|[12][0-9]|3[01])) (\*|([1-9]|1[0-2])) (\*|([0-6]))$/;
     return cronRegex.test(expression);
   };
 
@@ -212,49 +207,21 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
       </div>
 
       {scheduleType === 'cron' && (
-        <div className="form-field">
-          <label htmlFor="cron-expression">
-            Cron Expression <span className="required">*</span>
-          </label>
-          <input
-            id="cron-expression"
-            type="text"
-            value={cronExpression}
-            onChange={(e) => setCronExpression(e.target.value)}
-            placeholder="0 9 * * *"
-            aria-invalid={!!errors.cron_expression}
-            aria-describedby={errors.cron_expression ? 'cron-error' : undefined}
-            disabled={isSubmitting}
-          />
-          {errors.cron_expression && (
-            <span id="cron-error" className="field-error">
-              {errors.cron_expression}
-            </span>
-          )}
-        </div>
+        <CronInput
+          value={cronExpression}
+          onChange={setCronExpression}
+          error={errors.cron_expression}
+          disabled={isSubmitting}
+        />
       )}
 
       {scheduleType === 'simple' && (
-        <div className="form-field">
-          <label htmlFor="simple-schedule">
-            Simple Schedule <span className="required">*</span>
-          </label>
-          <input
-            id="simple-schedule"
-            type="text"
-            value={simpleSchedule}
-            onChange={(e) => setSimpleSchedule(e.target.value)}
-            placeholder='{"type":"daily","time":"09:30"}'
-            aria-invalid={!!errors.simple_schedule}
-            aria-describedby={errors.simple_schedule ? 'simple-error' : undefined}
-            disabled={isSubmitting}
-          />
-          {errors.simple_schedule && (
-            <span id="simple-error" className="field-error">
-              {errors.simple_schedule}
-            </span>
-          )}
-        </div>
+        <SimpleScheduleInput
+          value={simpleSchedule}
+          onChange={setSimpleSchedule}
+          error={errors.simple_schedule}
+          disabled={isSubmitting}
+        />
       )}
 
       <div className="form-field">
@@ -295,27 +262,18 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
 
       <div className="form-actions">
         {onCancel && (
-          <button
-            type="button"
-            className="btn-cancel"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
+          <button type="button" className="btn-cancel" onClick={onCancel} disabled={isSubmitting}>
             Cancel
           </button>
         )}
-        <button
-          type="submit"
-          className="btn-submit"
-          disabled={isSubmitting}
-        >
+        <button type="submit" className="btn-submit" disabled={isSubmitting}>
           {isSubmitting
             ? initialData
               ? 'Updating...'
               : 'Creating...'
             : initialData
-            ? 'Update Task'
-            : 'Create Task'}
+              ? 'Update Task'
+              : 'Create Task'}
         </button>
       </div>
     </form>
