@@ -1,9 +1,4 @@
-use crate::models::execution::{create_execution, update_execution, ExecutionStatus, NewExecution, UpdateExecution};
-use crate::models::task::get_task;
-use crate::opencode::executor::run_opencode_task;
-use crate::storage::output;
-use crate::db::connection;
-use chrono::Utc;
+use crate::task_executor::execute_task;
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
@@ -20,57 +15,23 @@ pub async fn run_task(
         .await
         .map_err(|e| format!("Task not found: {}", e))?;
     
-    let new_execution = NewExecution {
-        task_id: task_id.clone(),
-        session_id: None,
-        status: Some(ExecutionStatus::Running),
-        output_file: None,
-        error_message: None,
-    };
-    
-    let execution = create_execution(&pool, new_execution)
-        .await
-        .map_err(|e| format!("Failed to create execution: {}", e))?;
-    
     let timeout_secs = task.timeout_seconds as u64;
-
-    // Get database directory for working directory
-    let db_path = connection::get_database_directory(&app)
-        .map_err(|e| format!("Failed to get database directory: {}", e))?;
-    let cwd = db_path.parent();
-
-    let result = run_opencode_task(&task.prompt, None, Some(timeout_secs), None, cwd).await;
     
-    let output_dir = output::get_output_directory(&app)
-        .map_err(|e| format!("Failed to get output directory: {}", e))?;
-    
-    output::create_output_directory(&output_dir)
+    // Use shared executor
+    let result = execute_task(task_id.clone(), &pool, &app, timeout_secs)
         .await
-        .map_err(|e| format!("Failed to create output directory: {}", e))?;
+        .map_err(|e| format!("Task execution failed: {}", e))?;
     
-    let (status, finished_at, output_file, error_message) = match result {
-        Ok(opencode_output) => {
-            let (final_status, err_msg) = if opencode_output.timed_out {
-                (ExecutionStatus::Timeout, Some("Execution timed out".to_string()))
-            } else if !opencode_output.success {
-                (ExecutionStatus::Failed, Some(opencode_output.stderr.clone()))
-            } else {
-                (ExecutionStatus::Success, None)
-            };
-            
-            let content = format!(
-                "Session ID: {}\n\n=== STDOUT ===\n{}\n\n=== STDERR ===\n{}",
-                opencode_output.session_id,
-                opencode_output.stdout,
-                opencode_output.stderr
-            );
-            
-            let _file_path = output::write_output_file(&output_dir, &execution.id, &content)
-                .await
-                .map_err(|e| format!("Failed to write output file: {}", e))?;
-            
-            (final_status, Utc::now().to_rfc3339(), Some(execution.id.clone()), err_msg)
-        }
+    if result.status == "success" {
+        Ok(result.execution_id)
+    } else {
+        Err(format!(
+            "Task execution failed with status: {}{}",
+            result.status,
+            result.error_message.map(|e| format!(" - {}", e)).unwrap_or_default()
+        ))
+    }
+}
         Err(e) => {
             let error_msg = format!("{}", e);
             let content = format!("Error: {}", error_msg);
