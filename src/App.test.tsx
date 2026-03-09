@@ -52,6 +52,10 @@ describe('App', () => {
     vi.mocked(api.getExecutions).mockResolvedValue(mockExecutions);
     vi.mocked(api.updateTask).mockResolvedValue(mockTasks[0]);
     vi.mocked(api.deleteTask).mockResolvedValue(true);
+    vi.mocked(api.getRunningExecutions).mockResolvedValue([]);
+    vi.mocked(api.getSchedulerStatus).mockResolvedValue('running');
+    vi.mocked(api.startScheduler).mockResolvedValue('Scheduler started successfully');
+    vi.mocked(api.reloadScheduler).mockResolvedValue('Scheduler reloaded');
   });
   it('should render app header with title', () => {
     render(<App />);

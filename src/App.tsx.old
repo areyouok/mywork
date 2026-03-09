@@ -1,46 +1,94 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { TaskList } from './components/TaskList';
 import { TaskForm, type TaskFormData } from './components/TaskForm';
 import { ExecutionHistory } from './components/ExecutionHistory';
 import { OutputViewer } from './components/OutputViewer';
-import { useTasks } from './hooks/useTasks';
-import { useScheduler } from './hooks/useScheduler';
-import { useExecutions } from './hooks/useExecutions';
-import { useTaskActions } from './hooks/useTaskActions';
-import { useOutput } from './hooks/useOutput';
 import type { Task } from './types/task';
+import type { Execution } from './types/execution';
+import * as api from './api/tasks';
 import './App.css';
 
 type ViewMode = 'list' | 'form' | 'history' | 'output';
 
 function App() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [executions, setExecutions] = useState<Execution[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [schedulerStatus, setSchedulerStatus] = useState<string>('unknown');
+  const [outputContent, setOutputContent] = useState<string>('');
+  const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
+  const [runningTaskIds, setRunningTaskIds] = useState<Set<string>>(new Set());
 
   const selectedTaskIdRef = useRef<string | null>(selectedTaskId);
+  const executionsRequestIdRef = useRef(0);
+
   useEffect(() => {
     selectedTaskIdRef.current = selectedTaskId;
   }, [selectedTaskId]);
 
-  const { tasks, loading: tasksLoading, loadTasks, createTask, updateTask, deleteTask } = useTasks();
-  const { status: schedulerStatus, addRunningTask, removeRunningTask } = useScheduler();
-  const { executions, loadExecutions } = useExecutions(selectedTaskId);
-  const { handleToggle, handleDelete, handleRun } = useTaskActions(
-    updateTask,
-    deleteTask,
-    addRunningTask,
-    removeRunningTask,
-    loadExecutions,
-    selectedTaskIdRef
-  );
-  const { outputContent, selectedExecutionId, loadOutput } = useOutput();
-
   const selectedTask = selectedTaskId ? tasks.find((t) => t.id === selectedTaskId) || null : null;
 
+  const loadExecutions = useCallback(async (taskId: string | null) => {
+    const requestId = ++executionsRequestIdRef.current;
+
+    if (!taskId) {
+      setExecutions([]);
+      return;
+    }
+
+    try {
+      const loadedExecutions = await api.getExecutions(taskId);
+      if (executionsRequestIdRef.current === requestId) {
+        setExecutions(loadedExecutions);
+      }
+    } catch (error) {
+      console.error('Failed to load executions:', error);
+    }
+  }, []);
+
   useEffect(() => {
+    async function loadRunningTasks() {
+      try {
+        const taskIds = await api.getRunningExecutions();
+        setRunningTaskIds(new Set(taskIds));
+      } catch (error) {
+        console.error('Failed to load running tasks:', error);
+      }
+    }
+    loadRunningTasks();
+  }, []);
+
+  useEffect(() => {
+    async function loadTasks() {
+      try {
+        const loadedTasks = await api.getTasks();
+        setTasks(loadedTasks);
+      } catch (error) {
+        console.error('Failed to load tasks:', error);
+      }
+    }
     loadTasks();
-  }, [loadTasks]);
+  }, []);
+
+  useEffect(() => {
+    async function initScheduler() {
+      try {
+        const currentStatus = await api.getSchedulerStatus();
+        console.log('Scheduler status:', currentStatus);
+        if (currentStatus.startsWith('stopped')) {
+          await api.startScheduler();
+        }
+        setSchedulerStatus('running');
+      } catch (error) {
+        console.error('Failed to init scheduler:', error);
+        setSchedulerStatus('error');
+      }
+    }
+
+    initScheduler();
+  }, []);
 
   useEffect(() => {
     loadExecutions(selectedTaskId);
@@ -66,10 +114,59 @@ function App() {
     setViewMode('history');
   };
 
+  const handleToggleTask = async (taskId: string, enabled: boolean) => {
+    try {
+      await api.updateTask(taskId, { enabled: enabled ? 1 : 0 });
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === taskId ? { ...task, enabled, updated_at: new Date().toISOString() } : task
+        )
+      );
+    } catch (error) {
+      console.error('Failed to toggle task:', error);
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await api.deleteTask(taskId);
+      setTasks((prev) => prev.filter((task) => task.id !== taskId));
+      if (selectedTaskId === taskId) {
+        setSelectedTaskId(null);
+      }
+    } catch (error) {
+      console.error('Failed to delete task:', error);
+    }
+  };
+
+  const handleRunTask = async (taskId: string) => {
+    setRunningTaskIds((prev) => {
+      const next = new Set(prev);
+      next.add(taskId);
+      return next;
+    });
+
+    try {
+      await api.runTask(taskId);
+    } catch (error) {
+      console.error('Failed to run task:', error);
+    } finally {
+      setRunningTaskIds((prev) => {
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
+
+      if (selectedTaskIdRef.current === taskId) {
+        loadExecutions(taskId);
+      }
+    }
+  };
+
   const handleSubmitTask = async (data: TaskFormData) => {
     try {
       if (editingTask) {
-        await updateTask(editingTask.id, {
+        const updatedTask = await api.updateTask(editingTask.id, {
           name: data.name,
           prompt: data.prompt,
           cron_expression: data.cron_expression,
@@ -77,9 +174,10 @@ function App() {
           timeout_seconds: data.timeout_seconds,
           skip_if_running: data.skip_if_running ? 1 : 0,
         });
+        setTasks((prev) => prev.map((task) => (task.id === editingTask.id ? updatedTask : task)));
         setEditingTask(null);
       } else {
-        await createTask({
+        const newTask = await api.createTask({
           name: data.name,
           prompt: data.prompt,
           cron_expression: data.cron_expression,
@@ -88,6 +186,10 @@ function App() {
           skip_if_running: data.skip_if_running ? 1 : 0,
           enabled: 1,
         });
+        setTasks((prev) => [...prev, newTask]);
+
+        // Reload scheduler to pick up the new task
+        await api.reloadScheduler();
       }
 
       setViewMode('list');
@@ -101,9 +203,16 @@ function App() {
     setViewMode('list');
   };
 
-  const handleViewOutput = async (execution: { id: string }) => {
-    await loadOutput(execution);
-    setViewMode('output');
+  const handleViewOutput = async (execution: Execution) => {
+    try {
+      const content = await api.getOutput(execution.id);
+      setOutputContent(content);
+      setSelectedExecutionId(execution.id);
+      setViewMode('output');
+    } catch (error) {
+      console.error('Failed to load output:', error);
+      setOutputContent('');
+    }
   };
 
   return (
@@ -166,10 +275,10 @@ function App() {
               <div className="panel-body">
                 <TaskList
                   tasks={[selectedTask]}
-                  runningTaskIds={new Set()}
-                  onToggle={handleToggle}
-                  onDelete={handleDelete}
-                  onRun={handleRun}
+                  runningTaskIds={runningTaskIds}
+                  onToggle={handleToggleTask}
+                  onDelete={handleDeleteTask}
+                  onRun={handleRunTask}
                   onEdit={handleEditTask}
                   onHistory={handleViewHistory}
                 />
