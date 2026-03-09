@@ -141,44 +141,18 @@ impl Default for SessionManager {
 }
 
 /// Run an OpenCode task with timeout control
-///
-/// # Arguments
-/// * `prompt` - The prompt to send to OpenCode
-/// * `session_id` - Optional session ID to reuse (None creates new session)
-/// * `timeout_secs` - Timeout in seconds (None uses default)
-/// * `config` - Optional configuration (None uses defaults)
-///
-/// # Returns
-/// `Ok(OpenCodeOutput)` if execution completes, `Err(OpenCodeError)` on failure
-///
-/// # Example
-/// ```no_run
-/// use tauri_app_lib::opencode::executor::{run_opencode_task, OpenCodeConfig};
-///
-/// #[tokio::main]
-/// async fn main() {
-///     let output = run_opencode_task(
-///         "Write a hello world program",
-///         None,
-///         Some(60),
-///         None::<&OpenCodeConfig>,
-///     ).await.unwrap();
-///     
-///     assert!(output.success);
-///     println!("Session ID: {}", output.session_id);
-/// }
-/// ```
 pub async fn run_opencode_task(
     prompt: &str,
     session_id: Option<&str>,
     timeout_secs: Option<u64>,
     config: Option<&OpenCodeConfig>,
+    cwd: Option<&std::path::Path>,
 ) -> Result<OpenCodeOutput, OpenCodeError> {
     let config = config.cloned().unwrap_or_default();
     let timeout = timeout_secs.unwrap_or(config.default_timeout_secs);
 
-    // Build command arguments
-    let mut args = Vec::new();
+    // Build command arguments: opencode run "prompt"
+    let mut args = vec!["run".to_string()];
 
     // Add session argument if provided
     if let Some(sid) = session_id {
@@ -186,20 +160,23 @@ pub async fn run_opencode_task(
         args.push(sid.to_string());
     }
 
-    // Add the prompt
-    args.push("--prompt".to_string());
+    // Add the prompt as positional argument
     args.push(prompt.to_string());
 
     // Execute the command with timeout
-    let process_output = run_with_timeout(&config.binary_path, &args.iter().map(String::as_str).collect::<Vec<_>>(), timeout)
-        .await
-        .map_err(OpenCodeError::from)?;
+    let process_output = run_with_timeout(
+        &config.binary_path,
+        &args.iter().map(String::as_str).collect::<Vec<_>>(),
+        timeout,
+        cwd,
+    )
+    .await
+    .map_err(OpenCodeError::from)?;
 
     // Determine session ID from output or use provided one
     let result_session_id = session_id
         .map(|s| s.to_string())
         .unwrap_or_else(|| {
-            // Try to parse session ID from stdout, or generate a new one
             parse_session_from_output(&process_output.stdout)
                 .unwrap_or_else(|| format!("sess_{}", Uuid::new_v4()))
         });
@@ -249,7 +226,7 @@ pub async fn create_session(
 
     // Execute opencode with --new-session flag
     let args = vec!["--new-session"];
-    let output = run_with_timeout(&config.binary_path, &args, 30)
+    let output = run_with_timeout(&config.binary_path, &args, 30, None)
         .await
         .map_err(OpenCodeError::from)?;
 
@@ -452,6 +429,7 @@ mod tests {
             "echo hello",
             None,
             Some(30),
+            None,
             None,
         )
         .await;

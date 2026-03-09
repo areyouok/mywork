@@ -2,6 +2,7 @@ use crate::models::execution::{create_execution, update_execution, ExecutionStat
 use crate::models::task::get_task;
 use crate::opencode::executor::run_opencode_task;
 use crate::storage::output;
+use crate::db::connection;
 use chrono::Utc;
 use sqlx::SqlitePool;
 use std::sync::Arc;
@@ -32,8 +33,13 @@ pub async fn run_task(
         .map_err(|e| format!("Failed to create execution: {}", e))?;
     
     let timeout_secs = task.timeout_seconds as u64;
-    
-    let result = run_opencode_task(&task.prompt, None, Some(timeout_secs), None).await;
+
+    // Get database directory for working directory
+    let db_path = connection::get_database_directory(&app)
+        .map_err(|e| format!("Failed to get database directory: {}", e))?;
+    let cwd = db_path.parent();
+
+    let result = run_opencode_task(&task.prompt, None, Some(timeout_secs), None, cwd).await;
     
     let output_dir = output::get_output_directory(&app)
         .map_err(|e| format!("Failed to get output directory: {}", e))?;
@@ -59,13 +65,11 @@ pub async fn run_task(
                 opencode_output.stderr
             );
             
-            let file_path = output::write_output_file(&output_dir, &execution.id, &content)
+            let _file_path = output::write_output_file(&output_dir, &execution.id, &content)
                 .await
                 .map_err(|e| format!("Failed to write output file: {}", e))?;
             
-            let file_path_str = file_path.to_string_lossy().to_string();
-            
-            (final_status, Utc::now().to_rfc3339(), Some(file_path_str), err_msg)
+            (final_status, Utc::now().to_rfc3339(), Some(execution.id.clone()), err_msg)
         }
         Err(e) => {
             let error_msg = format!("{}", e);

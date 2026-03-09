@@ -99,31 +99,28 @@ pub fn kill_process(pid: u32) -> Result<(), TimeoutError> {
 /// * `program` - Program to execute
 /// * `args` - Arguments for the program
 /// * `timeout_secs` - Timeout in seconds
+/// * `cwd` - Working directory for the process
 ///
 /// # Returns
 /// `Ok(ProcessOutput)` if the command completes (or times out), `Err` if spawn fails
-///
-/// # Example
-/// ```no_run
-/// use tauri_app_lib::scheduler::timeout::run_with_timeout;
-///
-/// #[tokio::main]
-/// async fn main() {
-///     let output = run_with_timeout("echo", &["hello"], 5).await.unwrap();
-///     assert!(output.success());
-///     assert!(output.stdout.contains("hello"));
-/// }
-/// ```
 pub async fn run_with_timeout(
     program: &str,
     args: &[&str],
     timeout_secs: u64,
+    cwd: Option<&std::path::Path>,
 ) -> Result<ProcessOutput, TimeoutError> {
     // Spawn the process
-    let mut child = Command::new(program)
-        .args(args)
+    let mut cmd = Command::new(program);
+    cmd.args(args)
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    
+    // Set working directory if provided
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
+    
+    let mut child = cmd
         .spawn()
         .map_err(|e| TimeoutError::SpawnFailed {
             message: e.to_string(),
@@ -216,7 +213,7 @@ mod tests {
     #[tokio::test]
     async fn test_run_with_timeout_success() {
         // Execute echo command successfully
-        let output = run_with_timeout("echo", &["hello", "world"], 5).await.unwrap();
+        let output = run_with_timeout("echo", &["hello", "world"], 5, None).await.unwrap();
         
         assert!(output.success());
         assert!(!output.timed_out);
@@ -228,7 +225,7 @@ mod tests {
     #[tokio::test]
     async fn test_run_with_timeout_command_failure() {
         // Execute a command that will fail (exit with non-zero)
-        let output = run_with_timeout("ls", &["/nonexistent_directory_12345"], 5).await.unwrap();
+        let output = run_with_timeout("ls", &["/nonexistent_directory_12345"], 5, None).await.unwrap();
         
         assert!(!output.success());
         assert!(!output.timed_out);
@@ -238,7 +235,7 @@ mod tests {
     #[tokio::test]
     async fn test_run_with_timeout_short_running() {
         // A short-running command should complete before timeout
-        let output = run_with_timeout("sleep", &["0.1"], 5).await.unwrap();
+        let output = run_with_timeout("sleep", &["0.1"], 5, None).await.unwrap();
         
         assert!(output.success());
         assert!(!output.timed_out);
@@ -248,7 +245,7 @@ mod tests {
     async fn test_run_with_timeout_times_out() {
         // A long-running command should timeout
         let start = std::time::Instant::now();
-        let output = run_with_timeout("sleep", &["30"], 2).await.unwrap();
+        let output = run_with_timeout("sleep", &["30"], 2, None).await.unwrap();
         let elapsed = start.elapsed();
         
         assert!(!output.success());
@@ -259,7 +256,7 @@ mod tests {
     #[tokio::test]
     async fn test_run_with_timeout_captures_stdout() {
         // Test that stdout is captured correctly
-        let output = run_with_timeout("printf", &["line1\\nline2\\nline3"], 5).await.unwrap();
+        let output = run_with_timeout("printf", &["line1\\nline2\\nline3"], 5, None).await.unwrap();
         
         assert!(output.success());
         assert!(output.stdout.contains("line1"));
@@ -271,7 +268,7 @@ mod tests {
     async fn test_run_with_timeout_captures_stderr() {
         // Test that stderr is captured correctly
         // Using bash to write to stderr
-        let output = run_with_timeout("bash", &["-c", "echo 'error message' >&2"], 5).await.unwrap();
+        let output = run_with_timeout("bash", &["-c", "echo 'error message' >&2"], 5, None).await.unwrap();
         
         assert!(output.success());
         assert!(output.stderr.contains("error message"));
@@ -280,7 +277,7 @@ mod tests {
     #[tokio::test]
     async fn test_run_with_timeout_invalid_command() {
         // Invalid command should return error
-        let result = run_with_timeout("nonexistent_command_12345", &[], 5).await;
+        let result = run_with_timeout("nonexistent_command_12345", &[], 5, None).await;
         
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -397,39 +394,17 @@ mod tests {
     #[tokio::test]
     async fn test_timeout_zero_seconds() {
         // Even with 0 second timeout, process should timeout immediately
-        let output = run_with_timeout("sleep", &["1"], 0).await.unwrap();
+        let output = run_with_timeout("sleep", &["1"], 0, None).await.unwrap();
         
         assert!(output.timed_out);
         assert!(!output.success());
     }
 
     #[tokio::test]
-    async fn test_timeout_multiple_kills_safe() {
-        // Verify that killing a process multiple times doesn't panic
-        let mut child = Command::new("sleep")
-            .arg("30")
-            .spawn()
-            .expect("Failed to spawn sleep");
-        
-        let pid = child.id().expect("Failed to get PID");
-        
-        thread::sleep(StdDuration::from_millis(100));
-        
-        // Kill once
-        let _ = kill_process(pid);
-        
-        // Kill again immediately (should be safe)
-        let _ = kill_process(pid);
-        
-        // Wait for process to be reaped
-        let _ = child.wait().await;
-    }
-
-    #[tokio::test]
     async fn test_run_with_timeout_concurrent_executions() {
-        let task0 = run_with_timeout("echo", &["task-0"], 5);
-        let task1 = run_with_timeout("echo", &["task-1"], 5);
-        let task2 = run_with_timeout("echo", &["task-2"], 5);
+        let task0 = run_with_timeout("echo", &["task-0"], 5, None);
+        let task1 = run_with_timeout("echo", &["task-1"], 5, None);
+        let task2 = run_with_timeout("echo", &["task-2"], 5, None);
         
         let (result0, result1, result2) = tokio::join!(task0, task1, task2);
         

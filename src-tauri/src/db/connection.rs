@@ -38,6 +38,11 @@ pub fn get_database_path(app: &AppHandle) -> Result<PathBuf, Box<dyn std::error:
     Ok(app_data_dir.join("mywork.db"))
 }
 
+pub fn get_database_directory(app: &AppHandle) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let app_data_dir = app.path().app_data_dir()?;
+    Ok(app_data_dir)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
