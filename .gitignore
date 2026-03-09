@@ -25,6 +25,8 @@ outputs/
 
 # Sisyphus
 .sisyphus/evidence/
+.sisyphus/boulder.json
+.sisyphus/notepads/
 
 # Test reports
 playwright-report/
