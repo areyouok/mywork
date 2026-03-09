@@ -38,7 +38,7 @@ interface UpdateExecution {
   error_message?: string;
 }
 
-interface RawTask {
+export interface RawTask {
   id: string;
   name: string;
   prompt: string;
@@ -51,7 +51,7 @@ interface RawTask {
   updated_at: string;
 }
 
-function convertTask(raw: RawTask): Task {
+export function convertTask(raw: RawTask): Task {
   return {
     ...raw,
     enabled: raw.enabled === 1,

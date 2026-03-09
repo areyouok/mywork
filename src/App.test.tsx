@@ -10,6 +10,12 @@ vi.mock('./api/tasks', () => ({
   updateTask: vi.fn(),
   deleteTask: vi.fn(),
   getExecutions: vi.fn(),
+  getRunningExecutions: vi.fn(),
+  getSchedulerStatus: vi.fn(),
+  startScheduler: vi.fn(),
+  reloadScheduler: vi.fn(),
+  runTask: vi.fn(),
+  stopScheduler: vi.fn(),
 }));
 
 const mockTasks = [
