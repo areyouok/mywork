@@ -2049,3 +2049,10 @@ tests/e2e/task-execution.spec.ts
 - [x] 5 张 evidence 截图生成
 - [x] Mock 模式复用现有测试
 - [x] 测试覆盖所有关键场景
+
+
+[2026-03-09 F1 compliance audit]
+- 静态审计显示：模块存在不等于功能完成，重点要核对前后端是否真正串联。
+- 本项目当前主要缺口是 scheduler/simple schedule/output viewer/concurrency 只做到模块级，未完成端到端集成。
+- 计划引用的 evidence 大量缺失（45 个唯一路径仅 5 个存在），最终验收前必须先补齐证据链。
+- macOS-only 范围被 tauri.conf.json 的 bundle.targets=all 和 Windows cfg 破坏，最终收口时需做平台范围清理。
