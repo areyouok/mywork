@@ -1,5 +1,6 @@
 use crate::scheduler::job_scheduler::{JobCallback, Scheduler, SchedulerState};
 use crate::scheduler::parse_simple_schedule;
+use crate::scheduler::task_queue::{TaskQueue, SkipResult};
 use crate::db::connection;
 use sqlx::SqlitePool;
 use std::sync::Arc;
@@ -73,10 +74,12 @@ fn get_task_cron_expression(task: &crate::models::task::Task) -> Option<String> 
 pub async fn reload_scheduler(
     pool: State<'_, Arc<SqlitePool>>,
     scheduler: State<'_, Arc<Mutex<Scheduler>>>,
+    task_queue: State<'_, Arc<Mutex<TaskQueue>>>,
     app: AppHandle,
 ) -> Result<String, String> {
     let pool = pool.inner().clone();
     let scheduler = scheduler.inner().clone();
+    let task_queue = task_queue.inner().clone();
     
     // Get all tasks from database
     let tasks = crate::models::task::get_all_tasks(&pool)
@@ -116,16 +119,18 @@ pub async fn reload_scheduler(
         let pool_clone = pool.clone();
         let app_handle = app.clone();
         let task_timeout = task.timeout_seconds as u64;
+        let task_queue_clone = task_queue.clone();
         
         let callback: JobCallback = Arc::new(move || {
             let task_id = task_id.clone();
             let pool = pool_clone.clone();
             let app = app_handle.clone();
             let timeout = task_timeout;
+            let task_queue = task_queue_clone.clone();
             
             Box::pin(async move {
                 // Execute the task
-                let result = execute_task_internal(task_id, pool, app, timeout).await;
+                let result = execute_task_internal(task_id, pool, app, timeout, task_queue).await;
                 if let Err(e) = result {
                     eprintln!("Task execution failed: {}", e);
                 }
@@ -156,18 +161,42 @@ pub async fn reload_scheduler(
 }
 
 /// Internal function to execute a task (used by scheduler callbacks)
-/// Internal function to execute a task (used by scheduler callbacks)
 pub async fn execute_task_internal(
     task_id: String,
     pool: Arc<SqlitePool>,
     app: AppHandle,
     timeout_seconds: u64,
+    task_queue: Arc<Mutex<TaskQueue>>,
 ) -> Result<(), String> {
     use crate::models::execution::ExecutionStatus;
     use crate::opencode::executor::run_opencode_task;
     use crate::storage::output;
     use chrono::Utc;
-    
+
+    // Check if task is already running (always enforce skip if running)
+    let queue = task_queue.lock().await;
+    let skip_result = queue.skip_if_running(&task_id).await;
+    drop(queue);
+
+    match skip_result {
+        SkipResult::Skipped { task_id } => {
+            eprintln!("Task '{}' is already running, skipping execution", task_id);
+            return Ok(());
+        }
+        SkipResult::Execute => {}
+    }
+
+    // Acquire slot for this task (guard will be dropped when function ends, releasing the slot)
+    let queue = task_queue.lock().await;
+    let _guard = match queue.acquire_slot(&task_id).await {
+        Ok(guard) => guard,
+        Err(e) => {
+            eprintln!("Failed to acquire slot for task '{}': {}", task_id, e);
+            return Ok(());
+        }
+    };
+    drop(queue);
+
     // Get task
     let task = crate::models::task::get_task(&pool, &task_id)
         .await

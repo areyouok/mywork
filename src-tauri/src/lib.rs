@@ -7,6 +7,7 @@ use tauri::{
 };
 use tokio::sync::Mutex;
 use scheduler::job_scheduler::Scheduler;
+use scheduler::task_queue::TaskQueue;
 
 pub mod commands;
 pub mod db;
@@ -135,10 +136,15 @@ pub fn run() {
             let scheduler = Arc::new(Mutex::new(Scheduler::new()));
             app.manage(scheduler.clone());
 
+            // Create task queue for concurrency control (always skip if running)
+            let task_queue = Arc::new(Mutex::new(TaskQueue::new(1)));
+            app.manage(task_queue.clone());
+
             setup_tray(app)?;
             
             let scheduler_clone = scheduler.clone();
             let pool_clone = pool_arc.clone();
+            let task_queue_clone = task_queue.clone();
             
             let _ = tauri::async_runtime::block_on(async {
                 let scheduler = scheduler_clone.lock().await;
@@ -169,15 +175,17 @@ pub fn run() {
                     let app_handle = app.handle().clone();
                     let task_id = task.id.clone();
                     let timeout = task.timeout_seconds as u64;
+                    let task_queue_inner = task_queue_clone.clone();
                     
                     let callback = Arc::new(move || {
                         let pool = pool_inner.clone();
                         let app = app_handle.clone();
                         let task_id = task_id.clone();
                         let timeout_secs = timeout;
+                        let task_queue = task_queue_inner.clone();
                         
                         Box::pin(async move {
-                            let _ = crate::commands::execute_task_internal(task_id, pool, app, timeout_secs).await;
+                            let _ = crate::commands::execute_task_internal(task_id, pool, app, timeout_secs, task_queue).await;
                         }) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
                     });
                     

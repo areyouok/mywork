@@ -11,7 +11,6 @@ export interface TaskFormData {
   cron_expression?: string;
   simple_schedule?: string;
   timeout_seconds: number;
-  skip_if_running: boolean;
 }
 
 interface TaskFormProps {
@@ -38,7 +37,6 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
   const [cronExpression, setCronExpression] = useState(initialData?.cron_expression || '');
   const [simpleSchedule, setSimpleSchedule] = useState(initialData?.simple_schedule || '');
   const [timeoutSeconds, setTimeoutSeconds] = useState(initialData?.timeout_seconds || 300);
-  const [skipIfRunning, setSkipIfRunning] = useState(initialData?.skip_if_running || false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -50,7 +48,6 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
       setCronExpression(initialData.cron_expression || '');
       setSimpleSchedule(initialData.simple_schedule || '');
       setTimeoutSeconds(initialData.timeout_seconds);
-      setSkipIfRunning(initialData.skip_if_running);
     }
   }, [initialData]);
 
@@ -111,7 +108,6 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
         cron_expression: scheduleType === 'cron' ? cronExpression.trim() : undefined,
         simple_schedule: scheduleType === 'simple' ? simpleSchedule.trim() : undefined,
         timeout_seconds: timeoutSeconds,
-        skip_if_running: skipIfRunning,
       });
 
       if (!initialData) {
@@ -120,7 +116,6 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
         setCronExpression('');
         setSimpleSchedule('');
         setTimeoutSeconds(300);
-        setSkipIfRunning(false);
         setScheduleType('simple');
       } else {
         onCancel?.();
@@ -240,18 +235,6 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
             {errors.timeout_seconds}
           </span>
         )}
-      </div>
-
-      <div className="form-field">
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={skipIfRunning}
-            onChange={(e) => setSkipIfRunning(e.target.checked)}
-            disabled={isSubmitting}
-          />
-          <span>Skip if running</span>
-        </label>
       </div>
 
       {errors.submit && (

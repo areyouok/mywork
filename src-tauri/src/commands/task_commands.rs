@@ -1,5 +1,6 @@
 use crate::models::task::{NewTask, Task, UpdateTask};
 use crate::scheduler::job_scheduler::Scheduler;
+use crate::scheduler::task_queue::TaskQueue;
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
@@ -34,6 +35,7 @@ pub async fn create_task(
     new_task: NewTask,
     pool: State<'_, Arc<SqlitePool>>,
     scheduler: State<'_, Arc<Mutex<Scheduler>>>,
+    task_queue: State<'_, Arc<Mutex<TaskQueue>>>,
     app: AppHandle,
 ) -> Result<Task, String> {
     let pool = pool.inner().clone();
@@ -45,7 +47,7 @@ pub async fn create_task(
         let cron_expression = get_task_schedule(&task);
         
         if let Some(cron_exp) = cron_expression {
-            add_task_to_scheduler(&scheduler, &task, &cron_exp, &pool, &app).await?;
+            add_task_to_scheduler(&scheduler, &task_queue, &task, &cron_exp, &pool, &app).await?;
         }
     }
     
@@ -59,6 +61,7 @@ pub async fn update_task(
     update: UpdateTask,
     pool: State<'_, Arc<SqlitePool>>,
     scheduler: State<'_, Arc<Mutex<Scheduler>>>,
+    task_queue: State<'_, Arc<Mutex<TaskQueue>>>,
     app: AppHandle,
 ) -> Result<Task, String> {
     let pool = pool.inner().clone();
@@ -78,7 +81,7 @@ pub async fn update_task(
         let cron_expression = get_task_schedule(&task);
         
         if let Some(cron_exp) = cron_expression {
-            add_task_to_scheduler(&scheduler, &task, &cron_exp, &pool, &app).await?;
+            add_task_to_scheduler(&scheduler, &task_queue, &task, &cron_exp, &pool, &app).await?;
         }
     }
     
@@ -117,6 +120,7 @@ fn get_task_schedule(task: &Task) -> Option<String> {
 
 async fn add_task_to_scheduler(
     scheduler: &Arc<Mutex<Scheduler>>,
+    task_queue: &Arc<Mutex<TaskQueue>>,
     task: &Task,
     cron_expression: &str,
     pool: &Arc<SqlitePool>,
@@ -128,15 +132,17 @@ async fn add_task_to_scheduler(
     let app_handle = app.clone();
     let task_id = task.id.clone();
     let timeout = task.timeout_seconds as u64;
+    let task_queue_clone = task_queue.clone();
     
     let callback = Arc::new(move || {
         let pool = pool_clone.clone();
         let app = app_handle.clone();
         let task_id = task_id.clone();
         let timeout_secs = timeout;
+        let task_queue = task_queue_clone.clone();
         
         Box::pin(async move {
-            let _ = crate::commands::execute_task_internal(task_id, pool, app, timeout_secs).await;
+            let _ = crate::commands::execute_task_internal(task_id, pool, app, timeout_secs, task_queue).await;
         }) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
     });
     
