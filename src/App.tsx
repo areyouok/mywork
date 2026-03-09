@@ -9,6 +9,7 @@ import { useExecutions } from './hooks/useExecutions';
 import { useTaskActions } from './hooks/useTaskActions';
 import { useOutput } from './hooks/useOutput';
 import type { Task } from './types/task';
+import type { Execution } from './types/execution';
 import './App.css';
 
 type ViewMode = 'list' | 'form' | 'history' | 'output';
@@ -23,9 +24,9 @@ function App() {
     selectedTaskIdRef.current = selectedTaskId;
   }, [selectedTaskId]);
 
-  const { tasks, loading: tasksLoading, loadTasks, createTask, updateTask, deleteTask } = useTasks();
+  const { tasks, loadTasks, createTask, updateTask, deleteTask } = useTasks();
   const { status: schedulerStatus, addRunningTask, removeRunningTask } = useScheduler();
-  const { executions, loadExecutions } = useExecutions(selectedTaskId);
+  const { executions, loadExecutions } = useExecutions();
   const { handleToggle, handleDelete, handleRun } = useTaskActions(
     updateTask,
     deleteTask,
@@ -101,7 +102,7 @@ function App() {
     setViewMode('list');
   };
 
-  const handleViewOutput = async (execution: { id: string }) => {
+  const handleViewOutput = async (execution: Execution | string) => {
     await loadOutput(execution);
     setViewMode('output');
   };
