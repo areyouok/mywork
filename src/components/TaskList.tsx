@@ -39,7 +39,26 @@ export function TaskList({ tasks, onToggle, onDelete }: TaskListProps) {
     if (task.simple_schedule) {
       try {
         const schedule = JSON.parse(task.simple_schedule);
-        return `${schedule.type} at ${schedule.hour}:00`;
+
+        if (schedule.type === 'interval') {
+          return `Every ${schedule.value} ${schedule.unit}`;
+        } else if (schedule.type === 'daily') {
+          return `Daily at ${schedule.time}`;
+        } else if (schedule.type === 'weekly') {
+          const dayMap: Record<string, string> = {
+            monday: 'Mon',
+            tuesday: 'Tue',
+            wednesday: 'Wed',
+            thursday: 'Thu',
+            friday: 'Fri',
+            saturday: 'Sat',
+            sunday: 'Sun',
+          };
+          const day = dayMap[schedule.day.toLowerCase()] || schedule.day;
+          return `${day} at ${schedule.time}`;
+        }
+
+        return JSON.stringify(schedule);
       } catch {
         return 'Custom schedule';
       }
@@ -69,9 +88,7 @@ export function TaskList({ tasks, onToggle, onDelete }: TaskListProps) {
             <div className="task-meta">
               <span className="task-schedule">{formatSchedule(task)}</span>
               {task.timeout_seconds !== 300 && (
-                <span className="task-timeout">
-                  Timeout: {task.timeout_seconds}s
-                </span>
+                <span className="task-timeout">Timeout: {task.timeout_seconds}s</span>
               )}
             </div>
           </div>
@@ -80,10 +97,7 @@ export function TaskList({ tasks, onToggle, onDelete }: TaskListProps) {
             {confirmDelete === task.id ? (
               <div className="confirm-delete">
                 <span>Are you sure?</span>
-                <button
-                  className="btn-confirm"
-                  onClick={() => handleConfirmDelete(task.id)}
-                >
+                <button className="btn-confirm" onClick={() => handleConfirmDelete(task.id)}>
                   Confirm
                 </button>
                 <button className="btn-cancel" onClick={handleCancelDelete}>

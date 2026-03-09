@@ -1,7 +1,9 @@
 use crate::models::task::{NewTask, Task, UpdateTask};
+use crate::scheduler::job_scheduler::Scheduler;
 use sqlx::SqlitePool;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, State};
+use tokio::sync::Mutex;
 
 /// Get all tasks
 #[tauri::command]
@@ -31,11 +33,23 @@ pub async fn get_task(
 pub async fn create_task(
     new_task: NewTask,
     pool: State<'_, Arc<SqlitePool>>,
+    scheduler: State<'_, Arc<Mutex<Scheduler>>>,
+    app: AppHandle,
 ) -> Result<Task, String> {
     let pool = pool.inner().clone();
-    crate::models::task::create_task(&pool, new_task)
+    let task = crate::models::task::create_task(&pool, new_task)
         .await
-        .map_err(|e| format!("Failed to create task: {}", e))
+        .map_err(|e| format!("Failed to create task: {}", e))?;
+    
+    if task.enabled == 1 {
+        let cron_expression = get_task_schedule(&task);
+        
+        if let Some(cron_exp) = cron_expression {
+            add_task_to_scheduler(&scheduler, &task, &cron_exp, &pool, &app).await?;
+        }
+    }
+    
+    Ok(task)
 }
 
 /// Update an existing task
@@ -44,11 +58,31 @@ pub async fn update_task(
     id: String,
     update: UpdateTask,
     pool: State<'_, Arc<SqlitePool>>,
+    scheduler: State<'_, Arc<Mutex<Scheduler>>>,
+    app: AppHandle,
 ) -> Result<Task, String> {
     let pool = pool.inner().clone();
-    crate::models::task::update_task(&pool, &id, update)
+    
+    {
+            let scheduler_guard = scheduler.inner().lock().await;
+            if scheduler_guard.has_job(&id).await {
+                let _ = scheduler_guard.remove_job(&id).await;
+            }
+        }
+    
+    let task = crate::models::task::update_task(&pool, &id, update)
         .await
-        .map_err(|e| format!("Failed to update task: {}", e))
+        .map_err(|e| format!("Failed to update task: {}", e))?;
+    
+    if task.enabled == 1 {
+        let cron_expression = get_task_schedule(&task);
+        
+        if let Some(cron_exp) = cron_expression {
+            add_task_to_scheduler(&scheduler, &task, &cron_exp, &pool, &app).await?;
+        }
+    }
+    
+    Ok(task)
 }
 
 /// Delete a task
@@ -56,9 +90,60 @@ pub async fn update_task(
 pub async fn delete_task(
     id: String,
     pool: State<'_, Arc<SqlitePool>>,
+    scheduler: State<'_, Arc<Mutex<Scheduler>>>,
 ) -> Result<bool, String> {
     let pool = pool.inner().clone();
+    
+    let scheduler_guard = scheduler.inner().lock().await;
+    if scheduler_guard.has_job(&id).await {
+        let _ = scheduler_guard.remove_job(&id).await;
+    }
+    drop(scheduler_guard);
+    
     crate::models::task::delete_task(&pool, &id)
         .await
         .map_err(|e| format!("Failed to delete task: {}", e))
+}
+
+fn get_task_schedule(task: &Task) -> Option<String> {
+    if let Some(cron) = &task.cron_expression {
+        Some(cron.clone())
+    } else if let Some(json) = &task.simple_schedule {
+        crate::scheduler::parse_simple_schedule(json).ok()
+    } else {
+        None
+    }
+}
+
+async fn add_task_to_scheduler(
+    scheduler: &Arc<Mutex<Scheduler>>,
+    task: &Task,
+    cron_expression: &str,
+    pool: &Arc<SqlitePool>,
+    app: &AppHandle,
+) -> Result<(), String> {
+    let scheduler_guard = scheduler.lock().await;
+    
+    let pool_clone = pool.clone();
+    let app_handle = app.clone();
+    let task_id = task.id.clone();
+    let timeout = task.timeout_seconds as u64;
+    
+    let callback = Arc::new(move || {
+        let pool = pool_clone.clone();
+        let app = app_handle.clone();
+        let task_id = task_id.clone();
+        let timeout_secs = timeout;
+        
+        Box::pin(async move {
+            let _ = crate::commands::execute_task_internal(task_id, pool, app, timeout_secs).await;
+        }) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+    });
+    
+    let _job_id = scheduler_guard
+        .add_job(&task.id, cron_expression, callback)
+        .await
+        .map_err(|e| format!("Failed to add job to scheduler: {}", e.to_string()))?;
+    
+    Ok(())
 }
