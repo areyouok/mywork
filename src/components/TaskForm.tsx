@@ -11,6 +11,7 @@ export interface TaskFormData {
   cron_expression?: string;
   simple_schedule?: string;
   timeout_seconds: number;
+  skip_if_running?: boolean;
 }
 
 interface TaskFormProps {

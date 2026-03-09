@@ -131,6 +131,10 @@ export async function reloadScheduler(): Promise<string> {
   return await invoke<string>('reload_scheduler');
 }
 
+export async function getRunningExecutions(): Promise<string[]> {
+  return await invoke<string[]>('get_running_executions');
+}
+
 export async function getOutput(executionId: string): Promise<string> {
   return await invoke<string>('get_output', { executionId });
 }

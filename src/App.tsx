@@ -49,6 +49,18 @@ function App() {
   }, []);
 
   useEffect(() => {
+    async function loadRunningTasks() {
+      try {
+        const taskIds = await api.getRunningExecutions();
+        setRunningTaskIds(new Set(taskIds));
+      } catch (error) {
+        console.error('Failed to load running tasks:', error);
+      }
+    }
+    loadRunningTasks();
+  }, []);
+
+  useEffect(() => {
     async function loadTasks() {
       try {
         const loadedTasks = await api.getTasks();
@@ -57,7 +69,6 @@ function App() {
         console.error('Failed to load tasks:', error);
       }
     }
-
     loadTasks();
   }, []);
 

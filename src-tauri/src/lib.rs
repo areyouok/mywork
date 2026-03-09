@@ -17,7 +17,7 @@ pub mod scheduler;
 pub mod storage;
 
 use commands::{get_tasks, get_task, create_task, update_task, delete_task, run_task};
-use commands::{get_executions, get_execution};
+use commands::{get_executions, get_execution, get_running_executions};
 use commands::{get_scheduler_status, start_scheduler, stop_scheduler, reload_scheduler};
 use commands::{get_output, delete_output};
 use models::execution::{get_executions_by_status, ExecutionStatus, UpdateExecution};
@@ -112,6 +112,7 @@ pub fn run() {
             run_task,
             get_executions,
             get_execution,
+            get_running_executions,
             get_scheduler_status,
             start_scheduler,
             stop_scheduler,
