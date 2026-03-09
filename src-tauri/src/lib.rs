@@ -125,6 +125,10 @@ pub fn run() {
 
             mark_running_as_failed_blocking(&pool);
 
+            let app_data_dir = app.path().app_data_dir()
+                .expect("Failed to get app data directory");
+            scheduler::cleanup_orphan_processes(&app_data_dir);
+
             let pool_arc = Arc::new(pool);
             app.manage(pool_arc.clone());
             

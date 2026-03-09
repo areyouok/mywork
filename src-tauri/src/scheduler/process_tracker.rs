@@ -1,6 +1,8 @@
 use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 use std::collections::HashSet;
+use std::path::PathBuf;
+use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
 static RUNNING_PIDS: OnceLock<Mutex<HashSet<u32>>> = OnceLock::new();
@@ -41,5 +43,45 @@ pub fn running_count() -> usize {
         pids.len()
     } else {
         0
+    }
+}
+
+pub fn cleanup_orphan_processes(app_data_dir: &PathBuf) {
+    let workdir = app_data_dir.to_string_lossy().to_string();
+
+    let output = Command::new("ps").args(["-eo", "pid,comm"]).output();
+
+    let Ok(output) = output else {
+        return;
+    };
+
+    let output_str = String::from_utf8_lossy(&output.stdout);
+
+    for line in output_str.lines() {
+        if !line.contains("opencode") {
+            continue;
+        }
+
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        let pid: u32 = match parts.first() {
+            Some(p) => match p.parse() {
+                Ok(n) => n,
+                Err(_) => continue,
+            },
+            None => continue,
+        };
+
+        let cwd_output = Command::new("pwdx").arg(pid.to_string()).output();
+        let Ok(cwd_output) = cwd_output else {
+            continue;
+        };
+
+        let cwd = String::from_utf8_lossy(&cwd_output.stdout);
+
+        if cwd.contains(&workdir) {
+            let pgid = Pid::from_raw(-(pid as i32));
+            let _ = kill(pgid, Signal::SIGKILL);
+            eprintln!("Cleaned up orphan opencode process: {}", pid);
+        }
     }
 }
