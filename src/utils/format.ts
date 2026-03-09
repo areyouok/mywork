@@ -2,13 +2,20 @@ export function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
   const diffHours = diffMs / (1000 * 60 * 60);
   const diffDays = diffMs / (1000 * 60 * 60 * 24);
 
-  if (diffHours < 1) {
+  if (diffMinutes < 1) {
     return 'less than 1 minute ago';
   }
-  if (diffHours < 2) {
+  if (diffMinutes === 1) {
+    return '1 minute ago';
+  }
+  if (diffMinutes < 60) {
+    return `${diffMinutes} minutes ago`;
+  }
+  if (diffHours === 1) {
     return '1 hour ago';
   }
   if (diffHours < 24) {
@@ -44,15 +51,19 @@ export function formatDuration(startedAt: string, finishedAt: string): string {
 
   if (diffHours > 0) {
     const remainingMinutes = diffMinutes % 60;
-    return remainingMinutes > 0 ? `${diffHours}h ${remainingMinutes}m` : `${diffHours}h`;
+    return remainingMinutes > 0
+      ? `${diffHours} hours ${remainingMinutes} minutes`
+      : `${diffHours} hours`;
   }
 
   if (diffMinutes > 0) {
     const remainingSeconds = diffSeconds % 60;
-    return remainingSeconds > 0 ? `${diffMinutes}m ${remainingSeconds}s` : `${diffMinutes}m`;
+    return remainingSeconds > 0
+      ? `${diffMinutes} minutes ${remainingSeconds} seconds`
+      : `${diffMinutes} minutes`;
   }
 
-  return `${diffSeconds}s`;
+  return `${diffSeconds} seconds`;
 }
 
 export function formatSimpleSchedule(simpleSchedule: string | undefined): string {
