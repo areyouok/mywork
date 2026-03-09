@@ -73,6 +73,7 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(pool_state) = app.try_state::<Arc<SqlitePool>>() {
                     mark_running_as_failed_blocking(pool_state.inner());
                 }
+                scheduler::kill_all_processes();
                 app.exit(0);
             }
         })
@@ -197,6 +198,7 @@ pub fn run() {
 
     app.run(|_app_handle, event| {
         if let RunEvent::Exit = event {
+            scheduler::kill_all_processes();
             println!("Application exiting...");
         }
     });

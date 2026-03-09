@@ -8,6 +8,8 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::time::timeout;
 
+use super::process_tracker;
+
 /// Timeout error types
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TimeoutError {
@@ -67,30 +69,17 @@ impl ProcessOutput {
     }
 }
 
-/// Kill a process by PID using SIGKILL
-///
-/// # Arguments
-/// * `pid` - Process ID to kill
-///
-/// # Returns
-/// `Ok(())` if the process was killed successfully, `Err` otherwise
-///
-/// # Example
-/// ```no_run
-/// use tauri_app_lib::scheduler::timeout::kill_process;
-///
-/// // Kill process with PID 1234
-/// kill_process(1234).expect("Failed to kill process");
-/// ```
-pub fn kill_process(pid: u32) -> Result<(), TimeoutError> {
-    let pid = Pid::from_raw(pid as i32);
-    
-    kill(pid, Signal::SIGKILL).map_err(|e| TimeoutError::KillFailed {
-        pid: pid.as_raw() as u32,
+pub fn kill_process(pid: u32, kill_process_group: bool) -> Result<(), TimeoutError> {
+    let target_pid = if kill_process_group {
+        Pid::from_raw(-(pid as i32))
+    } else {
+        Pid::from_raw(pid as i32)
+    };
+
+    kill(target_pid, Signal::SIGKILL).map_err(|e| TimeoutError::KillFailed {
+        pid,
         message: e.to_string(),
-    })?;
-    
-    Ok(())
+    })
 }
 
 /// Run a command with timeout control
@@ -109,13 +98,12 @@ pub async fn run_with_timeout(
     timeout_secs: u64,
     cwd: Option<&std::path::Path>,
 ) -> Result<ProcessOutput, TimeoutError> {
-    // Spawn the process
     let mut cmd = Command::new(program);
     cmd.args(args)
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+        .stderr(std::process::Stdio::piped())
+        .process_group(0);
     
-    // Set working directory if provided
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     }
@@ -131,19 +119,19 @@ pub async fn run_with_timeout(
         message: "Failed to get process PID".to_string(),
     })?;
     
-    // Wrap the wait with timeout
+    process_tracker::register_pid(pid);
+    
     let timeout_duration = Duration::from_secs(timeout_secs);
     let result = timeout(timeout_duration, async {
-        // Read stdout and stderr concurrently with waiting
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
         
-        // Wait for the process to complete
         let status = child.wait().await.map_err(|e| TimeoutError::ExecutionFailed {
             message: e.to_string(),
         })?;
         
-        // Read stdout
+        process_tracker::unregister_pid(pid);
+        
         let stdout_str = if let Some(stdout) = stdout {
             let mut reader = BufReader::new(stdout).lines();
             let mut lines = Vec::new();
@@ -157,7 +145,6 @@ pub async fn run_with_timeout(
             String::new()
         };
         
-        // Read stderr
         let stderr_str = if let Some(stderr) = stderr {
             let mut reader = BufReader::new(stderr).lines();
             let mut lines = Vec::new();
@@ -181,21 +168,18 @@ pub async fn run_with_timeout(
     .await;
     
     match result {
-        // Process completed within timeout
         Ok(Ok(output)) => Ok(output),
-        // Process failed during execution
-        Ok(Err(e)) => Err(e),
-        // Timeout occurred
+        Ok(Err(e)) => {
+            process_tracker::unregister_pid(pid);
+            Err(e)
+        }
         Err(_) => {
-            // Kill the process
-            kill_process(pid)?;
-            
-            // Wait for process to be reaped
+            kill_process(pid, true)?;
             let _ = child.wait().await;
+            process_tracker::unregister_pid(pid);
             
-            // Return timeout result
             Ok(ProcessOutput {
-                status: std::process::ExitStatus::from_raw(137), // 128 + SIGKILL(9)
+                status: std::process::ExitStatus::from_raw(137),
                 stdout: String::new(),
                 stderr: String::new(),
                 timed_out: true,
@@ -301,17 +285,13 @@ mod tests {
         // Wait a bit for process to start
         thread::sleep(StdDuration::from_millis(100));
         
-        // Kill the process
-        let result = kill_process(pid);
+        let result = kill_process(pid, false);
         assert!(result.is_ok());
         
-        // Wait for process to be reaped
         let _ = child.wait().await;
         
-        // Verify process is no longer running
-        // Try to kill again - should fail because process is gone
         thread::sleep(StdDuration::from_millis(100));
-        let _result2 = kill_process(pid);
+        let _result2 = kill_process(pid, false);
         // This may or may not fail depending on whether PID has been recycled
         // Just verify first kill succeeded
         assert!(result.is_ok());
@@ -321,7 +301,7 @@ mod tests {
     async fn test_kill_process_nonexistent() {
         // Try to kill a process that doesn't exist (use a very high PID)
         // This may or may not succeed depending on OS behavior
-        let _result = kill_process(999999);
+        let _result = kill_process(999999, false);
         // We don't assert the result because OS behavior varies
     }
 
