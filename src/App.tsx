@@ -236,14 +236,6 @@ function App() {
             <div className="content-panel">
               <div className="panel-header">
                 <h2>{selectedTask.name}</h2>
-                <div className="panel-actions">
-                  <button className="btn-secondary" onClick={() => handleEditTask(selectedTask)}>
-                    Edit
-                  </button>
-                  <button className="btn-secondary" onClick={() => handleViewHistory(selectedTask)}>
-                    History
-                  </button>
-                </div>
               </div>
               <div className="panel-body">
                 <TaskList
@@ -251,6 +243,8 @@ function App() {
                   onToggle={handleToggleTask}
                   onDelete={handleDeleteTask}
                   onRun={handleRunTask}
+                  onEdit={handleEditTask}
+                  onHistory={handleViewHistory}
                 />
               </div>
             </div>
