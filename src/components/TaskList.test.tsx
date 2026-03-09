@@ -127,9 +127,23 @@ describe('TaskList', () => {
 
       render(<TaskList tasks={mockTasks} />);
 
+      // First tab focuses the first switch
       await user.tab();
       expect(screen.getAllByRole('switch')[0]).toHaveFocus();
 
+      // Second tab focuses the first run button
+      await user.tab();
+      expect(screen.getAllByRole('button', { name: /run/i })[0]).toHaveFocus();
+
+      // Third tab focuses the first edit button
+      await user.tab();
+      expect(screen.getAllByRole('button', { name: /edit/i })[0]).toHaveFocus();
+
+      // Fourth tab focuses the first history button
+      await user.tab();
+      expect(screen.getAllByRole('button', { name: /history/i })[0]).toHaveFocus();
+
+      // Fifth tab focuses the first delete button
       await user.tab();
       expect(screen.getAllByRole('button', { name: /delete/i })[0]).toHaveFocus();
     });
