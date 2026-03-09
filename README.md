@@ -175,13 +175,13 @@ cargo clippy
 The SQLite database is stored at:
 
 ```
-~/Library/Application Support/com.mywork.scheduler/mywork.db
+~/Library/Application Support/com.mywork/mywork.db
 ```
 
 Task outputs are stored in:
 
 ```
-~/Library/Application Support/com.mywork.scheduler/outputs/
+~/Library/Application Support/com.mywork/outputs/
 ```
 
 ## Recommended IDE Setup

@@ -60,8 +60,8 @@ npm run format        # Prettier
 
 ## DATA STORAGE
 
-- DB: `~/Library/Application Support/com.mywork.scheduler/mywork.db`
-- Outputs: `~/Library/Application Support/com.mywork.scheduler/outputs/`
+- DB: `~/Library/Application Support/com.mywork/mywork.db`
+- Outputs: `~/Library/Application Support/com.mywork/outputs/`
 
 ## NOTES
 
