@@ -15,11 +15,12 @@ export function formatRelativeTime(dateString: string): string {
   if (diffMinutes < 60) {
     return `${diffMinutes} minutes ago`;
   }
-  if (diffHours === 1) {
+  const diffHoursInt = Math.floor(diffHours);
+  if (diffHoursInt === 1) {
     return '1 hour ago';
   }
   if (diffHours < 24) {
-    return `${Math.floor(diffHours)} hours ago`;
+    return `${diffHoursInt} hours ago`;
   }
   if (diffDays < 7) {
     return date.toLocaleString('en-US', {
