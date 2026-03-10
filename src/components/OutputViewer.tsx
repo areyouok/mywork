@@ -55,7 +55,6 @@ export function OutputViewer({ content, isMarkdown: _isMarkdown, execution }: Ou
     }
   }, [displayContent]);
   const isEmpty = !displayContent || displayContent.trim() === '';
-  const statusLabel = execution ? execution.status : null;
 
   if (isEmpty) {
     return (
@@ -67,11 +66,6 @@ export function OutputViewer({ content, isMarkdown: _isMarkdown, execution }: Ou
 
   return (
     <div className="output-viewer">
-      {statusLabel && (
-        <div className="output-status-row">
-          <span className={`execution-status status-${statusLabel}`}>{statusLabel}</span>
-        </div>
-      )}
       <div className="output-viewer-content" ref={containerRef} onScroll={handleScroll}>
         <AnsiRenderer text={displayContent} />
       </div>

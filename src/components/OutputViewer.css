@@ -1,15 +1,12 @@
 /* OutputViewer Styles */
 .output-viewer {
+  display: flex;
+  flex-direction: column;
   padding: var(--space-lg);
   background-color: var(--bg-primary);
   border-radius: var(--radius-md);
-  min-height: 200px;
-}
-
-.output-status-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: var(--space-md);
+  min-height: 0;
+  height: 100%;
 }
 
 .output-viewer-empty {
@@ -22,10 +19,11 @@
 }
 
 .output-viewer-content {
+  flex: 1;
   line-height: var(--line-height-relaxed);
   color: var(--text-primary);
-  max-height: 600px;
   overflow-y: auto;
+  min-height: 0;
 }
 
 /* Markdown Typography */

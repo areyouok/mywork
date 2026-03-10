@@ -8,6 +8,7 @@ import { useScheduler } from './hooks/useScheduler';
 import { useExecutions } from './hooks/useExecutions';
 import { useTaskActions } from './hooks/useTaskActions';
 import { useOutput } from './hooks/useOutput';
+import { getExecution } from './api/tasks';
 import type { Task } from './types/task';
 import type { Execution } from './types/execution';
 import './App.css';
@@ -153,6 +154,31 @@ function App() {
     setViewMode('output');
   };
 
+  useEffect(() => {
+    if (viewMode !== 'output' || !selectedExecution || selectedExecution.status !== 'running') {
+      return;
+    }
+
+    let cancelled = false;
+    const intervalId = setInterval(async () => {
+      try {
+        const latest = await getExecution(selectedExecution.id);
+        if (!cancelled) {
+          setSelectedExecution(latest);
+        }
+      } catch (error) {
+        console.error('Failed to refresh selected execution:', error);
+      }
+    }, 1000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [viewMode, selectedExecution]);
+
+  const outputExecutionStatus = selectedExecution?.status;
+
   return (
     <div className="app">
       <header className="app-header">
@@ -245,9 +271,16 @@ function App() {
           )}
 
           {viewMode === 'output' && selectedTask && (
-            <div className="content-panel">
+            <div className="content-panel output-panel">
               <div className="panel-header">
-                <h2>Output - Execution {selectedExecutionId}</h2>
+                <div className="output-header-title">
+                  {outputExecutionStatus && (
+                    <span className={`execution-status status-${outputExecutionStatus}`}>
+                      {outputExecutionStatus}
+                    </span>
+                  )}
+                  <h2>Output - Execution {selectedExecutionId}</h2>
+                </div>
                 <div className="panel-actions">
                   <button className="btn-secondary" onClick={() => setViewMode('history')}>
                     Back to History

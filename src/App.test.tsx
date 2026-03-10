@@ -8,20 +8,6 @@ vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn(async () => () => {}),
 }));
 
-vi.mock('./api/tasks', () => ({
-  getTasks: vi.fn(),
-  createTask: vi.fn(),
-  updateTask: vi.fn(),
-  deleteTask: vi.fn(),
-  getExecutions: vi.fn(),
-  getRunningExecutions: vi.fn(),
-  getSchedulerStatus: vi.fn(),
-  startScheduler: vi.fn(),
-  reloadScheduler: vi.fn(),
-  runTask: vi.fn(),
-  stopScheduler: vi.fn(),
-}));
-
 const mockTasks = [
   {
     id: '1',
@@ -53,6 +39,29 @@ const mockExecutions = [
   },
 ];
 
+const mockGetExecution = vi.hoisted(() => vi.fn());
+const mockGetOutput = vi.hoisted(() => vi.fn());
+
+vi.mock('./api/tasks', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./api/tasks')>();
+  return {
+    ...actual,
+    getTasks: vi.fn(),
+    createTask: vi.fn(),
+    updateTask: vi.fn(),
+    deleteTask: vi.fn(),
+    getExecutions: vi.fn(),
+    getRunningExecutions: vi.fn(),
+    getSchedulerStatus: vi.fn(),
+    startScheduler: vi.fn(),
+    reloadScheduler: vi.fn(),
+    runTask: vi.fn(),
+    stopScheduler: vi.fn(),
+    getExecution: mockGetExecution,
+    getOutput: mockGetOutput,
+  };
+});
+
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -64,6 +73,8 @@ describe('App', () => {
     vi.mocked(api.getSchedulerStatus).mockResolvedValue('running');
     vi.mocked(api.startScheduler).mockResolvedValue('Scheduler started successfully');
     vi.mocked(api.reloadScheduler).mockResolvedValue('Scheduler reloaded');
+    mockGetExecution.mockResolvedValue(mockExecutions[0]);
+    mockGetOutput.mockResolvedValue('');
   });
   it('should render app header with title', () => {
     render(<App />);
@@ -158,6 +169,47 @@ describe('App', () => {
 
     expect(screen.getByRole('heading', { name: /execution history/i })).toBeInTheDocument();
     expect(screen.getByText('Back to Task')).toBeInTheDocument();
+  });
+
+  it('should render execution status badge in output header', async () => {
+    const user = userEvent.setup();
+    const runningExecution = {
+      id: 'exec-running',
+      task_id: '1',
+      status: 'running' as const,
+      started_at: '2024-01-01T10:00:00Z',
+      output_file: 'exec-running',
+    };
+
+    vi.mocked(api.getExecutions).mockResolvedValue([runningExecution]);
+    vi.mocked(api.getOutput).mockResolvedValue('stream output');
+    mockGetExecution.mockResolvedValue({
+      ...runningExecution,
+      status: 'success',
+      finished_at: '2024-01-01T10:01:00Z',
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Daily Code Review')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Daily Code Review'));
+    await user.click(screen.getByRole('button', { name: /history/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('running')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('running'));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /output - execution exec-running/i })
+      ).toBeInTheDocument();
+      expect(screen.getByText('running')).toBeInTheDocument();
+    });
   });
 
   it('should toggle task enabled status', async () => {
