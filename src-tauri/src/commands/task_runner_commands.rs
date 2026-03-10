@@ -91,7 +91,7 @@ pub async fn run_task(
                     output::append_output_file(
                         &output_dir,
                         &execution.id,
-                        &format!("[stderr] {}\n", text),
+                        &format!("{}\n", text),
                     )
                     .await
                     .map_err(|e| format!("Failed to append stderr: {}", e))?;

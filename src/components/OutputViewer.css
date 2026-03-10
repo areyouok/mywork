@@ -6,6 +6,12 @@
   min-height: 200px;
 }
 
+.output-status-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-md);
+}
+
 .output-viewer-empty {
   display: flex;
   align-items: center;
@@ -19,6 +25,7 @@
   line-height: var(--line-height-relaxed);
   color: var(--text-primary);
   max-height: 600px;
+  overflow-y: auto;
 }
 
 /* Markdown Typography */

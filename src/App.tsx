@@ -35,15 +35,35 @@ function App() {
   const { executions, loadExecutions } = useExecutions();
 
   useEffect(() => {
+    const tauriInternals = Reflect.get(window, '__TAURI_INTERNALS__');
+    if (!tauriInternals) {
+      return;
+    }
+
     let unlistenStarted: (() => void) | undefined;
     let unlistenFinished: (() => void) | undefined;
+    let mounted = true;
 
     import('@tauri-apps/api/event').then(({ listen }) => {
-      listen<string>('execution-started', () => loadExecutions(selectedTaskId));
-      listen<string>('execution-finished', () => loadExecutions(selectedTaskId));
+      if (!mounted) {
+        return;
+      }
+
+      void listen<string>('execution-started', () => loadExecutions(selectedTaskId)).then(
+        (unlisten) => {
+          unlistenStarted = unlisten;
+        }
+      );
+
+      void listen<string>('execution-finished', () => loadExecutions(selectedTaskId)).then(
+        (unlisten) => {
+          unlistenFinished = unlisten;
+        }
+      );
     });
 
     return () => {
+      mounted = false;
       unlistenStarted?.();
       unlistenFinished?.();
     };

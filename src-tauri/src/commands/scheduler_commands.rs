@@ -243,7 +243,7 @@ pub async fn execute_task_internal(
                 if opencode_output.stderr.is_empty() {
                     String::new()
                 } else {
-                    format!("\n[stderr] {}", opencode_output.stderr)
+                    format!("\n{}", opencode_output.stderr)
                 }
             );
             

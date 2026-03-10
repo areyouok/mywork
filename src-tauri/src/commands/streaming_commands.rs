@@ -95,9 +95,7 @@ mod tests {
         let mut merged = String::new();
         let exit_code = stream_executor_to_events(&mut executor, |event| {
             if let OutputEvent::Output { text, source } = &event {
-                if source == "stderr" {
-                    merged.push_str("[stderr] ");
-                }
+                let _ = source;
                 merged.push_str(text);
                 merged.push('\n');
             }

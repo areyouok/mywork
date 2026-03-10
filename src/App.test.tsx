@@ -4,6 +4,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import App from './App';
 import * as api from './api/tasks';
 
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn(async () => () => {}),
+}));
+
 vi.mock('./api/tasks', () => ({
   getTasks: vi.fn(),
   createTask: vi.fn(),
