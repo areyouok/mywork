@@ -33,6 +33,22 @@ function App() {
     runningTaskIds,
   } = useScheduler();
   const { executions, loadExecutions } = useExecutions();
+
+  useEffect(() => {
+    let unlistenStarted: (() => void) | undefined;
+    let unlistenFinished: (() => void) | undefined;
+
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen<string>('execution-started', () => loadExecutions(selectedTaskId));
+      listen<string>('execution-finished', () => loadExecutions(selectedTaskId));
+    });
+
+    return () => {
+      unlistenStarted?.();
+      unlistenFinished?.();
+    };
+  }, [loadExecutions, selectedTaskId]);
+
   const { handleToggle, handleDelete, handleRun } = useTaskActions(
     updateTask,
     deleteTask,

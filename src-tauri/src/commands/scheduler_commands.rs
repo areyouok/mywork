@@ -173,6 +173,9 @@ pub async fn execute_task_internal(
     use crate::storage::output;
     use chrono::Utc;
 
+    // Emit event to notify frontend to refresh executions
+    let _ = app.emit("execution-started", &task_id);
+
     // Atomically check if running and acquire slot (prevents race condition)
     let queue = task_queue.lock().await;
     let _guard = match queue.acquire_slot_with_skip(&task_id).await {
@@ -272,6 +275,8 @@ pub async fn execute_task_internal(
     crate::models::execution::update_execution(&pool, &execution.id, update)
         .await
         .map_err(|e| format!("Failed to update execution: {}", e))?;
+    
+    let _ = app.emit("execution-finished", &task_id);
     
     Ok(())
 }
