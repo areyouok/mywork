@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { TaskList } from './components/TaskList';
 import { TaskForm, type TaskFormData } from './components/TaskForm';
 import { ExecutionHistory } from './components/ExecutionHistory';
@@ -183,7 +183,16 @@ function App() {
     }
   }, [executions, selectedExecution, viewMode]);
 
-  const outputExecutionStatus = selectedExecution?.status;
+  const selectedExecutionLive = useMemo(() => {
+    if (!selectedExecution) {
+      return null;
+    }
+    return (
+      executions.find((execution) => execution.id === selectedExecution.id) ?? selectedExecution
+    );
+  }, [executions, selectedExecution]);
+
+  const outputExecutionStatus = selectedExecutionLive?.status;
 
   return (
     <div className="app">
@@ -297,7 +306,7 @@ function App() {
                 <OutputViewer
                   content={outputContent}
                   isMarkdown={true}
-                  execution={selectedExecution}
+                  execution={selectedExecutionLive}
                 />
               </div>
             </div>

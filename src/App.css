@@ -182,8 +182,9 @@
 
 .panel-body {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   padding: var(--space-xl);
+  min-height: 0;
 }
 
 .output-panel .panel-body {
@@ -191,7 +192,6 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: var(--space-xl);
   box-sizing: border-box;
 }
 
