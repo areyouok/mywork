@@ -16,7 +16,7 @@ export function OutputViewer({ content, isMarkdown: _isMarkdown, execution }: Ou
   const { outputContent, loadOutput } = useOutput();
   const { output: streamingOutput, isStreaming, startStreaming } = useStreamingOutput();
   const containerRef = useRef<HTMLDivElement>(null);
-  const useContentPropDirectly = content !== undefined;
+  const useContentPropDirectly = content !== undefined && !isRunning;
 
   useEffect(() => {
     if (!useContentPropDirectly && !isRunning && execution) {

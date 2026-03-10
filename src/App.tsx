@@ -18,6 +18,7 @@ function App() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [selectedExecution, setSelectedExecution] = useState<Execution | null>(null);
 
   const selectedTaskIdRef = useRef<string | null>(selectedTaskId);
   useEffect(() => {
@@ -107,6 +108,11 @@ function App() {
   };
 
   const handleViewOutput = async (execution: Execution | string) => {
+    const exec =
+      typeof execution === 'string'
+        ? ({ id: execution, task_id: '', status: 'pending', started_at: '' } as Execution)
+        : execution;
+    setSelectedExecution(exec);
     await loadOutput(execution);
     setViewMode('output');
   };
@@ -213,7 +219,11 @@ function App() {
                 </div>
               </div>
               <div className="panel-body">
-                <OutputViewer content={outputContent} isMarkdown={true} />
+                <OutputViewer
+                  content={outputContent}
+                  isMarkdown={true}
+                  execution={selectedExecution}
+                />
               </div>
             </div>
           )}
