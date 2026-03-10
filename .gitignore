@@ -24,9 +24,7 @@ Cargo.lock
 outputs/
 
 # Sisyphus
-.sisyphus/evidence/
-.sisyphus/boulder.json
-.sisyphus/notepads/
+.sisyphus
 
 # Test reports
 playwright-report/
