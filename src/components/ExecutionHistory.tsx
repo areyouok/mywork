@@ -53,13 +53,17 @@ export function ExecutionHistory({
   }
 
   const handleClick = (execution: Execution) => {
-    if (onViewOutput && execution.output_file) {
+    if (onViewOutput && (execution.output_file || execution.status === 'running')) {
       onViewOutput(execution);
     }
   };
 
   const handleKeyPress = (event: React.KeyboardEvent, execution: Execution) => {
-    if (event.key === 'Enter' && onViewOutput && execution.output_file) {
+    if (
+      event.key === 'Enter' &&
+      onViewOutput &&
+      (execution.output_file || execution.status === 'running')
+    ) {
       onViewOutput(execution);
     }
   };
@@ -71,7 +75,8 @@ export function ExecutionHistory({
   return (
     <div className="execution-history" role="list">
       {filteredExecutions.map((execution) => {
-        const isClickable = onViewOutput && execution.output_file;
+        const isClickable =
+          onViewOutput && (execution.output_file || execution.status === 'running');
         const isRunning = execution.status === 'running' && !execution.finished_at;
 
         return (
