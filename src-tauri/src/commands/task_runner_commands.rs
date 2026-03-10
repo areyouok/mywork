@@ -1,19 +1,35 @@
 use crate::models::execution::{create_execution, update_execution, ExecutionStatus, NewExecution, UpdateExecution};
 use crate::models::task::get_task;
 use crate::opencode::executor::run_opencode_task;
+use crate::scheduler::task_queue::{TaskQueue, SkipResult};
 use crate::storage::output;
 use crate::db::connection;
 use chrono::Utc;
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
+use tokio::sync::Mutex;
 
 #[tauri::command]
 pub async fn run_task(
     task_id: String,
     pool: State<'_, Arc<SqlitePool>>,
+    task_queue: State<'_, Arc<Mutex<TaskQueue>>>,
     app: AppHandle,
 ) -> Result<String, String> {
+    let queue = task_queue.inner().lock().await;
+    let _guard = match queue.acquire_slot_with_skip(&task_id).await {
+        Ok(Ok(guard)) => guard,
+        Ok(Err(SkipResult::Skipped { task_id })) => {
+            return Err(format!("Task '{}' is already running", task_id));
+        }
+        Ok(Err(SkipResult::Execute)) => unreachable!(),
+        Err(e) => {
+            return Err(format!("Failed to acquire slot: {}", e));
+        }
+    };
+    drop(queue);
+    
     let pool = pool.inner().clone();
     
     let task = get_task(&pool, &task_id)

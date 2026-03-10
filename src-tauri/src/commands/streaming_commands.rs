@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use crate::executor::streaming_executor::{StreamLine, StreamingExecutor};
 use crate::models::task;
-use crate::storage::output;
 use serde::Serialize;
 use sqlx::SqlitePool;
 use tauri::{AppHandle, State};
@@ -24,7 +23,7 @@ pub async fn execute_task_streaming(
     cwd: Option<String>,
     channel: Channel<OutputEvent>,
     pool: State<'_, Arc<SqlitePool>>,
-    app: AppHandle,
+    _app: AppHandle,
 ) -> Result<(), String> {
     let task = task::get_task(&pool, &task_id)
         .await
@@ -37,21 +36,10 @@ pub async fn execute_task_streaming(
         .await
         .map_err(|e| format!("Failed to start opencode streaming: {}", e))?;
 
-    let (stdout, stderr, _) = stream_executor_to_events(&mut executor, |event| {
+    let (_stdout, _stderr, _) = stream_executor_to_events(&mut executor, |event| {
         channel.send(event).map_err(|e| e.to_string())
     })
     .await?;
-
-    let output_dir = output::get_output_directory(&app)
-        .map_err(|e| format!("Failed to get output directory: {}", e))?;
-    output::create_output_directory(&output_dir)
-        .await
-        .map_err(|e| format!("Failed to create output directory: {}", e))?;
-
-    let content = format!("=== STDOUT ===\n{}\n\n=== STDERR ===\n{}", stdout, stderr);
-    output::write_output_file(&output_dir, &task_id, &content)
-        .await
-        .map_err(|e| format!("Failed to write output file: {}", e))?;
 
     Ok(())
 }
