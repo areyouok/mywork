@@ -9,7 +9,6 @@ interface NewTask {
   simple_schedule?: string;
   enabled?: number;
   timeout_seconds?: number;
-  skip_if_running?: number;
 }
 
 interface UpdateTask {
@@ -19,7 +18,6 @@ interface UpdateTask {
   simple_schedule?: string;
   enabled?: number;
   timeout_seconds?: number;
-  skip_if_running?: number;
 }
 
 interface NewExecution {
@@ -46,7 +44,6 @@ export interface RawTask {
   simple_schedule?: string;
   enabled: number;
   timeout_seconds: number;
-  skip_if_running: number;
   created_at: string;
   updated_at: string;
 }
@@ -55,7 +52,6 @@ export function convertTask(raw: RawTask): Task {
   return {
     ...raw,
     enabled: raw.enabled === 1,
-    skip_if_running: raw.skip_if_running === 1,
   };
 }
 

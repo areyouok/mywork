@@ -11,7 +11,6 @@ describe('API Tasks', () => {
         prompt: 'Test prompt',
         enabled: 1,
         timeout_seconds: 300,
-        skip_if_running: 1,
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-01T00:00:00Z',
       };
@@ -19,7 +18,6 @@ describe('API Tasks', () => {
       const task = convertTask(raw);
 
       expect(task.enabled).toBe(true);
-      expect(task.skip_if_running).toBe(true);
     });
 
     it('should convert enabled from 0 to false', () => {
@@ -29,7 +27,6 @@ describe('API Tasks', () => {
         prompt: 'Test prompt',
         enabled: 0,
         timeout_seconds: 300,
-        skip_if_running: 0,
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-01T00:00:00Z',
       };
@@ -37,7 +34,6 @@ describe('API Tasks', () => {
       const task = convertTask(raw);
 
       expect(task.enabled).toBe(false);
-      expect(task.skip_if_running).toBe(false);
     });
 
     it('should preserve all other fields', () => {
@@ -49,7 +45,6 @@ describe('API Tasks', () => {
         simple_schedule: undefined,
         enabled: 1,
         timeout_seconds: 600,
-        skip_if_running: 0,
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-02T00:00:00Z',
       };
