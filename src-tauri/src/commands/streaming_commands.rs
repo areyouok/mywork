@@ -1,9 +1,12 @@
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::executor::streaming_executor::{StreamLine, StreamingExecutor};
+use crate::models::task;
 use crate::storage::output;
 use serde::Serialize;
-use tauri::AppHandle;
+use sqlx::SqlitePool;
+use tauri::{AppHandle, State};
 use tauri::ipc::Channel;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -17,12 +20,17 @@ pub enum OutputEvent {
 #[tauri::command]
 pub async fn execute_task_streaming(
     task_id: String,
-    prompt: String,
+    _prompt: String,
     cwd: Option<String>,
     channel: Channel<OutputEvent>,
+    pool: State<'_, Arc<SqlitePool>>,
     app: AppHandle,
 ) -> Result<(), String> {
-    let args = ["--print-session-id", "--non-interactive", "-p", &prompt];
+    let task = task::get_task(&pool, &task_id)
+        .await
+        .map_err(|e| format!("Failed to get task: {}", e))?;
+
+    let args: Vec<&str> = vec!["run", &task.prompt];
     let cwd_path = cwd.as_deref().map(Path::new);
 
     let mut executor = StreamingExecutor::spawn("opencode", &args, cwd_path)

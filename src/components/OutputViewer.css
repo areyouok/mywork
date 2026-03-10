@@ -19,7 +19,6 @@
   line-height: var(--line-height-relaxed);
   color: var(--text-primary);
   max-height: 600px;
-  overflow-y: auto;
 }
 
 /* Markdown Typography */
