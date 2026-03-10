@@ -4,7 +4,7 @@ use crate::scheduler::task_queue::{TaskQueue, SkipResult};
 use crate::db::connection;
 use sqlx::SqlitePool;
 use std::sync::Arc;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
 /// Start the scheduler
