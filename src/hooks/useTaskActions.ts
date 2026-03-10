@@ -7,17 +7,19 @@ export function useTaskActions(
   addRunningTask: (taskId: string) => void,
   removeRunningTask: (taskId: string) => void,
   loadExecutions: (taskId: string | null) => Promise<void>,
-  selectedTaskIdRef: React.MutableRefObject<string | null>
+  selectedTaskIdRef: React.MutableRefObject<string | null>,
+  loadTasks: () => Promise<void>
 ) {
   const handleToggle = useCallback(
     async (taskId: string, enabled: boolean) => {
       try {
         await updateTask(taskId, { enabled: enabled ? 1 : 0 });
+        await loadTasks();
       } catch (error) {
         console.error('Failed to toggle task:', error);
       }
     },
-    [updateTask]
+    [updateTask, loadTasks]
   );
 
   const handleDelete = useCallback(

@@ -33,7 +33,8 @@ function App() {
     addRunningTask,
     removeRunningTask,
     loadExecutions,
-    selectedTaskIdRef
+    selectedTaskIdRef,
+    loadTasks
   );
   const { outputContent, selectedExecutionId, loadOutput } = useOutput();
 

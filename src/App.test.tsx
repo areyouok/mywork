@@ -158,6 +158,11 @@ describe('App', () => {
 
   it('should toggle task enabled status', async () => {
     const user = userEvent.setup();
+
+    const updatedTasks = [{ ...mockTasks[0], enabled: false }, mockTasks[1]];
+
+    vi.mocked(api.getTasks).mockResolvedValueOnce(mockTasks).mockResolvedValueOnce(updatedTasks);
+
     render(<App />);
 
     await waitFor(() => {
@@ -170,7 +175,10 @@ describe('App', () => {
     expect(toggleButton).toHaveAttribute('aria-checked', 'true');
 
     await user.click(toggleButton);
-    expect(toggleButton).toHaveAttribute('aria-checked', 'false');
+
+    await waitFor(() => {
+      expect(toggleButton).toHaveAttribute('aria-checked', 'false');
+    });
   });
 
   it('should delete task after confirmation', async () => {
