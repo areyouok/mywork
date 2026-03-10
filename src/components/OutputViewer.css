@@ -1,12 +1,14 @@
 /* OutputViewer Styles */
 .output-viewer {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  flex: 1;
   padding: var(--space-lg);
   background-color: var(--bg-primary);
   border-radius: var(--radius-md);
   min-height: 0;
-  height: 100%;
+  overflow: hidden;
 }
 
 .output-viewer-empty {

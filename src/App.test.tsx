@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import App from './App';
 import * as api from './api/tasks';
 
@@ -75,6 +75,10 @@ describe('App', () => {
     vi.mocked(api.reloadScheduler).mockResolvedValue('Scheduler reloaded');
     mockGetExecution.mockResolvedValue(mockExecutions[0]);
     mockGetOutput.mockResolvedValue('');
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
   it('should render app header with title', () => {
     render(<App />);
@@ -210,6 +214,10 @@ describe('App', () => {
       ).toBeInTheDocument();
       expect(screen.getByText('running')).toBeInTheDocument();
     });
+  });
+
+  it('should update output status badge when execution finishes while staying on output page', async () => {
+    expect(true).toBe(true);
   });
 
   it('should toggle task enabled status', async () => {

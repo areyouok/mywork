@@ -190,6 +190,9 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  padding: var(--space-xl);
+  box-sizing: border-box;
 }
 
 /* Empty State */

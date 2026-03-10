@@ -8,7 +8,6 @@ import { useScheduler } from './hooks/useScheduler';
 import { useExecutions } from './hooks/useExecutions';
 import { useTaskActions } from './hooks/useTaskActions';
 import { useOutput } from './hooks/useOutput';
-import { getExecution } from './api/tasks';
 import type { Task } from './types/task';
 import type { Execution } from './types/execution';
 import './App.css';
@@ -155,27 +154,34 @@ function App() {
   };
 
   useEffect(() => {
-    if (viewMode !== 'output' || !selectedExecution || selectedExecution.status !== 'running') {
+    if (viewMode !== 'output' || !selectedTaskId) {
       return;
     }
 
-    let cancelled = false;
-    const intervalId = setInterval(async () => {
-      try {
-        const latest = await getExecution(selectedExecution.id);
-        if (!cancelled) {
-          setSelectedExecution(latest);
-        }
-      } catch (error) {
-        console.error('Failed to refresh selected execution:', error);
-      }
+    const intervalId = setInterval(() => {
+      void loadExecutions(selectedTaskId);
     }, 1000);
 
     return () => {
-      cancelled = true;
       clearInterval(intervalId);
     };
-  }, [viewMode, selectedExecution]);
+  }, [loadExecutions, selectedTaskId, viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== 'output' || !selectedExecution) {
+      return;
+    }
+
+    const matchedExecution = executions.find((execution) => execution.id === selectedExecution.id);
+    if (
+      matchedExecution &&
+      (matchedExecution.status !== selectedExecution.status ||
+        matchedExecution.finished_at !== selectedExecution.finished_at ||
+        matchedExecution.output_file !== selectedExecution.output_file)
+    ) {
+      setSelectedExecution(matchedExecution);
+    }
+  }, [executions, selectedExecution, viewMode]);
 
   const outputExecutionStatus = selectedExecution?.status;
 

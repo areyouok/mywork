@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { AnsiRenderer } from './AnsiRenderer';
-import { useOutput } from '../hooks/useOutput';
 import { useStreamingOutput } from '../hooks/useStreamingOutput';
 import type { Execution } from '@/types/execution';
 import './OutputViewer.css';
@@ -12,12 +11,10 @@ interface OutputViewerProps {
 }
 
 export function OutputViewer({ content, isMarkdown: _isMarkdown, execution }: OutputViewerProps) {
-  const isRunning = execution?.status === 'running';
-  const { outputContent, loadOutput } = useOutput();
   const { output: streamingOutput, startStreaming, stopStreaming } = useStreamingOutput();
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
-  const useContentPropDirectly = content !== undefined && !isRunning;
+  const executionId = execution?.id;
 
   const handleScroll = () => {
     if (!containerRef.current) {
@@ -29,25 +26,16 @@ export function OutputViewer({ content, isMarkdown: _isMarkdown, execution }: Ou
   };
 
   useEffect(() => {
-    if (!useContentPropDirectly && !isRunning && execution) {
-      loadOutput(execution);
+    if (executionId) {
+      startStreaming(executionId);
     }
-  }, [execution, isRunning, loadOutput, useContentPropDirectly]);
 
-  useEffect(() => {
-    if (!useContentPropDirectly && isRunning && execution) {
-      startStreaming(execution.id);
-    }
     return () => {
       stopStreaming();
     };
-  }, [execution, isRunning, startStreaming, stopStreaming, useContentPropDirectly]);
+  }, [executionId, startStreaming, stopStreaming]);
 
-  const displayContent = useContentPropDirectly
-    ? content
-    : isRunning
-      ? streamingOutput
-      : outputContent;
+  const displayContent = execution ? streamingOutput || content || '' : content || '';
 
   useEffect(() => {
     if (containerRef.current && shouldAutoScrollRef.current) {

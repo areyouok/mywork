@@ -5,7 +5,6 @@ import * as tasksApi from '@/api/tasks';
 
 vi.mock('@/api/tasks', () => ({
   getOutput: vi.fn(),
-  getExecution: vi.fn(),
 }));
 
 describe('useStreamingOutput', () => {
@@ -28,12 +27,6 @@ describe('useStreamingOutput', () => {
 
   it('startStreaming 会加载初始输出并进入 streaming 状态', async () => {
     vi.mocked(tasksApi.getOutput).mockResolvedValue('line1\n');
-    vi.mocked(tasksApi.getExecution).mockResolvedValue({
-      id: 'exec-1',
-      task_id: 'task-1',
-      status: 'running',
-      started_at: new Date().toISOString(),
-    });
 
     const { result } = renderHook(() => useStreamingOutput());
 
@@ -46,25 +39,11 @@ describe('useStreamingOutput', () => {
     expect(result.current.isStreaming).toBe(true);
   });
 
-  it('轮询时会刷新输出并在任务完成后停止', async () => {
+  it('轮询时会刷新输出并保持不回退', async () => {
     vi.mocked(tasksApi.getOutput)
-      .mockResolvedValueOnce('line1\n')
-      .mockResolvedValueOnce('line1\nline2\n')
-      .mockResolvedValueOnce('line1\nline2\n');
-    vi.mocked(tasksApi.getExecution)
-      .mockResolvedValueOnce({
-        id: 'exec-1',
-        task_id: 'task-1',
-        status: 'running',
-        started_at: new Date().toISOString(),
-      })
-      .mockResolvedValueOnce({
-        id: 'exec-1',
-        task_id: 'task-1',
-        status: 'success',
-        started_at: new Date().toISOString(),
-        finished_at: new Date().toISOString(),
-      });
+      .mockResolvedValueOnce('a\n')
+      .mockResolvedValueOnce('a\nb\n')
+      .mockResolvedValueOnce('a\n');
 
     const { result } = renderHook(() => useStreamingOutput());
 
@@ -77,13 +56,14 @@ describe('useStreamingOutput', () => {
       await Promise.resolve();
     });
 
+    expect(result.current.output).toBe('a\nb\n');
+
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);
       await Promise.resolve();
     });
 
-    expect(result.current.output).toBe('line1\nline2\n');
-    expect(result.current.isStreaming).toBe(false);
+    expect(result.current.output).toBe('a\nb\n');
   });
 
   it('初次加载失败会设置 error 并停止', async () => {
@@ -101,12 +81,6 @@ describe('useStreamingOutput', () => {
 
   it('stopStreaming 会停止并清空输出', async () => {
     vi.mocked(tasksApi.getOutput).mockResolvedValue('line1\n');
-    vi.mocked(tasksApi.getExecution).mockResolvedValue({
-      id: 'exec-1',
-      task_id: 'task-1',
-      status: 'running',
-      started_at: new Date().toISOString(),
-    });
 
     const { result } = renderHook(() => useStreamingOutput());
 
