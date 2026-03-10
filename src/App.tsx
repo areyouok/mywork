@@ -76,7 +76,6 @@ function App() {
           cron_expression: data.cron_expression,
           simple_schedule: data.simple_schedule,
           timeout_seconds: data.timeout_seconds,
-          skip_if_running: data.skip_if_running ? 1 : 0,
         });
         setEditingTask(null);
       } else {
@@ -86,7 +85,6 @@ function App() {
           cron_expression: data.cron_expression,
           simple_schedule: data.simple_schedule,
           timeout_seconds: data.timeout_seconds,
-          skip_if_running: data.skip_if_running ? 1 : 0,
           enabled: 1,
         });
       }

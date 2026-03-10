@@ -26,7 +26,6 @@ export function useTasks() {
       simple_schedule?: string;
       enabled?: number;
       timeout_seconds?: number;
-      skip_if_running?: number;
     }) => {
       const newTask = await api.createTask(data);
       setTasks((prev) => [...prev, newTask]);

@@ -6,7 +6,6 @@ export interface Task {
   simple_schedule?: string;
   enabled: boolean;
   timeout_seconds: number;
-  skip_if_running: boolean;
   created_at: string;
   updated_at: string;
 }

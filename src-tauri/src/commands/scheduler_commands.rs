@@ -173,23 +173,15 @@ pub async fn execute_task_internal(
     use crate::storage::output;
     use chrono::Utc;
 
-    // Check if task is already running (always enforce skip if running)
+    // Atomically check if running and acquire slot (prevents race condition)
     let queue = task_queue.lock().await;
-    let skip_result = queue.skip_if_running(&task_id).await;
-    drop(queue);
-
-    match skip_result {
-        SkipResult::Skipped { task_id } => {
+    let _guard = match queue.acquire_slot_with_skip(&task_id).await {
+        Ok(Ok(guard)) => guard,
+        Ok(Err(SkipResult::Skipped { task_id })) => {
             eprintln!("Task '{}' is already running, skipping execution", task_id);
             return Ok(());
         }
-        SkipResult::Execute => {}
-    }
-
-    // Acquire slot for this task (guard will be dropped when function ends, releasing the slot)
-    let queue = task_queue.lock().await;
-    let _guard = match queue.acquire_slot(&task_id).await {
-        Ok(guard) => guard,
+        Ok(Err(SkipResult::Execute)) => unreachable!("acquire_slot_with_skip should not return Execute in Err"),
         Err(e) => {
             eprintln!("Failed to acquire slot for task '{}': {}", task_id, e);
             return Ok(());

@@ -281,7 +281,6 @@ mod tests {
             simple_schedule: None,
             enabled: None,
             timeout_seconds: None,
-            skip_if_running: None,
         };
         let task = create_task(pool, new_task).await.expect("Failed to create task");
         task.id

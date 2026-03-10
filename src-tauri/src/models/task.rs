@@ -13,7 +13,6 @@ pub struct Task {
     pub simple_schedule: Option<String>,
     pub enabled: i32,
     pub timeout_seconds: i32,
-    pub skip_if_running: i32,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -27,7 +26,6 @@ pub struct NewTask {
     pub simple_schedule: Option<String>,
     pub enabled: Option<i32>,
     pub timeout_seconds: Option<i32>,
-    pub skip_if_running: Option<i32>,
 }
 
 /// UpdateTask struct for updating an existing task
@@ -39,7 +37,6 @@ pub struct UpdateTask {
     pub simple_schedule: Option<String>,
     pub enabled: Option<i32>,
     pub timeout_seconds: Option<i32>,
-    pub skip_if_running: Option<i32>,
 }
 
 /// Create a new task
@@ -59,12 +56,11 @@ pub async fn create_task(pool: &SqlitePool, new_task: NewTask) -> Result<Task, s
 
     let enabled = new_task.enabled.unwrap_or(1);
     let timeout_seconds = new_task.timeout_seconds.unwrap_or(300);
-    let skip_if_running = new_task.skip_if_running.unwrap_or(1);
 
     sqlx::query(
         r#"
-        INSERT INTO tasks (id, name, prompt, cron_expression, simple_schedule, enabled, timeout_seconds, skip_if_running, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tasks (id, name, prompt, cron_expression, simple_schedule, enabled, timeout_seconds, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&id)
@@ -74,7 +70,6 @@ pub async fn create_task(pool: &SqlitePool, new_task: NewTask) -> Result<Task, s
     .bind(&new_task.simple_schedule)
     .bind(enabled)
     .bind(timeout_seconds)
-    .bind(skip_if_running)
     .bind(&created_at)
     .bind(&updated_at)
     .execute(pool)
@@ -88,9 +83,8 @@ pub async fn create_task(pool: &SqlitePool, new_task: NewTask) -> Result<Task, s
         simple_schedule: new_task.simple_schedule,
         enabled,
         timeout_seconds,
-        skip_if_running,
         created_at,
-        updated_at,
+        updated_at
     })
 }
 
@@ -106,7 +100,7 @@ pub async fn create_task(pool: &SqlitePool, new_task: NewTask) -> Result<Task, s
 pub async fn get_task(pool: &SqlitePool, id: &str) -> Result<Task, sqlx::Error> {
     sqlx::query_as::<_, Task>(
         r#"
-        SELECT id, name, prompt, cron_expression, simple_schedule, enabled, timeout_seconds, skip_if_running, created_at, updated_at
+        SELECT id, name, prompt, cron_expression, simple_schedule, enabled, timeout_seconds, created_at, updated_at
         FROM tasks
         WHERE id = ?
         "#,
@@ -127,7 +121,7 @@ pub async fn get_task(pool: &SqlitePool, id: &str) -> Result<Task, sqlx::Error> 
 pub async fn get_all_tasks(pool: &SqlitePool) -> Result<Vec<Task>, sqlx::Error> {
     sqlx::query_as::<_, Task>(
         r#"
-        SELECT id, name, prompt, cron_expression, simple_schedule, enabled, timeout_seconds, skip_if_running, created_at, updated_at
+        SELECT id, name, prompt, cron_expression, simple_schedule, enabled, timeout_seconds, created_at, updated_at
         FROM tasks
         ORDER BY created_at DESC
         "#,
@@ -155,13 +149,12 @@ pub async fn update_task(pool: &SqlitePool, id: &str, update: UpdateTask) -> Res
     let simple_schedule = update.simple_schedule.or(existing.simple_schedule);
     let enabled = update.enabled.unwrap_or(existing.enabled);
     let timeout_seconds = update.timeout_seconds.unwrap_or(existing.timeout_seconds);
-    let skip_if_running = update.skip_if_running.unwrap_or(existing.skip_if_running);
     let updated_at = Utc::now().to_rfc3339();
 
     sqlx::query(
         r#"
         UPDATE tasks
-        SET name = ?, prompt = ?, cron_expression = ?, simple_schedule = ?, enabled = ?, timeout_seconds = ?, skip_if_running = ?, updated_at = ?
+        SET name = ?, prompt = ?, cron_expression = ?, simple_schedule = ?, enabled = ?, timeout_seconds = ?, updated_at = ?
         WHERE id = ?
         "#,
     )
@@ -171,7 +164,6 @@ pub async fn update_task(pool: &SqlitePool, id: &str, update: UpdateTask) -> Res
     .bind(&simple_schedule)
     .bind(enabled)
     .bind(timeout_seconds)
-    .bind(skip_if_running)
     .bind(&updated_at)
     .bind(id)
     .execute(pool)
@@ -185,7 +177,6 @@ pub async fn update_task(pool: &SqlitePool, id: &str, update: UpdateTask) -> Res
         simple_schedule,
         enabled,
         timeout_seconds,
-        skip_if_running,
         created_at: existing.created_at,
         updated_at,
     })
@@ -234,7 +225,6 @@ mod tests {
             simple_schedule: None,
             enabled: Some(1),
             timeout_seconds: Some(300),
-            skip_if_running: Some(1),
         };
 
         let result = create_task(&pool, new_task).await;
@@ -247,7 +237,6 @@ mod tests {
         assert_eq!(task.cron_expression, Some("0 * * * *".to_string()));
         assert_eq!(task.enabled, 1);
         assert_eq!(task.timeout_seconds, 300);
-        assert_eq!(task.skip_if_running, 1);
         assert!(!task.created_at.is_empty());
         assert!(!task.updated_at.is_empty());
 
@@ -264,7 +253,6 @@ mod tests {
             simple_schedule: None,
             enabled: None,
             timeout_seconds: None,
-            skip_if_running: None,
         };
 
         let result = create_task(&pool, new_task).await;
@@ -273,7 +261,6 @@ mod tests {
         let task = result.unwrap();
         assert_eq!(task.enabled, 1, "Default enabled should be 1");
         assert_eq!(task.timeout_seconds, 300, "Default timeout should be 300");
-        assert_eq!(task.skip_if_running, 1, "Default skip_if_running should be 1");
 
         pool.close().await;
     }
@@ -288,7 +275,6 @@ mod tests {
             simple_schedule: Some(r#"{"type":"interval","value":5,"unit":"minutes"}"#.to_string()),
             enabled: Some(1),
             timeout_seconds: Some(600),
-            skip_if_running: Some(0),
         };
 
         let created = create_task(&pool, new_task).await.expect("Failed to create task");
@@ -302,7 +288,6 @@ mod tests {
         assert_eq!(task.prompt, "Get this task");
         assert_eq!(task.simple_schedule, Some(r#"{"type":"interval","value":5,"unit":"minutes"}"#.to_string()));
         assert_eq!(task.timeout_seconds, 600);
-        assert_eq!(task.skip_if_running, 0);
 
         pool.close().await;
     }
@@ -343,7 +328,6 @@ mod tests {
             simple_schedule: None,
             enabled: None,
             timeout_seconds: None,
-            skip_if_running: None,
         };
         let task2 = NewTask {
             name: "Task 2".to_string(),
@@ -352,7 +336,6 @@ mod tests {
             simple_schedule: None,
             enabled: None,
             timeout_seconds: None,
-            skip_if_running: None,
         };
 
         create_task(&pool, task1).await.expect("Failed to create task1");
@@ -377,7 +360,6 @@ mod tests {
             simple_schedule: None,
             enabled: Some(1),
             timeout_seconds: Some(300),
-            skip_if_running: Some(1),
         };
 
         let created = create_task(&pool, new_task).await.expect("Failed to create task");
@@ -391,7 +373,6 @@ mod tests {
             simple_schedule: None,
             enabled: Some(0),
             timeout_seconds: Some(600),
-            skip_if_running: Some(0),
         };
 
         let result = update_task(&pool, &created.id, update).await;
@@ -404,7 +385,6 @@ mod tests {
         assert_eq!(updated.cron_expression, Some("0 0 * * *".to_string()));
         assert_eq!(updated.enabled, 0);
         assert_eq!(updated.timeout_seconds, 600);
-        assert_eq!(updated.skip_if_running, 0);
         assert_eq!(updated.created_at, created.created_at);
         assert_ne!(updated.updated_at, created.updated_at, "updated_at should change");
 
@@ -421,7 +401,6 @@ mod tests {
             simple_schedule: None,
             enabled: Some(1),
             timeout_seconds: Some(300),
-            skip_if_running: Some(1),
         };
 
         let created = create_task(&pool, new_task).await.expect("Failed to create task");
@@ -433,7 +412,6 @@ mod tests {
             simple_schedule: None,
             enabled: None,
             timeout_seconds: None,
-            skip_if_running: None,
         };
 
         let result = update_task(&pool, &created.id, update).await;
@@ -458,7 +436,6 @@ mod tests {
             simple_schedule: None,
             enabled: None,
             timeout_seconds: None,
-            skip_if_running: None,
         };
 
         let result = update_task(&pool, "non-existent-id", update).await;
@@ -478,7 +455,6 @@ mod tests {
             simple_schedule: None,
             enabled: None,
             timeout_seconds: None,
-            skip_if_running: None,
         };
 
         let created = create_task(&pool, new_task).await.expect("Failed to create task");
@@ -519,7 +495,6 @@ mod tests {
             simple_schedule: None,
             enabled: Some(1),
             timeout_seconds: Some(300),
-            skip_if_running: Some(1),
         };
         let created = create_task(&pool, new_task).await.expect("Create failed");
 
@@ -534,7 +509,6 @@ mod tests {
             simple_schedule: None,
             enabled: None,
             timeout_seconds: None,
-            skip_if_running: None,
         };
         let updated = update_task(&pool, &created.id, update).await.expect("Update failed");
         assert_eq!(updated.name, "Updated Lifecycle");

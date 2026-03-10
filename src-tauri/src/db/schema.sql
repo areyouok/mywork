@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS tasks (
     simple_schedule TEXT, -- JSON: {"type": "interval", "value": 5, "unit": "minutes"}
     enabled INTEGER DEFAULT 1,
     timeout_seconds INTEGER DEFAULT 300,
-    skip_if_running INTEGER DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
