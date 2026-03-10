@@ -63,6 +63,13 @@ export function ExecutionHistory({
             onKeyPress={(e) => handleKeyPress(e, execution)}
             aria-label={`Execution ${getStatusLabel(execution.status)} at ${formatRelativeTime(execution.started_at)}`}
           >
+            <div className="execution-header">
+              <span className={`execution-status status-${execution.status}`}>
+                {execution.status}
+              </span>
+              <span className="execution-time">{formatRelativeTime(execution.started_at)}</span>
+            </div>
+
             <div className="execution-duration">
               {isRunning
                 ? 'Running...'
