@@ -58,6 +58,15 @@
   }
 }
 
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .execution-history-loading p {
   margin-top: var(--space-md);
   color: var(--text-secondary);
@@ -121,6 +130,7 @@
 
 .execution-status.status-running {
   background: var(--accent-color);
+  animation: rotate 1s linear infinite;
 }
 
 .execution-status.status-success {

@@ -4,8 +4,6 @@
   background-color: var(--bg-primary);
   border-radius: var(--radius-md);
   min-height: 200px;
-  max-height: 600px;
-  overflow-y: auto;
 }
 
 .output-viewer-empty {
@@ -20,6 +18,8 @@
 .output-viewer-content {
   line-height: var(--line-height-relaxed);
   color: var(--text-primary);
+  max-height: 600px;
+  overflow-y: auto;
 }
 
 /* Markdown Typography */
@@ -149,4 +149,64 @@
   padding-right: var(--space-sm);
   color: var(--text-quaternary);
   user-select: none;
+}
+
+/* ANSI Colors */
+.ansi-renderer {
+  font-family:
+    'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.ansi-renderer pre {
+  margin: 0;
+  padding: 0;
+  background: none;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.ansi-0 {
+  color: #000000;
+}
+.ansi-1 {
+  color: #cd3131;
+}
+.ansi-2 {
+  color: #0dbc79;
+}
+.ansi-3 {
+  color: #e5e510;
+}
+.ansi-4 {
+  color: #2472c8;
+}
+.ansi-5 {
+  color: #bc3fbc;
+}
+.ansi-6 {
+  color: #11a8cd;
+}
+.ansi-7 {
+  color: #e5e5e5;
+}
+.ansi-8 {
+  color: #666666;
+}
+.ansi-9 {
+  color: #ff6666;
+}
+.ansi-10 {
+  color: #66ff66;
+}
+
+.ansi-bold {
+  font-weight: bold;
+}
+.ansi-underline {
+  text-decoration: underline;
+}
+.ansi-italic {
+  font-style: italic;
 }

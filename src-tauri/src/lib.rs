@@ -11,6 +11,7 @@ use scheduler::task_queue::TaskQueue;
 
 pub mod commands;
 pub mod db;
+pub mod executor;
 pub mod models;
 pub mod opencode;
 pub mod scheduler;
@@ -20,6 +21,8 @@ use commands::{get_tasks, get_task, create_task, update_task, delete_task, run_t
 use commands::{get_executions, get_execution, get_running_executions};
 use commands::{get_scheduler_status, start_scheduler, stop_scheduler, reload_scheduler};
 use commands::{get_output, delete_output};
+use commands::{test_channel_stream};
+use commands::{execute_task_streaming};
 use models::execution::{get_executions_by_status, ExecutionStatus, UpdateExecution};
 use chrono::Utc;
 
@@ -118,7 +121,9 @@ pub fn run() {
             stop_scheduler,
             reload_scheduler,
             get_output,
-            delete_output
+            delete_output,
+            test_channel_stream,
+            execute_task_streaming
         ])
         .setup(|app| {
             let db_path = db::connection::get_database_path(app.handle())?;

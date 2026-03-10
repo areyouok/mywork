@@ -3,6 +3,7 @@ import { TaskList } from './components/TaskList';
 import { TaskForm, type TaskFormData } from './components/TaskForm';
 import { ExecutionHistory } from './components/ExecutionHistory';
 import { OutputViewer } from './components/OutputViewer';
+import { ChannelTest } from './components/ChannelTest';
 import { useTasks } from './hooks/useTasks';
 import { useScheduler } from './hooks/useScheduler';
 import { useExecutions } from './hooks/useExecutions';
@@ -12,7 +13,7 @@ import type { Task } from './types/task';
 import type { Execution } from './types/execution';
 import './App.css';
 
-type ViewMode = 'list' | 'form' | 'history' | 'output';
+type ViewMode = 'list' | 'form' | 'history' | 'output' | 'channel-test';
 
 function App() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -111,6 +112,9 @@ function App() {
       <header className="app-header">
         <h1>MyWork Scheduler</h1>
         <div className="header-actions">
+          <button className="btn-secondary" onClick={() => setViewMode('channel-test')}>
+            Channel Test
+          </button>
           <span className={`scheduler-status status-${schedulerStatus}`}>
             Scheduler: {schedulerStatus}
           </span>
@@ -209,6 +213,22 @@ function App() {
               </div>
               <div className="panel-body">
                 <OutputViewer content={outputContent} isMarkdown={true} />
+              </div>
+            </div>
+          )}
+
+          {viewMode === 'channel-test' && (
+            <div className="content-panel">
+              <div className="panel-header">
+                <h2>Channel PoC Test</h2>
+                <div className="panel-actions">
+                  <button className="btn-secondary" onClick={() => setViewMode('list')}>
+                    Back
+                  </button>
+                </div>
+              </div>
+              <div className="panel-body">
+                <ChannelTest />
               </div>
             </div>
           )}

@@ -1,61 +1,60 @@
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import ReactMarkdown from 'react-markdown';
+import { useEffect, useRef } from 'react';
+import { AnsiRenderer } from './AnsiRenderer';
+import { useOutput } from '../hooks/useOutput';
+import { useStreamingOutput } from '../hooks/useStreamingOutput';
+import type { Execution } from '@/types/execution';
 import './OutputViewer.css';
 
 interface OutputViewerProps {
-  content: string;
+  content?: string;
   isMarkdown?: boolean;
+  execution?: Execution | null;
 }
 
-export function OutputViewer({ content, isMarkdown = true }: OutputViewerProps) {
-  const isEmpty = !content || content.trim() === '';
+export function OutputViewer({ content, isMarkdown: _isMarkdown, execution }: OutputViewerProps) {
+  const isRunning = execution?.status === 'running';
+  const { outputContent, loadOutput } = useOutput();
+  const { output: streamingOutput, isStreaming, startStreaming } = useStreamingOutput();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const useContentPropDirectly = content !== undefined;
+
+  useEffect(() => {
+    if (!useContentPropDirectly && !isRunning && execution) {
+      loadOutput(execution);
+    }
+  }, [execution, isRunning, loadOutput, useContentPropDirectly]);
+
+  useEffect(() => {
+    if (!useContentPropDirectly && isRunning && execution) {
+      startStreaming(execution.task_id, '');
+    }
+  }, [execution, isRunning, startStreaming, useContentPropDirectly]);
+
+  useEffect(() => {
+    if (isStreaming && containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [isStreaming, streamingOutput]);
+
+  const displayContent = useContentPropDirectly
+    ? content
+    : isRunning
+      ? streamingOutput
+      : outputContent;
+  const isEmpty = !displayContent || displayContent.trim() === '';
 
   if (isEmpty) {
     return (
       <div className="output-viewer output-viewer-empty">
-        <p>No output to display</p>
-      </div>
-    );
-  }
-
-  if (!isMarkdown) {
-    return (
-      <div className="output-viewer">
-        <div className="output-viewer-content">
-          <pre>{content}</pre>
-        </div>
+        <p>No output</p>
       </div>
     );
   }
 
   return (
     <div className="output-viewer">
-      <div className="output-viewer-content">
-        <ReactMarkdown
-          components={{
-            code({ className, children, ...props }) {
-              const match = /language-(\w+)/.exec(className || '');
-              const isInline = !match;
-
-              if (isInline) {
-                return (
-                  <code className={className} {...props}>
-                    {children}
-                  </code>
-                );
-              }
-
-              return (
-                <SyntaxHighlighter style={vscDarkPlus} language={match[1]} PreTag="div">
-                  {String(children).replace(/\n$/, '')}
-                </SyntaxHighlighter>
-              );
-            },
-          }}
-        >
-          {content}
-        </ReactMarkdown>
+      <div className="output-viewer-content" ref={containerRef}>
+        <AnsiRenderer text={displayContent} />
       </div>
     </div>
   );

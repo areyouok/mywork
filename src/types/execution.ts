@@ -16,4 +16,5 @@ export interface ExecutionHistoryProps {
   onViewOutput?: (execution: Execution) => void;
   taskId?: string;
   loading?: boolean;
+  onRefresh?: () => void;
 }

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { formatRelativeTime, formatDuration } from '@/utils/format';
 import type { ExecutionHistoryProps, Execution } from '@/types/execution';
 import './ExecutionHistory.css';
@@ -7,7 +8,27 @@ export function ExecutionHistory({
   onViewOutput,
   taskId,
   loading,
+  onRefresh,
 }: ExecutionHistoryProps) {
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const hasRunning = executions.some((e) => e.status === 'running');
+
+    if (hasRunning && onRefresh) {
+      intervalRef.current = setInterval(() => {
+        onRefresh();
+      }, 500);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [executions, onRefresh]);
+
   if (loading) {
     return (
       <div className="execution-history-loading">
