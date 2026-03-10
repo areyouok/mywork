@@ -1,6 +1,6 @@
 use crate::models::execution::{create_execution, update_execution, ExecutionStatus, NewExecution, UpdateExecution};
 use crate::models::task::get_task;
-use crate::opencode::executor::run_opencode_task;
+use crate::executor::streaming_executor::{StreamLine, StreamingExecutor};
 use crate::scheduler::task_queue::{TaskQueue, SkipResult};
 use crate::storage::output;
 use crate::db::connection;
@@ -9,6 +9,7 @@ use sqlx::SqlitePool;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 use tokio::sync::Mutex;
+use tokio::time::{timeout, Duration};
 
 #[tauri::command]
 pub async fn run_task(
@@ -40,7 +41,7 @@ pub async fn run_task(
         task_id: task_id.clone(),
         session_id: None,
         status: Some(ExecutionStatus::Running),
-        output_file: None,
+        output_file: Some(task_id.clone()),
         error_message: None,
     };
     
@@ -55,54 +56,82 @@ pub async fn run_task(
         .map_err(|e| format!("Failed to get database directory: {}", e))?;
     let cwd = db_path.parent();
 
-    let result = run_opencode_task(&task.prompt, None, Some(timeout_secs), None, cwd).await;
-    
     let output_dir = output::get_output_directory(&app)
         .map_err(|e| format!("Failed to get output directory: {}", e))?;
     
     output::create_output_directory(&output_dir)
         .await
         .map_err(|e| format!("Failed to create output directory: {}", e))?;
-    
-    let (status, finished_at, output_file, error_message) = match result {
-        Ok(opencode_output) => {
-            let (final_status, err_msg) = if opencode_output.timed_out {
-                (ExecutionStatus::Timeout, Some("Execution timed out".to_string()))
-            } else if !opencode_output.success {
-                (ExecutionStatus::Failed, Some(opencode_output.stderr.clone()))
+
+    output::write_output_file(&output_dir, &execution.id, "")
+        .await
+        .map_err(|e| format!("Failed to initialize output file: {}", e))?;
+
+    let args: Vec<&str> = vec!["run", &task.prompt];
+    let mut executor = StreamingExecutor::spawn("opencode", &args, cwd)
+        .await
+        .map_err(|e| format!("Failed to start opencode streaming: {}", e))?;
+
+    let mut parsed_session_id: Option<String> = None;
+    let stream_future = async {
+        while let Some(line) = executor.read_line().await {
+            match line {
+                StreamLine::Stdout(text) => {
+                    if parsed_session_id.is_none() {
+                        let trimmed = text.trim();
+                        if let Some(rest) = trimmed.strip_prefix("Session ID:") {
+                            parsed_session_id = Some(rest.trim().to_string());
+                        }
+                    }
+                    output::append_output_file(&output_dir, &execution.id, &format!("{}\n", text))
+                        .await
+                        .map_err(|e| format!("Failed to append stdout: {}", e))?;
+                }
+                StreamLine::Stderr(text) => {
+                    output::append_output_file(
+                        &output_dir,
+                        &execution.id,
+                        &format!("[stderr] {}\n", text),
+                    )
+                    .await
+                    .map_err(|e| format!("Failed to append stderr: {}", e))?;
+                }
+                StreamLine::Finished => break,
+            }
+        }
+        Ok::<i32, String>(executor.exit_code().await.unwrap_or(-1))
+    };
+
+    let timeout_result = timeout(Duration::from_secs(timeout_secs), stream_future).await;
+
+    let (status, finished_at, output_file, error_message) = match timeout_result {
+        Ok(Ok(exit_code)) => {
+            let final_status = if exit_code == 0 {
+                ExecutionStatus::Success
             } else {
-                (ExecutionStatus::Success, None)
+                ExecutionStatus::Failed
             };
-            
-            let content = format!(
-                "Session ID: {}\n\n=== STDOUT ===\n{}\n\n=== STDERR ===\n{}",
-                opencode_output.session_id,
-                opencode_output.stdout,
-                opencode_output.stderr
-            );
-            
-            let _file_path = output::write_output_file(&output_dir, &execution.id, &content)
-                .await
-                .map_err(|e| format!("Failed to write output file: {}", e))?;
-            
+            let err_msg = if exit_code == 0 {
+                None
+            } else {
+                Some(format!("Process exited with code {}", exit_code))
+            };
             (final_status, Utc::now().to_rfc3339(), Some(execution.id.clone()), err_msg)
         }
-        Err(e) => {
-            let error_msg = format!("{}", e);
-            let content = format!("Error: {}", error_msg);
-
-            let file_path = output::write_output_file(&output_dir, &execution.id, &content)
-                .await
-                .ok();
-
-            let file_path_str = file_path.map(|p| p.to_string_lossy().to_string());
-
-            (ExecutionStatus::Failed, Utc::now().to_rfc3339(), file_path_str, Some(error_msg))
+        Ok(Err(e)) => {
+            let _ = output::append_output_file(&output_dir, &execution.id, &format!("Error: {}\n", e)).await;
+            (ExecutionStatus::Failed, Utc::now().to_rfc3339(), Some(execution.id.clone()), Some(e))
+        }
+        Err(_) => {
+            executor.kill().await;
+            let msg = "Execution timed out".to_string();
+            let _ = output::append_output_file(&output_dir, &execution.id, &format!("{}\n", msg)).await;
+            (ExecutionStatus::Timeout, Utc::now().to_rfc3339(), Some(execution.id.clone()), Some(msg))
         }
     };
     
     let update = UpdateExecution {
-        session_id: None,
+        session_id: parsed_session_id,
         status: Some(status.clone()),
         finished_at: Some(finished_at),
         output_file: output_file.clone(),

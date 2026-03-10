@@ -14,7 +14,12 @@ interface OutputViewerProps {
 export function OutputViewer({ content, isMarkdown: _isMarkdown, execution }: OutputViewerProps) {
   const isRunning = execution?.status === 'running';
   const { outputContent, loadOutput } = useOutput();
-  const { output: streamingOutput, isStreaming, startStreaming } = useStreamingOutput();
+  const {
+    output: streamingOutput,
+    isStreaming,
+    startStreaming,
+    stopStreaming,
+  } = useStreamingOutput();
   const containerRef = useRef<HTMLDivElement>(null);
   const useContentPropDirectly = content !== undefined && !isRunning;
 
@@ -26,9 +31,12 @@ export function OutputViewer({ content, isMarkdown: _isMarkdown, execution }: Ou
 
   useEffect(() => {
     if (!useContentPropDirectly && isRunning && execution) {
-      startStreaming(execution.task_id, '');
+      startStreaming(execution.id);
     }
-  }, [execution, isRunning, startStreaming, useContentPropDirectly]);
+    return () => {
+      stopStreaming();
+    };
+  }, [execution, isRunning, startStreaming, stopStreaming, useContentPropDirectly]);
 
   useEffect(() => {
     if (isStreaming && containerRef.current) {

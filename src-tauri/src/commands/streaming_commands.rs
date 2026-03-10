@@ -11,8 +11,7 @@ use tauri::ipc::Channel;
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum OutputEvent {
-    Stdout { text: String },
-    Stderr { text: String },
+    Output { text: String, source: String },
     Finished { exit_code: i32 },
 }
 
@@ -36,7 +35,7 @@ pub async fn execute_task_streaming(
         .await
         .map_err(|e| format!("Failed to start opencode streaming: {}", e))?;
 
-    let (_stdout, _stderr, _) = stream_executor_to_events(&mut executor, |event| {
+    let _ = stream_executor_to_events(&mut executor, |event| {
         channel.send(event).map_err(|e| e.to_string())
     })
     .await?;
@@ -47,36 +46,35 @@ pub async fn execute_task_streaming(
 async fn stream_executor_to_events<S>(
     executor: &mut StreamingExecutor,
     mut send: S,
-) -> Result<(String, String, i32), String>
+) -> Result<i32, String>
 where
     S: FnMut(OutputEvent) -> Result<(), String>,
 {
-    let mut stdout = String::new();
-    let mut stderr = String::new();
-
     while let Some(line) = executor.read_line().await {
         match line {
             StreamLine::Stdout(text) => {
-                stdout.push_str(&text);
-                stdout.push('\n');
-                send(OutputEvent::Stdout { text })?;
+                send(OutputEvent::Output {
+                    text,
+                    source: "stdout".to_string(),
+                })?;
             }
             StreamLine::Stderr(text) => {
-                stderr.push_str(&text);
-                stderr.push('\n');
-                send(OutputEvent::Stderr { text })?;
+                send(OutputEvent::Output {
+                    text,
+                    source: "stderr".to_string(),
+                })?;
             }
             StreamLine::Finished => {
                 let exit_code = executor.exit_code().await.unwrap_or(-1);
                 send(OutputEvent::Finished { exit_code })?;
-                return Ok((stdout, stderr, exit_code));
+                return Ok(exit_code);
             }
         }
     }
 
     let exit_code = executor.exit_code().await.unwrap_or(-1);
     send(OutputEvent::Finished { exit_code })?;
-    Ok((stdout, stderr, exit_code))
+    Ok(exit_code)
 }
 
 #[cfg(test)]
@@ -94,22 +92,30 @@ mod tests {
         .expect("failed to spawn executor");
 
         let mut events = Vec::new();
-        let (stdout, stderr, exit_code) = stream_executor_to_events(&mut executor, |event| {
+        let mut merged = String::new();
+        let exit_code = stream_executor_to_events(&mut executor, |event| {
+            if let OutputEvent::Output { text, source } = &event {
+                if source == "stderr" {
+                    merged.push_str("[stderr] ");
+                }
+                merged.push_str(text);
+                merged.push('\n');
+            }
             events.push(event);
             Ok(())
         })
         .await
         .expect("failed to stream events");
 
-        assert!(stdout.contains("stdout-line"));
-        assert!(stderr.contains("stderr-line"));
+        assert!(merged.contains("stdout-line"));
+        assert!(merged.contains("stderr-line"));
         assert_eq!(exit_code, 0);
 
         assert!(events.iter().any(|event| {
-            matches!(event, OutputEvent::Stdout { text } if text.contains("stdout-line"))
+            matches!(event, OutputEvent::Output { text, source } if source == "stdout" && text.contains("stdout-line"))
         }));
         assert!(events.iter().any(|event| {
-            matches!(event, OutputEvent::Stderr { text } if text.contains("stderr-line"))
+            matches!(event, OutputEvent::Output { text, source } if source == "stderr" && text.contains("stderr-line"))
         }));
         assert!(matches!(
             events.last(),

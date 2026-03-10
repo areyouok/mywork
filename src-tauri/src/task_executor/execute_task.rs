@@ -55,10 +55,14 @@ pub async fn execute_task(
             };
             
             let content = format!(
-                "Session ID: {}\n\n=== STDOUT ===\n{}\n\n=== STDERR ===\n{}",
+                "Session ID: {}\n{}{}",
                 opencode_output.session_id,
                 opencode_output.stdout,
-                opencode_output.stderr
+                if opencode_output.stderr.is_empty() {
+                    String::new()
+                } else {
+                    format!("\n[stderr] {}", opencode_output.stderr)
+                }
             );
             
             let _file_path = output::write_output_file(&output_dir, &execution.id, &content)

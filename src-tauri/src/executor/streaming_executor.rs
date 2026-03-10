@@ -207,6 +207,12 @@ impl StreamingExecutor {
     pub async fn exit_code(&self) -> Option<i32> {
         *self.exit_code.lock().await
     }
+
+    pub async fn kill(&self) {
+        let mut child = self.child.lock().await;
+        let _ = child.start_kill();
+        let _ = child.wait().await;
+    }
 }
 
 #[cfg(test)]

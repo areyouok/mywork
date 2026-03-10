@@ -1,6 +1,7 @@
 use chrono::{DateTime, Duration, Utc};
 use std::path::Path;
 use std::io;
+use tokio::io::AsyncWriteExt;
 use tauri::{AppHandle, Manager};
 
 /// Get the output directory path for the application
@@ -48,6 +49,21 @@ pub async fn write_output_file(
 ) -> Result<std::path::PathBuf, io::Error> {
     let file_path = output_dir.join(format!("{}.txt", execution_id));
     tokio::fs::write(&file_path, content).await?;
+    Ok(file_path)
+}
+
+pub async fn append_output_file(
+    output_dir: &Path,
+    execution_id: &str,
+    content: &str,
+) -> Result<std::path::PathBuf, io::Error> {
+    let file_path = output_dir.join(format!("{}.txt", execution_id));
+    let mut file = tokio::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&file_path)
+        .await?;
+    file.write_all(content.as_bytes()).await?;
     Ok(file_path)
 }
 
@@ -196,6 +212,26 @@ mod tests {
         // Assert
         assert!(result.is_ok(), "File read should succeed");
         assert_eq!(result.unwrap(), content);
+    }
+
+    #[tokio::test]
+    async fn test_append_output_file() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let output_dir = temp_dir.path().join("outputs");
+        create_output_directory(&output_dir).await.expect("Failed to create dir");
+
+        let execution_id = "test-exec-append";
+        append_output_file(&output_dir, execution_id, "line1\n")
+            .await
+            .expect("failed to append line1");
+        append_output_file(&output_dir, execution_id, "line2\n")
+            .await
+            .expect("failed to append line2");
+
+        let content = read_output_file(&output_dir, execution_id)
+            .await
+            .expect("failed to read output");
+        assert_eq!(content, "line1\nline2\n");
     }
 
     #[tokio::test]
