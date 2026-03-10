@@ -37,6 +37,63 @@ mywork/
 - **Dev server port**: 1420 (fixed, strictPort)
 - **Test globals**: Vitest globals enabled (no imports needed)
 
+## TDD PRINCIPLES
+
+This project follows Test-Driven Development (TDD) methodology strictly.
+
+### Core Rules
+
+1. **Red-Green-Refactor Cycle**
+   - Write a failing test first (Red)
+   - Write minimal code to pass the test (Green)
+   - Refactor while keeping tests green (Refactor)
+
+2. **Test First, Always**
+   - No production code without a failing test
+   - Tests drive the design, not just verify it
+   - Write tests before implementing features
+
+3. **Minimal Implementation**
+   - Write only enough code to make the test pass
+   - Don't implement features not covered by tests
+   - Avoid speculative generalization
+
+4. **Refactor Mercilessly**
+   - After tests pass, improve code quality
+   - Remove duplication ruthlessly
+   - Simplify complex logic
+   - Keep tests green during refactoring
+
+5. **Fast Feedback Loop**
+   - Unit tests must run in milliseconds
+   - Use mocks/stubs for external dependencies
+   - E2E tests for critical user journeys only
+
+### Test Organization
+
+- **Unit tests**: Colocated with source files (`.test.ts`, `.test.tsx`)
+- **Integration tests**: Test module interactions
+- **E2E tests**: `tests/e2e/` for user workflows
+- **Rust tests**: `#[cfg(test)]` modules in source files
+
+### Test Quality Standards
+
+- One assertion per test when possible
+- Descriptive test names (e.g., "should return error when input is empty")
+- Use Arrange-Act-Assert pattern
+- Avoid test interdependencies
+- No shared mutable state between tests
+
+### Verification Checklist
+
+Before committing:
+
+- [ ] All new code has corresponding tests
+- [ ] All tests pass locally
+- [ ] Test coverage maintained or improved
+- [ ] No skipped tests without justification
+- [ ] Refactoring done while keeping tests green
+
 ## ANTI-PATTERNS (THIS PROJECT)
 
 - No `as any` type assertions
