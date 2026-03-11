@@ -1,6 +1,7 @@
 use crate::models::task::{NewTask, Task, UpdateTask};
 use crate::scheduler::job_scheduler::Scheduler;
 use crate::scheduler::task_queue::TaskQueue;
+use crate::storage::output;
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
@@ -94,18 +95,60 @@ pub async fn delete_task(
     id: String,
     pool: State<'_, Arc<SqlitePool>>,
     scheduler: State<'_, Arc<Mutex<Scheduler>>>,
+    task_queue: State<'_, Arc<Mutex<TaskQueue>>>,
+    app: AppHandle,
 ) -> Result<bool, String> {
     let pool = pool.inner().clone();
-    
+
+    let queue_guard = task_queue.inner().lock().await;
+    if queue_guard.is_running(&id).await {
+        return Err(format!(
+            "Cannot delete task '{}' while it is running",
+            id
+        ));
+    }
+
+    let executions = crate::models::execution::get_executions_by_task(&pool, &id)
+        .await
+        .map_err(|e| format!("Failed to query executions before deleting task: {}", e))?;
+
+    let output_dir = output::get_output_directory(&app)
+        .map_err(|e| format!("Failed to get output directory: {}", e))?;
+
+    for execution in executions {
+        if let Some(output_file) = execution.output_file {
+            output::delete_output_file(&output_dir, &output_file)
+                .await
+                .map_err(|e| {
+                    format!(
+                        "Failed to delete output file '{}' for execution '{}': {}",
+                        output_file, execution.id, e
+                    )
+                })?;
+        } else {
+            output::delete_output_files_for_execution(&output_dir, &execution.id)
+                .await
+                .map_err(|e| {
+                    format!(
+                        "Failed to delete output files for execution '{}': {}",
+                        execution.id, e
+                    )
+                })?;
+        }
+    }
+
+    let deleted = crate::models::task::delete_task(&pool, &id)
+        .await
+        .map_err(|e| format!("Failed to delete task with related data: {}", e))?;
+
     let scheduler_guard = scheduler.inner().lock().await;
     if scheduler_guard.has_job(&id).await {
         let _ = scheduler_guard.remove_job(&id).await;
     }
-    drop(scheduler_guard);
-    
-    crate::models::task::delete_task(&pool, &id)
-        .await
-        .map_err(|e| format!("Failed to delete task: {}", e))
+
+    drop(queue_guard);
+
+    Ok(deleted)
 }
 
 async fn add_task_to_scheduler(

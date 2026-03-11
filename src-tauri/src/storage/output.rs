@@ -95,7 +95,44 @@ pub async fn delete_output_file(
     output_file_name: &str,
 ) -> Result<(), io::Error> {
     let file_path = output_dir.join(output_file_name);
-    tokio::fs::remove_file(&file_path).await
+    match tokio::fs::remove_file(&file_path).await {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+pub async fn delete_output_files_for_execution(
+    output_dir: &Path,
+    execution_id: &str,
+) -> Result<u64, io::Error> {
+    let mut deleted_count = 0;
+
+    let mut entries = match tokio::fs::read_dir(output_dir).await {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(e),
+    };
+
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+
+        if file_name == format!("{}.txt", execution_id)
+            || (file_name.starts_with(&format!("{}_", execution_id)) && file_name.ends_with(".txt"))
+        {
+            tokio::fs::remove_file(&path).await?;
+            deleted_count += 1;
+        }
+    }
+
+    Ok(deleted_count)
 }
 
 /// Clean up output files older than a specified number of days
@@ -300,7 +337,71 @@ mod tests {
         let result = delete_output_file(&output_dir, output_file_name).await;
 
         // Assert
-        assert!(result.is_err(), "Deleting non-existent file should fail");
+        assert!(result.is_ok(), "Deleting non-existent file should be idempotent");
+    }
+
+    #[tokio::test]
+    async fn test_delete_output_file_idempotent() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let output_dir = temp_dir.path().join("outputs");
+        create_output_directory(&output_dir)
+            .await
+            .expect("Failed to create dir");
+
+        let output_file_name = "test-exec-idempotent_20260311_120007_555.txt";
+        write_output_file(&output_dir, output_file_name, "content")
+            .await
+            .expect("Failed to write file");
+
+        let first_delete = delete_output_file(&output_dir, output_file_name).await;
+        let second_delete = delete_output_file(&output_dir, output_file_name).await;
+
+        assert!(first_delete.is_ok(), "First deletion should succeed");
+        assert!(second_delete.is_ok(), "Second deletion should also succeed");
+    }
+
+    #[tokio::test]
+    async fn test_delete_output_files_for_execution_matches_timestamped_and_legacy() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let output_dir = temp_dir.path().join("outputs");
+        create_output_directory(&output_dir)
+            .await
+            .expect("Failed to create dir");
+
+        write_output_file(&output_dir, "exec-1_20260311_120000_111.txt", "a")
+            .await
+            .expect("Failed to write file a");
+        write_output_file(&output_dir, "exec-1_20260311_120001_222.txt", "b")
+            .await
+            .expect("Failed to write file b");
+        write_output_file(&output_dir, "exec-1.txt", "legacy")
+            .await
+            .expect("Failed to write legacy file");
+        write_output_file(&output_dir, "exec-2_20260311_120002_333.txt", "other")
+            .await
+            .expect("Failed to write other file");
+
+        let deleted = delete_output_files_for_execution(&output_dir, "exec-1")
+            .await
+            .expect("Delete by execution id should succeed");
+
+        assert_eq!(deleted, 3, "Should delete all exec-1 output files");
+        assert!(!output_dir.join("exec-1_20260311_120000_111.txt").exists());
+        assert!(!output_dir.join("exec-1_20260311_120001_222.txt").exists());
+        assert!(!output_dir.join("exec-1.txt").exists());
+        assert!(output_dir.join("exec-2_20260311_120002_333.txt").exists());
+    }
+
+    #[tokio::test]
+    async fn test_delete_output_files_for_execution_idempotent_with_missing_dir() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let output_dir = temp_dir.path().join("outputs");
+
+        let deleted = delete_output_files_for_execution(&output_dir, "exec-x")
+            .await
+            .expect("Delete should be idempotent for missing directory");
+
+        assert_eq!(deleted, 0);
     }
 
     #[tokio::test]

@@ -192,10 +192,19 @@ pub async fn update_task(pool: &SqlitePool, id: &str, update: UpdateTask) -> Res
 /// * `Ok(bool)` - True if task was deleted
 /// * `Err(sqlx::Error)` - Database error
 pub async fn delete_task(pool: &SqlitePool, id: &str) -> Result<bool, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    sqlx::query("DELETE FROM executions WHERE task_id = ?")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+
     let result = sqlx::query("DELETE FROM tasks WHERE id = ?")
         .bind(id)
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
+
+    tx.commit().await?;
 
     Ok(result.rows_affected() > 0)
 }
@@ -231,6 +240,7 @@ pub async fn touch_task(pool: &SqlitePool, id: &str) -> Result<(), sqlx::Error> 
 mod tests {
     use super::*;
     use crate::db::connection::init_database;
+    use crate::models::execution::{create_execution, get_executions_by_task, ExecutionStatus, NewExecution};
     use tempfile::TempDir;
 
     async fn setup_test_db() -> (SqlitePool, TempDir) {
@@ -507,6 +517,51 @@ mod tests {
         assert!(result.is_ok(), "Delete should succeed even if task not found");
         let deleted = result.unwrap();
         assert!(!deleted, "Should return false for non-existent task");
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_delete_task_removes_related_executions() {
+        let (pool, _temp_dir) = setup_test_db().await;
+        let new_task = NewTask {
+            name: "Delete with executions".to_string(),
+            prompt: "Delete this with executions".to_string(),
+            cron_expression: None,
+            simple_schedule: None,
+            enabled: None,
+            timeout_seconds: None,
+        };
+
+        let created = create_task(&pool, new_task).await.expect("Failed to create task");
+
+        let execution = NewExecution {
+            task_id: created.id.clone(),
+            session_id: Some("session-delete-related".to_string()),
+            status: Some(ExecutionStatus::Success),
+            output_file: Some("test-output-file.txt".to_string()),
+            error_message: None,
+        };
+        create_execution(&pool, execution)
+            .await
+            .expect("Failed to create execution");
+
+        let before_delete = get_executions_by_task(&pool, &created.id)
+            .await
+            .expect("Failed to query executions before deletion");
+        assert_eq!(before_delete.len(), 1, "Execution should exist before deletion");
+
+        let deleted = delete_task(&pool, &created.id).await.expect("Delete should succeed");
+        assert!(deleted, "Task should be deleted");
+
+        let executions_after_delete = get_executions_by_task(&pool, &created.id)
+            .await
+            .expect("Failed to query executions after deletion");
+        assert_eq!(
+            executions_after_delete.len(),
+            0,
+            "Related executions should be removed when deleting task"
+        );
 
         pool.close().await;
     }
