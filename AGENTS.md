@@ -13,8 +13,7 @@ macOS system tray app for scheduling and managing OpenCode task executions. Reac
 mywork/
 ├── src/              # React frontend (see src/AGENTS.md)
 ├── src-tauri/src/    # Rust backend (see src-tauri/src/AGENTS.md)
-├── tests/e2e/        # Playwright E2E tests
-└── .sisyphus/        # AI dev tool config
+└── tests/e2e/        # Playwright E2E tests
 ```
 
 ## WHERE TO LOOK

@@ -7,10 +7,11 @@ A Tauri-based desktop application for scheduling and managing AI task executions
 - **System Tray Application**: Runs in the macOS menu bar for easy access
 - **Flexible Scheduling**: Support for both cron expressions and simple time intervals
 - **Task Management**: Create, edit, enable/disable, and delete scheduled tasks
-- **Execution History**: View detailed history of all task executions
-- **Output Viewer**: View task outputs with Markdown rendering support
+- **Execution History**: View detailed history of all task executions with human-readable IDs
+- **Real-time Streaming**: View task output in real-time during execution
+- **Output Viewer**: View task outputs with Markdown rendering and ANSI color support
 - **Timeout Control**: Automatically kill long-running tasks
-- **Concurrency Control**: Skip task execution if previous run is still in progress
+- **Concurrency Control**: Automatic skip if previous run is still in progress
 - **SQLite Persistence**: All data stored locally in SQLite database
 
 ## Installation
@@ -64,8 +65,9 @@ The built application will be available in `src-tauri/target/release/bundle/maco
      - **Cron Expression**: e.g., `*/5 * * * *` (every 5 minutes)
      - **Simple Schedule**: Select from dropdown (e.g., "Every 5 minutes")
    - **Timeout**: Maximum execution time in seconds (default: 300)
-   - **Skip if Running**: Enable to prevent overlapping executions
 4. Click "Save"
+
+Note: Tasks automatically skip execution if a previous run is still in progress.
 
 ### Viewing Task History
 
@@ -96,24 +98,39 @@ The built application will be available in `src-tauri/target/release/bundle/maco
 mywork/
 ├── src/                    # React frontend
 │   ├── components/         # UI components
-│   │   ├── TaskList.tsx    # Task list display
-│   │   ├── TaskForm.tsx    # Task creation/editing
-│   │   ├── CronInput.tsx   # Cron expression input
-│   │   ├── SimpleScheduleInput.tsx  # Simple schedule selector
+│   │   ├── TaskList.tsx            # Task list display
+│   │   ├── TaskForm.tsx            # Task creation/editing
+│   │   ├── CronInput.tsx           # Cron expression input
+│   │   ├── SimpleScheduleInput.tsx # Simple schedule selector
 │   │   ├── ExecutionHistory.tsx    # Execution history list
-│   │   └── OutputViewer.tsx        # Output viewer with Markdown
+│   │   ├── OutputViewer.tsx        # Output viewer with Markdown
+│   │   └── AnsiRenderer.tsx        # ANSI escape → HTML converter
+│   ├── hooks/              # Custom React hooks
+│   │   ├── useTasks.ts             # Task CRUD + scheduler
+│   │   ├── useScheduler.ts         # Scheduler status
+│   │   ├── useExecutions.ts        # Execution loading
+│   │   ├── useOutput.ts            # Output content loading
+│   │   └── useStreamingOutput.ts   # Streaming output
 │   ├── api/               # Tauri API wrappers
+│   │   └── tasks.ts                 # All IPC wrappers
 │   ├── types/             # TypeScript types
-│   └── App.tsx            # Main application component
+│   ├── utils/              # Utility functions
+│   │   └── format.ts                # Time formatting
+│   ├── styles/             # Global styles
+│   │   └── design-system.css        # CSS variables + theming
+│   └── App.tsx             # Main application component
 ├── src-tauri/             # Rust backend
 │   └── src/
 │       ├── commands/      # Tauri command handlers
 │       │   ├── task_commands.rs      # Task CRUD operations
 │       │   ├── execution_commands.rs # Execution queries
 │       │   ├── scheduler_commands.rs # Scheduler control
+│       │   ├── task_runner_commands.rs # Manual task execution
+│       │   ├── streaming_commands.rs # Real-time output streaming
 │       │   └── output_commands.rs    # Output file operations
 │       ├── db/            # Database layer
-│       │   └── connection.rs  # SQLite connection pool
+│       │   ├── connection.rs  # SQLite connection pool
+│       │   └── schema.sql      # Database schema
 │       ├── models/        # Data models
 │       │   ├── task.rs    # Task model
 │       │   └── execution.rs # Execution model
@@ -122,9 +139,15 @@ mywork/
 │       │   ├── simple_schedule.rs # Simple schedule parsing
 │       │   ├── job_scheduler.rs   # Job scheduler core
 │       │   ├── task_queue.rs      # Concurrency control
-│       │   └── timeout.rs         # Timeout handling
+│       │   ├── timeout.rs         # Timeout handling
+│       │   └── process_tracker.rs # PID tracking + cleanup
+│       ├── executor/       # Streaming process executor
+│       │   └── streaming_executor.rs # Async stdout/stderr streaming
+│       ├── task_executor/   # Task execution logic
+│       │   └── execute_task.rs     # execute_task() implementation
 │       ├── opencode/      # OpenCode integration
-│       │   └── executor.rs    # CLI executor
+│       │   ├── executor.rs        # CLI executor
+│       │   └── session_parser.rs   # Session ID extraction
 │       └── storage/       # File storage
 │           └── output.rs  # Output file management
 └── tests/                 # E2E tests
@@ -137,9 +160,12 @@ mywork/
    - User fills form → Frontend validates → Tauri command → Database insert → Scheduler adds job
 
 2. **Task Execution**:
-   - Scheduler triggers → Task queue checks concurrency → OpenCode executor runs → Output saved to file → Execution record created
+   - Scheduler triggers → Task queue checks concurrency → OpenCode executor runs → Output streamed to file → Execution record created → Frontend notified via Tauri events
 
-3. **History Viewing**:
+3. **Real-time Streaming**:
+   - Manual run → StreamingExecutor spawns process → stdout/stderr streamed via IPC channel → Frontend receives in real-time → Output displayed with ANSI color support
+
+4. **History Viewing**:
    - User clicks task → Frontend queries executions → Tauri command → Database query → Results displayed
 
 ## Development
@@ -210,13 +236,13 @@ The application uses SQLite for data persistence. The schema is defined in `src-
 **executions** - Task execution history
 | Column | Type | Description |
 |--------|------|-------------|
-| id | TEXT | Primary key (UUID) |
+| id | TEXT | Primary key (`{task_id}_{YYYYMMDD_HHMMSS_mmm}`) |
 | task_id | TEXT | Foreign key to tasks |
 | session_id | TEXT | OpenCode session ID |
 | status | TEXT | Execution status: pending, running, success, failed, timeout, skipped |
 | started_at | TEXT | Start timestamp (ISO 8601) |
 | finished_at | TEXT | End timestamp (ISO 8601) |
-| output_file | TEXT | Path to output file |
+| output_file | TEXT | Output filename (`{execution_id}.txt`) |
 | error_message | TEXT | Error message if failed |
 
 ### Indexes
