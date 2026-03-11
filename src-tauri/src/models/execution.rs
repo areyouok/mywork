@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::str::FromStr;
+use uuid::Uuid;
 
 /// Execution status enum
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -77,6 +78,11 @@ pub struct UpdateExecution {
     pub error_message: Option<String>,
 }
 
+pub fn generate_output_file_name(execution_id: &str, timestamp: &DateTime<Utc>) -> String {
+    let ts = timestamp.format("%Y%m%d_%H%M%S_%3f");
+    format!("{}_{}.txt", execution_id, ts)
+}
+
 /// Create a new execution
 ///
 /// # Arguments
@@ -91,9 +97,7 @@ pub async fn create_execution(
     new_execution: NewExecution,
 ) -> Result<Execution, sqlx::Error> {
     let now: DateTime<Utc> = Utc::now();
-    // Generate human-friendly ID: task_id + timestamp with milliseconds (filesystem-safe)
-    let timestamp = now.format("%Y%m%d_%H%M%S_%3f").to_string();
-    let id = format!("{}_{}", new_execution.task_id, timestamp);
+    let id = Uuid::new_v4().to_string();
     let started_at = now.to_rfc3339();
     let status = new_execution
         .status
@@ -287,6 +291,17 @@ mod tests {
         task.id
     }
 
+    #[test]
+    fn test_generate_output_file_name() {
+        let timestamp = DateTime::parse_from_rfc3339("2026-03-11T12:34:56.789Z")
+            .expect("timestamp should parse")
+            .with_timezone(&Utc);
+
+        let file_name = generate_output_file_name("exec-123", &timestamp);
+
+        assert_eq!(file_name, "exec-123_20260311_123456_789.txt");
+    }
+
     #[tokio::test]
     async fn test_create_execution() {
         let (pool, _temp_dir) = setup_test_db().await;
@@ -304,7 +319,10 @@ mod tests {
 
         assert!(result.is_ok(), "Execution creation should succeed");
         let execution = result.unwrap();
-        assert!(!execution.id.is_empty(), "Execution ID should be generated");
+        assert!(
+            Uuid::parse_str(&execution.id).is_ok(),
+            "Execution ID should be UUID"
+        );
         assert_eq!(execution.task_id, task_id);
         assert_eq!(execution.session_id, Some("session-123".to_string()));
         assert_eq!(execution.status, "pending");

@@ -1,4 +1,7 @@
-use crate::models::execution::{create_execution, update_execution, ExecutionStatus, NewExecution, UpdateExecution};
+use crate::models::execution::{
+    create_execution, generate_output_file_name, update_execution, ExecutionStatus, NewExecution,
+    UpdateExecution,
+};
 use crate::models::task::get_task;
 use crate::opencode::session_parser::parse_session_id;
 use crate::executor::streaming_executor::{StreamLine, StreamingExecutor};
@@ -65,7 +68,9 @@ pub async fn run_task(
         .await
         .map_err(|e| format!("Failed to create output directory: {}", e))?;
 
-    output::write_output_file(&output_dir, &execution.id, "")
+    let output_file_name = generate_output_file_name(&execution.id, &Utc::now());
+
+    output::write_output_file(&output_dir, &output_file_name, "")
         .await
         .map_err(|e| format!("Failed to initialize output file: {}", e))?;
 
@@ -76,7 +81,7 @@ pub async fn run_task(
             session_id: None,
             status: None,
             finished_at: None,
-            output_file: Some(format!("{}.txt", execution.id)),
+            output_file: Some(output_file_name.clone()),
             error_message: None,
         },
     )
@@ -96,14 +101,14 @@ pub async fn run_task(
                     if parsed_session_id.is_none() {
                         parsed_session_id = parse_session_id(&text);
                     }
-                    output::append_output_file(&output_dir, &execution.id, &format!("{}\n", text))
+                    output::append_output_file(&output_dir, &output_file_name, &format!("{}\n", text))
                         .await
                         .map_err(|e| format!("Failed to append stdout: {}", e))?;
                 }
                 StreamLine::Stderr(text) => {
                     output::append_output_file(
                         &output_dir,
-                        &execution.id,
+                        &output_file_name,
                         &format!("{}\n", text),
                     )
                     .await
@@ -129,17 +134,32 @@ pub async fn run_task(
             } else {
                 Some(format!("Process exited with code {}", exit_code))
             };
-            (final_status, Utc::now().to_rfc3339(), Some(format!("{}.txt", execution.id)), err_msg)
+            (
+                final_status,
+                Utc::now().to_rfc3339(),
+                Some(output_file_name.clone()),
+                err_msg,
+            )
         }
         Ok(Err(e)) => {
-            let _ = output::append_output_file(&output_dir, &execution.id, &format!("Error: {}\n", e)).await;
-            (ExecutionStatus::Failed, Utc::now().to_rfc3339(), Some(format!("{}.txt", execution.id)), Some(e))
+            let _ = output::append_output_file(&output_dir, &output_file_name, &format!("Error: {}\n", e)).await;
+            (
+                ExecutionStatus::Failed,
+                Utc::now().to_rfc3339(),
+                Some(output_file_name.clone()),
+                Some(e),
+            )
         }
         Err(_) => {
             executor.kill().await;
             let msg = "Execution timed out".to_string();
-            let _ = output::append_output_file(&output_dir, &execution.id, &format!("{}\n", msg)).await;
-            (ExecutionStatus::Timeout, Utc::now().to_rfc3339(), Some(format!("{}.txt", execution.id)), Some(msg))
+            let _ = output::append_output_file(&output_dir, &output_file_name, &format!("{}\n", msg)).await;
+            (
+                ExecutionStatus::Timeout,
+                Utc::now().to_rfc3339(),
+                Some(output_file_name.clone()),
+                Some(msg),
+            )
         }
     };
     

@@ -47,7 +47,7 @@ src-tauri/src/
 ## CONVENTIONS
 
 - **Commands**: One file per domain, exported via `mod.rs`
-- **Models**: Serde-serializable structs with UUID or timestamp-based IDs
+- **Models**: Serde-serializable structs with UUID IDs
 - **Async**: All I/O is async via tokio
 - **Errors**: Use `anyhow::Result` for command handlers
 - **Streaming**: Use `StreamingExecutor` for real-time output via Tauri IPC channels
@@ -64,5 +64,5 @@ src-tauri/src/
 - Scheduler: tokio-cron-scheduler with PostgresJob-style cron
 - Concurrency: Default behavior - skip execution if previous run still in progress
 - Process management: Uses `nix` crate for signal handling
-- Execution ID format: `{task_id}_{YYYYMMDD_HHMMSS_mmm}` (human-readable)
-- Output files: `{execution_id}.txt` in app support directory
+- Execution ID format: UUID
+- Output files: `{execution_id}_{YYYYMMDD_HHMMSS_mmm}.txt` in app support directory

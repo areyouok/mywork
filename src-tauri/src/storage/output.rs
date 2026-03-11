@@ -36,7 +36,6 @@ pub async fn create_output_directory(output_dir: &Path) -> Result<(), io::Error>
 ///
 /// # Arguments
 /// * `output_dir` - Path to the output directory
-/// * `execution_id` - Unique identifier for the execution
 /// * `content` - Content to write to the file
 ///
 /// # Returns
@@ -44,20 +43,20 @@ pub async fn create_output_directory(output_dir: &Path) -> Result<(), io::Error>
 /// * `Err(io::Error)` - Failed to write file
 pub async fn write_output_file(
     output_dir: &Path,
-    execution_id: &str,
+    output_file_name: &str,
     content: &str,
 ) -> Result<std::path::PathBuf, io::Error> {
-    let file_path = output_dir.join(format!("{}.txt", execution_id));
+    let file_path = output_dir.join(output_file_name);
     tokio::fs::write(&file_path, content).await?;
     Ok(file_path)
 }
 
 pub async fn append_output_file(
     output_dir: &Path,
-    execution_id: &str,
+    output_file_name: &str,
     content: &str,
 ) -> Result<std::path::PathBuf, io::Error> {
-    let file_path = output_dir.join(format!("{}.txt", execution_id));
+    let file_path = output_dir.join(output_file_name);
     let mut file = tokio::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -71,16 +70,15 @@ pub async fn append_output_file(
 ///
 /// # Arguments
 /// * `output_dir` - Path to the output directory
-/// * `execution_id` - Unique identifier for the execution
 ///
 /// # Returns
 /// * `Ok(String)` - Content of the file
 /// * `Err(io::Error)` - Failed to read file
 pub async fn read_output_file(
     output_dir: &Path,
-    execution_id: &str,
+    output_file_name: &str,
 ) -> Result<String, io::Error> {
-    let file_path = output_dir.join(format!("{}.txt", execution_id));
+    let file_path = output_dir.join(output_file_name);
     tokio::fs::read_to_string(&file_path).await
 }
 
@@ -88,16 +86,15 @@ pub async fn read_output_file(
 ///
 /// # Arguments
 /// * `output_dir` - Path to the output directory
-/// * `execution_id` - Unique identifier for the execution
 ///
 /// # Returns
 /// * `Ok(())` - File deleted successfully
 /// * `Err(io::Error)` - Failed to delete file
 pub async fn delete_output_file(
     output_dir: &Path,
-    execution_id: &str,
+    output_file_name: &str,
 ) -> Result<(), io::Error> {
-    let file_path = output_dir.join(format!("{}.txt", execution_id));
+    let file_path = output_dir.join(output_file_name);
     tokio::fs::remove_file(&file_path).await
 }
 
@@ -182,17 +179,20 @@ mod tests {
         let output_dir = temp_dir.path().join("outputs");
         create_output_directory(&output_dir).await.expect("Failed to create dir");
         
-        let execution_id = "test-exec-123";
+        let output_file_name = "test-exec-123_20260311_120000_123.txt";
         let content = "This is test output content";
 
         // Act
-        let result = write_output_file(&output_dir, execution_id, content).await;
+        let result = write_output_file(&output_dir, output_file_name, content).await;
 
         // Assert
         assert!(result.is_ok(), "File write should succeed");
         let file_path = result.unwrap();
         assert!(file_path.exists(), "Output file should exist");
-        assert_eq!(file_path.file_name().unwrap(), "test-exec-123.txt");
+        assert_eq!(
+            file_path.file_name().unwrap(),
+            "test-exec-123_20260311_120000_123.txt"
+        );
     }
 
     #[tokio::test]
@@ -202,12 +202,14 @@ mod tests {
         let output_dir = temp_dir.path().join("outputs");
         create_output_directory(&output_dir).await.expect("Failed to create dir");
         
-        let execution_id = "test-exec-456";
+        let output_file_name = "test-exec-456_20260311_120001_456.txt";
         let content = "This is test output content for reading";
-        write_output_file(&output_dir, execution_id, content).await.expect("Failed to write file");
+        write_output_file(&output_dir, output_file_name, content)
+            .await
+            .expect("Failed to write file");
 
         // Act
-        let result = read_output_file(&output_dir, execution_id).await;
+        let result = read_output_file(&output_dir, output_file_name).await;
 
         // Assert
         assert!(result.is_ok(), "File read should succeed");
@@ -220,15 +222,15 @@ mod tests {
         let output_dir = temp_dir.path().join("outputs");
         create_output_directory(&output_dir).await.expect("Failed to create dir");
 
-        let execution_id = "test-exec-append";
-        append_output_file(&output_dir, execution_id, "line1\n")
+        let output_file_name = "test-exec-append_20260311_120002_789.txt";
+        append_output_file(&output_dir, output_file_name, "line1\n")
             .await
             .expect("failed to append line1");
-        append_output_file(&output_dir, execution_id, "line2\n")
+        append_output_file(&output_dir, output_file_name, "line2\n")
             .await
             .expect("failed to append line2");
 
-        let content = read_output_file(&output_dir, execution_id)
+        let content = read_output_file(&output_dir, output_file_name)
             .await
             .expect("failed to read output");
         assert_eq!(content, "line1\nline2\n");
@@ -240,7 +242,13 @@ mod tests {
         let output_dir = temp_dir.path().join("outputs");
         create_output_directory(&output_dir).await.expect("Failed to create dir");
         
-        write_output_file(&output_dir, "recent-exec", "recent content").await.expect("Failed to write file");
+        write_output_file(
+            &output_dir,
+            "recent-exec_20260311_120003_111.txt",
+            "recent content",
+        )
+        .await
+        .expect("Failed to write file");
         
         let old_file = output_dir.join("old-exec.txt");
         fs::write(&old_file, "old content").await.expect("Failed to write file");
@@ -253,7 +261,7 @@ mod tests {
         assert!(result.is_ok(), "Cleanup should succeed");
         assert_eq!(result.unwrap(), 1, "Only old file should be deleted");
         
-        let recent_path = output_dir.join("recent-exec.txt");
+        let recent_path = output_dir.join("recent-exec_20260311_120003_111.txt");
         assert!(recent_path.exists(), "Recent file should still exist");
         assert!(!old_file.exists(), "Old file should be deleted");
     }
@@ -265,15 +273,17 @@ mod tests {
         let output_dir = temp_dir.path().join("outputs");
         create_output_directory(&output_dir).await.expect("Failed to create dir");
         
-        let execution_id = "test-exec-789";
-        write_output_file(&output_dir, execution_id, "content").await.expect("Failed to write file");
+        let output_file_name = "test-exec-789_20260311_120004_222.txt";
+        write_output_file(&output_dir, output_file_name, "content")
+            .await
+            .expect("Failed to write file");
 
         // Act
-        let result = delete_output_file(&output_dir, execution_id).await;
+        let result = delete_output_file(&output_dir, output_file_name).await;
 
         // Assert
         assert!(result.is_ok(), "File deletion should succeed");
-        let file_path = output_dir.join(format!("{}.txt", execution_id));
+        let file_path = output_dir.join(output_file_name);
         assert!(!file_path.exists(), "File should be deleted");
     }
 
@@ -284,10 +294,10 @@ mod tests {
         let output_dir = temp_dir.path().join("outputs");
         create_output_directory(&output_dir).await.expect("Failed to create dir");
         
-        let execution_id = "non-existent";
+        let output_file_name = "non-existent_20260311_120005_333.txt";
 
         // Act
-        let result = delete_output_file(&output_dir, execution_id).await;
+        let result = delete_output_file(&output_dir, output_file_name).await;
 
         // Assert
         assert!(result.is_err(), "Deleting non-existent file should fail");
@@ -316,7 +326,13 @@ mod tests {
         create_output_directory(&output_dir).await.expect("Failed to create dir");
         
         // Create a recent file
-        write_output_file(&output_dir, "recent-exec", "recent content").await.expect("Failed to write file");
+        write_output_file(
+            &output_dir,
+            "recent-exec_20260311_120006_444.txt",
+            "recent content",
+        )
+        .await
+        .expect("Failed to write file");
 
         // Act
         let result = cleanup_old_outputs(&output_dir, 30).await;
@@ -325,7 +341,7 @@ mod tests {
         assert!(result.is_ok(), "Cleanup should succeed");
         assert_eq!(result.unwrap(), 0, "Recent files should not be deleted");
         
-        let file_path = output_dir.join("recent-exec.txt");
+        let file_path = output_dir.join("recent-exec_20260311_120006_444.txt");
         assert!(file_path.exists(), "Recent file should still exist");
     }
 

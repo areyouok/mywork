@@ -1,4 +1,7 @@
-use crate::models::execution::{create_execution, update_execution, ExecutionStatus, NewExecution, UpdateExecution};
+use crate::models::execution::{
+    create_execution, generate_output_file_name, update_execution, ExecutionStatus, NewExecution,
+    UpdateExecution,
+};
 use crate::models::task::{get_task, touch_task};
 use crate::opencode::executor::run_opencode_task;
 use crate::storage::output;
@@ -48,6 +51,8 @@ pub async fn execute_task(
         .await
         .map_err(|e| format!("Failed to create output directory: {}", e))?;
     
+    let output_file_name = generate_output_file_name(&execution.id, &Utc::now());
+
     let (session_id, status, finished_at, output_file, error_message) = match result {
         Ok(opencode_output) => {
             let (final_status, err_msg) = if opencode_output.timed_out {
@@ -69,7 +74,7 @@ pub async fn execute_task(
                 }
             );
             
-            let _file_path = output::write_output_file(&output_dir, &execution.id, &content)
+            let _file_path = output::write_output_file(&output_dir, &output_file_name, &content)
                 .await
                 .map_err(|e| format!("Failed to write output file: {}", e))?;
             
@@ -77,7 +82,7 @@ pub async fn execute_task(
                 Some(opencode_output.session_id),
                 final_status,
                 Utc::now().to_rfc3339(),
-                Some(format!("{}.txt", execution.id)),
+                Some(output_file_name.clone()),
                 err_msg,
             )
         }
@@ -85,7 +90,7 @@ pub async fn execute_task(
             let error_msg = format!("{}", e);
             let content = format!("Error: {}", error_msg);
             
-            let _file_path = output::write_output_file(&output_dir, &execution.id, &content)
+            let _file_path = output::write_output_file(&output_dir, &output_file_name, &content)
                 .await
                 .ok();
             
@@ -93,7 +98,7 @@ pub async fn execute_task(
                 None,
                 ExecutionStatus::Failed,
                 Utc::now().to_rfc3339(),
-                Some(format!("{}.txt", execution.id)),
+                Some(output_file_name.clone()),
                 Some(error_msg),
             )
         }

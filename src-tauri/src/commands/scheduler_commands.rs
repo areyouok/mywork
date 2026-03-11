@@ -157,6 +157,7 @@ pub async fn execute_task_internal(
     task_queue: Arc<Mutex<TaskQueue>>,
 ) -> Result<(), String> {
     use crate::models::execution::ExecutionStatus;
+    use crate::models::execution::generate_output_file_name;
     use crate::opencode::executor::run_opencode_task;
     use crate::storage::output;
     use chrono::Utc;
@@ -212,6 +213,8 @@ pub async fn execute_task_internal(
     output::create_output_directory(&output_dir)
         .await
         .map_err(|e| format!("Failed to create output directory: {}", e))?;
+
+    let output_file_name = generate_output_file_name(&execution.id, &Utc::now());
     
     let (session_id, status, finished_at, output_file, error_message) = match result {
         Ok(opencode_output) => {
@@ -234,7 +237,7 @@ pub async fn execute_task_internal(
                 }
             );
             
-            let _file_path = output::write_output_file(&output_dir, &execution.id, &content)
+            let _file_path = output::write_output_file(&output_dir, &output_file_name, &content)
                 .await
                 .map_err(|e| format!("Failed to write output file: {}", e))?;
             
@@ -242,7 +245,7 @@ pub async fn execute_task_internal(
                 Some(opencode_output.session_id),
                 final_status,
                 Utc::now().to_rfc3339(),
-                Some(format!("{}.txt", execution.id)),
+                Some(output_file_name.clone()),
                 err_msg,
             )
         }
@@ -250,7 +253,7 @@ pub async fn execute_task_internal(
             let error_msg = format!("{}", e);
             let content = format!("Error: {}", error_msg);
             
-            let _file_path = output::write_output_file(&output_dir, &execution.id, &content)
+            let _file_path = output::write_output_file(&output_dir, &output_file_name, &content)
                 .await
                 .ok();
             
@@ -258,7 +261,7 @@ pub async fn execute_task_internal(
                 None,
                 ExecutionStatus::Failed,
                 Utc::now().to_rfc3339(),
-                Some(format!("{}.txt", execution.id)),
+                Some(output_file_name.clone()),
                 Some(error_msg),
             )
         }

@@ -7,7 +7,7 @@ A Tauri-based desktop application for scheduling and managing AI task executions
 - **System Tray Application**: Runs in the macOS menu bar for easy access
 - **Flexible Scheduling**: Support for both cron expressions and simple time intervals
 - **Task Management**: Create, edit, enable/disable, and delete scheduled tasks
-- **Execution History**: View detailed history of all task executions with human-readable IDs
+- **Execution History**: View detailed history of all task executions
 - **Real-time Streaming**: View task output in real-time during execution
 - **Output Viewer**: View task outputs with Markdown rendering and ANSI color support
 - **Timeout Control**: Automatically kill long-running tasks
@@ -236,13 +236,13 @@ The application uses SQLite for data persistence. The schema is defined in `src-
 **executions** - Task execution history
 | Column | Type | Description |
 |--------|------|-------------|
-| id | TEXT | Primary key (`{task_id}_{YYYYMMDD_HHMMSS_mmm}`) |
+| id | TEXT | Primary key (UUID) |
 | task_id | TEXT | Foreign key to tasks |
 | session_id | TEXT | OpenCode session ID |
 | status | TEXT | Execution status: pending, running, success, failed, timeout, skipped |
 | started_at | TEXT | Start timestamp (ISO 8601) |
 | finished_at | TEXT | End timestamp (ISO 8601) |
-| output_file | TEXT | Output filename (`{execution_id}.txt`) |
+| output_file | TEXT | Output filename (`execution_id + timestamp + .txt`) |
 | error_message | TEXT | Error message if failed |
 
 ### Indexes
