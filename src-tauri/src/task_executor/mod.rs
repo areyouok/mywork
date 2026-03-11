@@ -109,15 +109,20 @@ pub async fn execute_task(
             let error_msg = format!("{}", e);
             let content = format!("Error: {}", error_msg);
 
-            let _file_path = output::write_output_file(&output_dir, &output_file_name, &content)
-                .await
-                .ok();
+            // Try to write error output file, but don't set output_file if it fails
+            let output_file_result = match output::write_output_file(&output_dir, &output_file_name, &content).await {
+                Ok(_) => Some(output_file_name.clone()),
+                Err(write_err) => {
+                    eprintln!("Failed to write error output file: {}", write_err);
+                    None
+                }
+            };
 
             (
                 None,
                 ExecutionStatus::Failed,
                 Utc::now().to_rfc3339(),
-                Some(output_file_name.clone()),
+                output_file_result,
                 Some(error_msg),
             )
         }
