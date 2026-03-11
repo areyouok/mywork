@@ -32,7 +32,6 @@ test.describe('Task Output E2E', () => {
           simple_schedule: string | null;
           enabled: number;
           timeout_seconds: number;
-          skip_if_running: number;
           created_at: string;
           updated_at: string;
         }>,
@@ -77,7 +76,6 @@ test.describe('Task Output E2E', () => {
               simple_schedule: newTask.simple_schedule || null,
               enabled: newTask.enabled ?? 1,
               timeout_seconds: newTask.timeout_seconds ?? 300,
-              skip_if_running: newTask.skip_if_running ?? 0,
               created_at: nowIso(),
               updated_at: nowIso(),
             };

@@ -2,7 +2,7 @@ use crate::models::execution::{create_execution, update_execution, ExecutionStat
 use crate::models::task::get_task;
 use crate::opencode::session_parser::parse_session_id;
 use crate::executor::streaming_executor::{StreamLine, StreamingExecutor};
-use crate::scheduler::task_queue::{TaskQueue, SkipResult};
+use crate::scheduler::task_queue::{TaskQueue, TaskQueueError};
 use crate::storage::output;
 use crate::db::connection;
 use chrono::Utc;
@@ -20,16 +20,10 @@ pub async fn run_task(
     app: AppHandle,
 ) -> Result<String, String> {
     let queue = task_queue.inner().lock().await;
-    let _guard = match queue.acquire_slot_with_skip(&task_id).await {
-        Ok(Ok(guard)) => guard,
-        Ok(Err(SkipResult::Skipped { task_id })) => {
+    let _guard = match queue.acquire_slot(&task_id).await {
+        Ok(guard) => guard,
+        Err(TaskQueueError::TaskAlreadyRunning { task_id }) => {
             return Err(format!("Task '{}' is already running", task_id));
-        }
-        Ok(Err(SkipResult::Execute)) => {
-            return Err(format!(
-                "Unexpected queue state while acquiring slot for task '{}'",
-                task_id
-            ));
         }
         Err(e) => {
             return Err(format!("Failed to acquire slot: {}", e));

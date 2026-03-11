@@ -204,7 +204,6 @@ The application uses SQLite for data persistence. The schema is defined in `src-
 | simple_schedule | TEXT | JSON for simple interval scheduling |
 | enabled | INTEGER | Whether task is active (1=yes, 0=no) |
 | timeout_seconds | INTEGER | Execution timeout in seconds (default: 300) |
-| skip_if_running | INTEGER | Skip if previous execution is still running |
 | created_at | TEXT | Creation timestamp (ISO 8601) |
 | updated_at | TEXT | Last update timestamp (ISO 8601) |
 

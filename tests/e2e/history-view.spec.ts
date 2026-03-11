@@ -21,7 +21,7 @@ test.describe('History View E2E', () => {
               simple_schedule: newTask.simple_schedule || null,
               enabled: newTask.enabled || 1,
               timeout_seconds: newTask.timeout_seconds || 300,
-              skip_if_running: newTask.skip_if_running || 0,
+
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             };
@@ -98,7 +98,7 @@ test.describe('History View E2E', () => {
               simple_schedule: newTask.simple_schedule || null,
               enabled: newTask.enabled || 1,
               timeout_seconds: newTask.timeout_seconds || 300,
-              skip_if_running: newTask.skip_if_running || 0,
+
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             };
@@ -174,7 +174,7 @@ test.describe('History View E2E', () => {
               simple_schedule: newTask.simple_schedule || null,
               enabled: newTask.enabled || 1,
               timeout_seconds: newTask.timeout_seconds || 300,
-              skip_if_running: newTask.skip_if_running || 0,
+
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             };
@@ -270,7 +270,7 @@ test.describe('History View E2E', () => {
               simple_schedule: newTask.simple_schedule || null,
               enabled: newTask.enabled || 1,
               timeout_seconds: newTask.timeout_seconds || 300,
-              skip_if_running: newTask.skip_if_running || 0,
+
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             };
@@ -348,7 +348,7 @@ test.describe('History View E2E', () => {
               simple_schedule: newTask.simple_schedule || null,
               enabled: newTask.enabled || 1,
               timeout_seconds: newTask.timeout_seconds || 300,
-              skip_if_running: newTask.skip_if_running || 0,
+
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             };

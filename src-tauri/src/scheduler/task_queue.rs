@@ -36,14 +36,7 @@ impl std::fmt::Display for TaskQueueError {
 
 impl std::error::Error for TaskQueueError {}
 
-/// Result of skip_if_running check
-#[derive(Debug, Clone, PartialEq)]
-pub enum SkipResult {
-    /// Task should execute (not running)
-    Execute,
-    /// Task should be skipped (already running)
-    Skipped { task_id: String },
-}
+
 
 /// Guard that automatically releases slot when dropped
 pub struct SlotGuard {
@@ -169,48 +162,6 @@ impl TaskQueue {
             task_id: task_id.to_string(),
             running_tasks: self.running_tasks.clone(),
         })
-    }
-
-    /// Try to acquire a slot with skip_if_running behavior
-    /// If task is already running, returns Skipped instead of error
-    ///
-    /// # Arguments
-    /// * `task_id` - Unique task identifier
-    ///
-    /// # Returns
-    /// * `Ok(Ok(SlotGuard))` - Successfully acquired slot
-    /// * `Ok(Err(SkipResult::Skipped))` - Task was skipped (already running)
-    /// * `Err(TaskQueueError::NoAvailableSlots)` - Queue is full
-    pub async fn acquire_slot_with_skip(
-        &self,
-        task_id: &str,
-    ) -> Result<Result<SlotGuard, SkipResult>, TaskQueueError> {
-        match self.acquire_slot(task_id).await {
-            Ok(guard) => Ok(Ok(guard)),
-            Err(TaskQueueError::TaskAlreadyRunning { task_id }) => {
-                Ok(Err(SkipResult::Skipped { task_id }))
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    /// Check if task should be skipped (skip_if_running logic)
-    /// Returns Skipped if task is running, Execute otherwise
-    ///
-    /// # Arguments
-    /// * `task_id` - The task ID to check
-    ///
-    /// # Returns
-    /// * `SkipResult::Skipped` - Task is already running, should skip
-    /// * `SkipResult::Execute` - Task is not running, can execute
-    pub async fn skip_if_running(&self, task_id: &str) -> SkipResult {
-        if self.is_running(task_id).await {
-            SkipResult::Skipped {
-                task_id: task_id.to_string(),
-            }
-        } else {
-            SkipResult::Execute
-        }
     }
 
     /// Manually release a slot for a task
@@ -360,63 +311,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_skip_if_running_not_running() {
-        let queue = TaskQueue::new(3);
-
-        let result = queue.skip_if_running("task-1").await;
-        assert_eq!(result, SkipResult::Execute);
-    }
-
-    #[tokio::test]
-    async fn test_skip_if_running_is_running() {
-        let queue = TaskQueue::new(3);
-
-        let _guard = queue.acquire_slot("task-1").await.expect("Failed to acquire slot");
-
-        let result = queue.skip_if_running("task-1").await;
-        assert_eq!(result, SkipResult::Skipped { task_id: "task-1".to_string() });
-    }
-
-    #[tokio::test]
-    async fn test_acquire_slot_with_skip_execute() {
-        let queue = TaskQueue::new(3);
-
-        let result = queue.acquire_slot_with_skip("task-1").await;
-
-        assert!(result.is_ok());
-        let inner = result.unwrap();
-        assert!(inner.is_ok());
-        assert_eq!(queue.running_count().await, 1);
-    }
-
-    #[tokio::test]
-    async fn test_acquire_slot_with_skip_skipped() {
-        let queue = TaskQueue::new(3);
-
-        let _guard = queue.acquire_slot("task-1").await.expect("Failed to acquire slot");
-
-        let result = queue.acquire_slot_with_skip("task-1").await;
-
-        assert!(result.is_ok());
-        let inner = result.unwrap();
-        assert!(inner.is_err());
-        let skip_result = inner.unwrap_err();
-        assert_eq!(skip_result, SkipResult::Skipped { task_id: "task-1".to_string() });
-    }
-
-    #[tokio::test]
-    async fn test_acquire_slot_with_skip_queue_full() {
-        let queue = TaskQueue::new(1);
-
-        let _guard = queue.acquire_slot("task-1").await.expect("Failed to acquire slot");
-
-        let result = queue.acquire_slot_with_skip("task-2").await;
-
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TaskQueueError::NoAvailableSlots { .. }));
-    }
-
-    #[tokio::test]
     async fn test_concurrent_execution_limit() {
         let queue = Arc::new(TaskQueue::new(2));
         let counter = Arc::new(AtomicUsize::new(0));
@@ -508,16 +402,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_skip_result_debug_and_clone() {
-        let result = SkipResult::Skipped { task_id: "test".to_string() };
-        let cloned = result.clone();
-        assert_eq!(result, cloned);
-
-        let debug_str = format!("{:?}", result);
-        assert!(debug_str.contains("Skipped"));
-    }
-
-    #[tokio::test]
     async fn test_full_lifecycle() {
         let queue = TaskQueue::new(3);
 
@@ -533,12 +417,6 @@ mod tests {
 
         let result = queue.acquire_slot("task-1").await;
         assert!(matches!(result.unwrap_err(), TaskQueueError::TaskAlreadyRunning { .. }));
-
-        let skip = queue.skip_if_running("task-1").await;
-        assert_eq!(skip, SkipResult::Skipped { task_id: "task-1".to_string() });
-
-        let skip = queue.skip_if_running("task-4").await;
-        assert_eq!(skip, SkipResult::Execute);
 
         drop(guard1);
         sleep(Duration::from_millis(10)).await;

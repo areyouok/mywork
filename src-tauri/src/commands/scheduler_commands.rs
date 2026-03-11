@@ -1,5 +1,5 @@
 use crate::scheduler::job_scheduler::{JobCallback, Scheduler, SchedulerState};
-use crate::scheduler::task_queue::{TaskQueue, SkipResult};
+use crate::scheduler::task_queue::{TaskQueue, TaskQueueError};
 use crate::db::connection;
 use sqlx::SqlitePool;
 use std::sync::Arc;
@@ -166,14 +166,10 @@ pub async fn execute_task_internal(
 
     // Atomically check if running and acquire slot (prevents race condition)
     let queue = task_queue.lock().await;
-    let _guard = match queue.acquire_slot_with_skip(&task_id).await {
-        Ok(Ok(guard)) => guard,
-        Ok(Err(SkipResult::Skipped { task_id })) => {
+    let _guard = match queue.acquire_slot(&task_id).await {
+        Ok(guard) => guard,
+        Err(TaskQueueError::TaskAlreadyRunning { task_id }) => {
             eprintln!("Task '{}' is already running, skipping execution", task_id);
-            return Ok(());
-        }
-        Ok(Err(SkipResult::Execute)) => {
-            eprintln!("Task '{}' received unexpected execute skip result", task_id);
             return Ok(());
         }
         Err(e) => {
