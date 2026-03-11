@@ -129,17 +129,17 @@ pub async fn run_task(
             } else {
                 Some(format!("Process exited with code {}", exit_code))
             };
-            (final_status, Utc::now().to_rfc3339(), Some(execution.id.clone()), err_msg)
+            (final_status, Utc::now().to_rfc3339(), Some(format!("{}.txt", execution.id)), err_msg)
         }
         Ok(Err(e)) => {
             let _ = output::append_output_file(&output_dir, &execution.id, &format!("Error: {}\n", e)).await;
-            (ExecutionStatus::Failed, Utc::now().to_rfc3339(), Some(execution.id.clone()), Some(e))
+            (ExecutionStatus::Failed, Utc::now().to_rfc3339(), Some(format!("{}.txt", execution.id)), Some(e))
         }
         Err(_) => {
             executor.kill().await;
             let msg = "Execution timed out".to_string();
             let _ = output::append_output_file(&output_dir, &execution.id, &format!("{}\n", msg)).await;
-            (ExecutionStatus::Timeout, Utc::now().to_rfc3339(), Some(execution.id.clone()), Some(msg))
+            (ExecutionStatus::Timeout, Utc::now().to_rfc3339(), Some(format!("{}.txt", execution.id)), Some(msg))
         }
     };
     
