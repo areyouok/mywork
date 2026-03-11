@@ -1,13 +1,14 @@
+use crate::db::connection;
+use crate::execution_retention::enforce_execution_history_limit;
+use crate::executor::streaming_executor::{StreamLine, StreamingExecutor};
 use crate::models::execution::{
     create_execution, generate_output_file_name, update_execution, ExecutionStatus, NewExecution,
     UpdateExecution,
 };
 use crate::models::task::get_task;
 use crate::opencode::session_parser::parse_session_id;
-use crate::executor::streaming_executor::{StreamLine, StreamingExecutor};
 use crate::scheduler::task_queue::{TaskQueue, TaskQueueError};
 use crate::storage::output;
-use crate::db::connection;
 use chrono::Utc;
 use sqlx::SqlitePool;
 use std::sync::Arc;
@@ -33,13 +34,13 @@ pub async fn run_task(
         }
     };
     drop(queue);
-    
+
     let pool = pool.inner().clone();
-    
+
     let task = get_task(&pool, &task_id)
         .await
         .map_err(|e| format!("Task not found: {}", e))?;
-    
+
     let new_execution = NewExecution {
         task_id: task_id.clone(),
         session_id: None,
@@ -47,13 +48,13 @@ pub async fn run_task(
         output_file: None,
         error_message: None,
     };
-    
+
     let execution = create_execution(&pool, new_execution)
         .await
         .map_err(|e| format!("Failed to create execution: {}", e))?;
 
     let _ = app.emit("execution-started", &task_id);
-    
+
     let timeout_secs = task.timeout_seconds as u64;
 
     // Get database directory for working directory
@@ -63,7 +64,7 @@ pub async fn run_task(
 
     let output_dir = output::get_output_directory(&app)
         .map_err(|e| format!("Failed to get output directory: {}", e))?;
-    
+
     output::create_output_directory(&output_dir)
         .await
         .map_err(|e| format!("Failed to create output directory: {}", e))?;
@@ -101,9 +102,13 @@ pub async fn run_task(
                     if parsed_session_id.is_none() {
                         parsed_session_id = parse_session_id(&text);
                     }
-                    output::append_output_file(&output_dir, &output_file_name, &format!("{}\n", text))
-                        .await
-                        .map_err(|e| format!("Failed to append stdout: {}", e))?;
+                    output::append_output_file(
+                        &output_dir,
+                        &output_file_name,
+                        &format!("{}\n", text),
+                    )
+                    .await
+                    .map_err(|e| format!("Failed to append stdout: {}", e))?;
                 }
                 StreamLine::Stderr(text) => {
                     output::append_output_file(
@@ -142,7 +147,12 @@ pub async fn run_task(
             )
         }
         Ok(Err(e)) => {
-            let _ = output::append_output_file(&output_dir, &output_file_name, &format!("Error: {}\n", e)).await;
+            let _ = output::append_output_file(
+                &output_dir,
+                &output_file_name,
+                &format!("Error: {}\n", e),
+            )
+            .await;
             (
                 ExecutionStatus::Failed,
                 Utc::now().to_rfc3339(),
@@ -153,7 +163,9 @@ pub async fn run_task(
         Err(_) => {
             executor.kill().await;
             let msg = "Execution timed out".to_string();
-            let _ = output::append_output_file(&output_dir, &output_file_name, &format!("{}\n", msg)).await;
+            let _ =
+                output::append_output_file(&output_dir, &output_file_name, &format!("{}\n", msg))
+                    .await;
             (
                 ExecutionStatus::Timeout,
                 Utc::now().to_rfc3339(),
@@ -162,7 +174,7 @@ pub async fn run_task(
             )
         }
     };
-    
+
     let update = UpdateExecution {
         session_id: parsed_session_id,
         status: Some(status.clone()),
@@ -170,20 +182,24 @@ pub async fn run_task(
         output_file: output_file.clone(),
         error_message: error_message.clone(),
     };
-    
+
     update_execution(&pool, &execution.id, update)
         .await
         .map_err(|e| format!("Failed to update execution: {}", e))?;
 
+    enforce_execution_history_limit(&pool, &output_dir).await;
+
     let _ = app.emit("execution-finished", &task_id);
-    
+
     if status == ExecutionStatus::Success {
         Ok(execution.id)
     } else {
         Err(format!(
             "Task execution failed with status: {:?}{}",
             status,
-            error_message.map(|e| format!(" - {}", e)).unwrap_or_default()
+            error_message
+                .map(|e| format!(" - {}", e))
+                .unwrap_or_default()
         ))
     }
 }

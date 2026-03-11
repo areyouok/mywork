@@ -2,6 +2,7 @@ use crate::models::execution::{
     create_execution, generate_output_file_name, update_execution, ExecutionStatus, NewExecution,
     UpdateExecution,
 };
+use crate::execution_retention::enforce_execution_history_limit;
 use crate::models::task::{get_task, touch_task};
 use crate::opencode::executor::run_opencode_task;
 use crate::storage::output;
@@ -120,6 +121,8 @@ pub async fn execute_task(
     update_execution(pool, &execution.id, update)
         .await
         .map_err(|e| format!("Failed to update execution: {}", e))?;
+
+    enforce_execution_history_limit(pool, &output_dir).await;
     
     Ok(TaskExecutionResult {
         execution_id: execution.id,

@@ -1,8 +1,8 @@
 use chrono::{DateTime, Duration, Utc};
-use std::path::Path;
 use std::io;
-use tokio::io::AsyncWriteExt;
+use std::path::Path;
 use tauri::{AppHandle, Manager};
+use tokio::io::AsyncWriteExt;
 
 /// Get the output directory path for the application
 ///
@@ -13,10 +13,7 @@ use tauri::{AppHandle, Manager};
 /// * `Ok(PathBuf)` - Path to the outputs directory
 /// * `Err(io::Error)` - Failed to get app data directory
 pub fn get_output_directory(app: &AppHandle) -> Result<std::path::PathBuf, io::Error> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(io::Error::other)?;
+    let app_data_dir = app.path().app_data_dir().map_err(io::Error::other)?;
     Ok(app_data_dir.join("outputs"))
 }
 
@@ -63,6 +60,7 @@ pub async fn append_output_file(
         .open(&file_path)
         .await?;
     file.write_all(content.as_bytes()).await?;
+    file.flush().await?;
     Ok(file_path)
 }
 
@@ -144,24 +142,21 @@ pub async fn delete_output_files_for_execution(
 /// # Returns
 /// * `Ok(u64)` - Number of files deleted
 /// * `Err(io::Error)` - Failed to clean up files
-pub async fn cleanup_old_outputs(
-    output_dir: &Path,
-    days_to_keep: i64,
-) -> Result<u64, io::Error> {
+pub async fn cleanup_old_outputs(output_dir: &Path, days_to_keep: i64) -> Result<u64, io::Error> {
     let cutoff_time = Utc::now() - Duration::days(days_to_keep);
     let mut deleted_count = 0;
 
     let mut entries = tokio::fs::read_dir(output_dir).await?;
-    
+
     while let Some(entry) = entries.next_entry().await? {
         let path = entry.path();
-        
+
         if path.extension().is_some_and(|ext| ext == "txt") {
             let metadata = entry.metadata().await?;
-            
+
             if let Ok(modified_time) = metadata.modified() {
                 let modified_datetime: DateTime<Utc> = modified_time.into();
-                
+
                 if modified_datetime < cutoff_time {
                     tokio::fs::remove_file(&path).await?;
                     deleted_count += 1;
@@ -214,8 +209,10 @@ mod tests {
         // Arrange
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let output_dir = temp_dir.path().join("outputs");
-        create_output_directory(&output_dir).await.expect("Failed to create dir");
-        
+        create_output_directory(&output_dir)
+            .await
+            .expect("Failed to create dir");
+
         let output_file_name = "test-exec-123_20260311_120000_123.txt";
         let content = "This is test output content";
 
@@ -237,8 +234,10 @@ mod tests {
         // Arrange
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let output_dir = temp_dir.path().join("outputs");
-        create_output_directory(&output_dir).await.expect("Failed to create dir");
-        
+        create_output_directory(&output_dir)
+            .await
+            .expect("Failed to create dir");
+
         let output_file_name = "test-exec-456_20260311_120001_456.txt";
         let content = "This is test output content for reading";
         write_output_file(&output_dir, output_file_name, content)
@@ -257,7 +256,9 @@ mod tests {
     async fn test_append_output_file() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let output_dir = temp_dir.path().join("outputs");
-        create_output_directory(&output_dir).await.expect("Failed to create dir");
+        create_output_directory(&output_dir)
+            .await
+            .expect("Failed to create dir");
 
         let output_file_name = "test-exec-append_20260311_120002_789.txt";
         append_output_file(&output_dir, output_file_name, "line1\n")
@@ -277,8 +278,10 @@ mod tests {
     async fn test_cleanup_old_outputs_mixed_files() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let output_dir = temp_dir.path().join("outputs");
-        create_output_directory(&output_dir).await.expect("Failed to create dir");
-        
+        create_output_directory(&output_dir)
+            .await
+            .expect("Failed to create dir");
+
         write_output_file(
             &output_dir,
             "recent-exec_20260311_120003_111.txt",
@@ -286,10 +289,13 @@ mod tests {
         )
         .await
         .expect("Failed to write file");
-        
+
         let old_file = output_dir.join("old-exec.txt");
-        fs::write(&old_file, "old content").await.expect("Failed to write file");
-        let old_time = std::time::SystemTime::now() - std::time::Duration::from_secs(31 * 24 * 60 * 60);
+        fs::write(&old_file, "old content")
+            .await
+            .expect("Failed to write file");
+        let old_time =
+            std::time::SystemTime::now() - std::time::Duration::from_secs(31 * 24 * 60 * 60);
         filetime::set_file_mtime(&old_file, filetime::FileTime::from_system_time(old_time))
             .expect("Failed to set file time");
 
@@ -297,7 +303,7 @@ mod tests {
 
         assert!(result.is_ok(), "Cleanup should succeed");
         assert_eq!(result.unwrap(), 1, "Only old file should be deleted");
-        
+
         let recent_path = output_dir.join("recent-exec_20260311_120003_111.txt");
         assert!(recent_path.exists(), "Recent file should still exist");
         assert!(!old_file.exists(), "Old file should be deleted");
@@ -308,8 +314,10 @@ mod tests {
         // Arrange
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let output_dir = temp_dir.path().join("outputs");
-        create_output_directory(&output_dir).await.expect("Failed to create dir");
-        
+        create_output_directory(&output_dir)
+            .await
+            .expect("Failed to create dir");
+
         let output_file_name = "test-exec-789_20260311_120004_222.txt";
         write_output_file(&output_dir, output_file_name, "content")
             .await
@@ -329,15 +337,20 @@ mod tests {
         // Arrange
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let output_dir = temp_dir.path().join("outputs");
-        create_output_directory(&output_dir).await.expect("Failed to create dir");
-        
+        create_output_directory(&output_dir)
+            .await
+            .expect("Failed to create dir");
+
         let output_file_name = "non-existent_20260311_120005_333.txt";
 
         // Act
         let result = delete_output_file(&output_dir, output_file_name).await;
 
         // Assert
-        assert!(result.is_ok(), "Deleting non-existent file should be idempotent");
+        assert!(
+            result.is_ok(),
+            "Deleting non-existent file should be idempotent"
+        );
     }
 
     #[tokio::test]
@@ -409,7 +422,9 @@ mod tests {
         // Arrange
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let output_dir = temp_dir.path().join("outputs");
-        create_output_directory(&output_dir).await.expect("Failed to create dir");
+        create_output_directory(&output_dir)
+            .await
+            .expect("Failed to create dir");
 
         // Act
         let result = cleanup_old_outputs(&output_dir, 30).await;
@@ -424,8 +439,10 @@ mod tests {
         // Arrange
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let output_dir = temp_dir.path().join("outputs");
-        create_output_directory(&output_dir).await.expect("Failed to create dir");
-        
+        create_output_directory(&output_dir)
+            .await
+            .expect("Failed to create dir");
+
         // Create a recent file
         write_output_file(
             &output_dir,
@@ -441,7 +458,7 @@ mod tests {
         // Assert
         assert!(result.is_ok(), "Cleanup should succeed");
         assert_eq!(result.unwrap(), 0, "Recent files should not be deleted");
-        
+
         let file_path = output_dir.join("recent-exec_20260311_120006_444.txt");
         assert!(file_path.exists(), "Recent file should still exist");
     }
@@ -451,13 +468,18 @@ mod tests {
         // Arrange
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let output_dir = temp_dir.path().join("outputs");
-        create_output_directory(&output_dir).await.expect("Failed to create dir");
-        
+        create_output_directory(&output_dir)
+            .await
+            .expect("Failed to create dir");
+
         // Create a file and set its modification time to 31 days ago
         let old_file = output_dir.join("old-exec.txt");
-        fs::write(&old_file, "old content").await.expect("Failed to write file");
-        
-        let old_time = std::time::SystemTime::now() - std::time::Duration::from_secs(31 * 24 * 60 * 60);
+        fs::write(&old_file, "old content")
+            .await
+            .expect("Failed to write file");
+
+        let old_time =
+            std::time::SystemTime::now() - std::time::Duration::from_secs(31 * 24 * 60 * 60);
         filetime::set_file_mtime(&old_file, filetime::FileTime::from_system_time(old_time))
             .expect("Failed to set file time");
 
@@ -474,11 +496,16 @@ mod tests {
     async fn test_cleanup_ignores_non_txt_files() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let output_dir = temp_dir.path().join("outputs");
-        create_output_directory(&output_dir).await.expect("Failed to create dir");
-        
+        create_output_directory(&output_dir)
+            .await
+            .expect("Failed to create dir");
+
         let old_file = output_dir.join("old-file.log");
-        fs::write(&old_file, "old content").await.expect("Failed to write file");
-        let old_time = std::time::SystemTime::now() - std::time::Duration::from_secs(31 * 24 * 60 * 60);
+        fs::write(&old_file, "old content")
+            .await
+            .expect("Failed to write file");
+        let old_time =
+            std::time::SystemTime::now() - std::time::Duration::from_secs(31 * 24 * 60 * 60);
         filetime::set_file_mtime(&old_file, filetime::FileTime::from_system_time(old_time))
             .expect("Failed to set file time");
 

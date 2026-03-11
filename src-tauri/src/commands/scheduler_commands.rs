@@ -1,6 +1,7 @@
+use crate::db::connection;
+use crate::execution_retention::enforce_execution_history_limit;
 use crate::scheduler::job_scheduler::{JobCallback, Scheduler, SchedulerState};
 use crate::scheduler::task_queue::{TaskQueue, TaskQueueError};
-use crate::db::connection;
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
@@ -13,28 +14,26 @@ pub async fn start_scheduler(
 ) -> Result<String, String> {
     let scheduler = scheduler.inner().clone();
     let scheduler_guard = scheduler.lock().await;
-    
+
     scheduler_guard
         .start()
         .await
         .map_err(|e| format!("Failed to start scheduler: {}", e))?;
-    
+
     Ok("Scheduler started successfully".to_string())
 }
 
 /// Stop the scheduler
 #[tauri::command]
-pub async fn stop_scheduler(
-    scheduler: State<'_, Arc<Mutex<Scheduler>>>,
-) -> Result<String, String> {
+pub async fn stop_scheduler(scheduler: State<'_, Arc<Mutex<Scheduler>>>) -> Result<String, String> {
     let scheduler = scheduler.inner().clone();
     let scheduler_guard = scheduler.lock().await;
-    
+
     scheduler_guard
         .stop()
         .await
         .map_err(|e| format!("Failed to stop scheduler: {}", e))?;
-    
+
     Ok("Scheduler stopped successfully".to_string())
 }
 
@@ -45,15 +44,15 @@ pub async fn get_scheduler_status(
 ) -> Result<String, String> {
     let scheduler = scheduler.inner().clone();
     let scheduler_guard = scheduler.lock().await;
-    
+
     let state = scheduler_guard.get_state().await;
     let job_count = scheduler_guard.job_count().await;
-    
+
     let status = match state {
         SchedulerState::Running => "running",
         SchedulerState::Stopped => "stopped",
     };
-    
+
     Ok(format!("{} ({} jobs)", status, job_count))
 }
 
@@ -68,12 +67,12 @@ pub async fn reload_scheduler(
     let pool = pool.inner().clone();
     let scheduler = scheduler.inner().clone();
     let task_queue = task_queue.inner().clone();
-    
+
     // Get all tasks from database
     let tasks = crate::models::task::get_all_tasks(&pool)
         .await
         .map_err(|e| format!("Failed to get tasks: {}", e))?;
-    
+
     // Stop scheduler if running
     {
         let scheduler_guard = scheduler.lock().await;
@@ -81,41 +80,41 @@ pub async fn reload_scheduler(
             let _ = scheduler_guard.stop().await;
         }
     }
-    
+
     // Track loaded count
     let mut loaded_count = 0;
     let mut errors = Vec::new();
-    
+
     // Add each enabled task with schedule
     for task in tasks.iter() {
         // Skip disabled tasks
         if task.enabled == 0 {
             continue;
         }
-        
+
         // Get cron expression
         let cron_expr = match crate::scheduler::get_task_cron_expression(task) {
-        Some(expr) => expr,
-        None => {
-            errors.push(format!("Task '{}' has no valid schedule", task.id));
-            continue;
-        }
-    };
-        
+            Some(expr) => expr,
+            None => {
+                errors.push(format!("Task '{}' has no valid schedule", task.id));
+                continue;
+            }
+        };
+
         // Create callback for this task
         let task_id = task.id.clone();
         let pool_clone = pool.clone();
         let app_handle = app.clone();
         let task_timeout = task.timeout_seconds as u64;
         let task_queue_clone = task_queue.clone();
-        
+
         let callback: JobCallback = Arc::new(move || {
             let task_id = task_id.clone();
             let pool = pool_clone.clone();
             let app = app_handle.clone();
             let timeout = task_timeout;
             let task_queue = task_queue_clone.clone();
-            
+
             Box::pin(async move {
                 // Execute the task
                 let result = execute_task_internal(task_id, pool, app, timeout, task_queue).await;
@@ -124,27 +123,37 @@ pub async fn reload_scheduler(
                 }
             }) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
         });
-        
+
         // Add job to scheduler
         let scheduler_guard = scheduler.lock().await;
-        match scheduler_guard.add_job(&task.id, &cron_expr, callback).await {
-                Ok(_) => loaded_count += 1,
-                Err(e) => errors.push(format!("Failed to add job for task '{}': {}", task.id, e)),
-            }
+        match scheduler_guard
+            .add_job(&task.id, &cron_expr, callback)
+            .await
+        {
+            Ok(_) => loaded_count += 1,
+            Err(e) => errors.push(format!("Failed to add job for task '{}': {}", task.id, e)),
+        }
     }
-    
+
     // Start scheduler
     {
         let scheduler_guard = scheduler.lock().await;
-        scheduler_guard.start().await
+        scheduler_guard
+            .start()
+            .await
             .map_err(|e| format!("Failed to start scheduler: {}", e))?;
     }
-    
+
     // Return result
     if errors.is_empty() {
         Ok(format!("Successfully loaded {} tasks", loaded_count))
     } else {
-        Ok(format!("Loaded {} tasks with {} errors: {}", loaded_count, errors.len(), errors.join(", ")))
+        Ok(format!(
+            "Loaded {} tasks with {} errors: {}",
+            loaded_count,
+            errors.len(),
+            errors.join(", ")
+        ))
     }
 }
 
@@ -156,8 +165,7 @@ pub async fn execute_task_internal(
     timeout_seconds: u64,
     task_queue: Arc<Mutex<TaskQueue>>,
 ) -> Result<(), String> {
-    use crate::models::execution::ExecutionStatus;
-    use crate::models::execution::generate_output_file_name;
+    use crate::models::execution::{generate_output_file_name, ExecutionStatus};
     use crate::opencode::executor::run_opencode_task;
     use crate::storage::output;
     use chrono::Utc;
@@ -184,7 +192,7 @@ pub async fn execute_task_internal(
     let task = crate::models::task::get_task(&pool, &task_id)
         .await
         .map_err(|e| format!("Task not found: {}", e))?;
-    
+
     // Create execution record
     let new_execution = crate::models::execution::NewExecution {
         task_id: task_id.clone(),
@@ -193,7 +201,7 @@ pub async fn execute_task_internal(
         output_file: None,
         error_message: None,
     };
-    
+
     let execution = crate::models::execution::create_execution(&pool, new_execution)
         .await
         .map_err(|e| format!("Failed to create execution: {}", e))?;
@@ -205,27 +213,33 @@ pub async fn execute_task_internal(
 
     // Run opencode task
     let result = run_opencode_task(&task.prompt, None, Some(timeout_seconds), None, cwd).await;
-    
+
     // Save output
     let output_dir = output::get_output_directory(&app)
         .map_err(|e| format!("Failed to get output directory: {}", e))?;
-    
+
     output::create_output_directory(&output_dir)
         .await
         .map_err(|e| format!("Failed to create output directory: {}", e))?;
 
     let output_file_name = generate_output_file_name(&execution.id, &Utc::now());
-    
+
     let (session_id, status, finished_at, output_file, error_message) = match result {
         Ok(opencode_output) => {
             let (final_status, err_msg) = if opencode_output.timed_out {
-                (ExecutionStatus::Timeout, Some("Execution timed out".to_string()))
+                (
+                    ExecutionStatus::Timeout,
+                    Some("Execution timed out".to_string()),
+                )
             } else if !opencode_output.success {
-                (ExecutionStatus::Failed, Some(opencode_output.stderr.clone()))
+                (
+                    ExecutionStatus::Failed,
+                    Some(opencode_output.stderr.clone()),
+                )
             } else {
                 (ExecutionStatus::Success, None)
             };
-            
+
             let content = format!(
                 "Session ID: {}\n{}{}",
                 opencode_output.session_id,
@@ -236,11 +250,11 @@ pub async fn execute_task_internal(
                     format!("\n{}", opencode_output.stderr)
                 }
             );
-            
+
             let _file_path = output::write_output_file(&output_dir, &output_file_name, &content)
                 .await
                 .map_err(|e| format!("Failed to write output file: {}", e))?;
-            
+
             (
                 Some(opencode_output.session_id),
                 final_status,
@@ -254,13 +268,14 @@ pub async fn execute_task_internal(
             let content = format!("Error: {}", error_msg);
 
             // Try to write error output file, but don't set output_file if it fails
-            let output_file_result = match output::write_output_file(&output_dir, &output_file_name, &content).await {
-                Ok(_) => Some(output_file_name.clone()),
-                Err(write_err) => {
-                    eprintln!("Failed to write error output file: {}", write_err);
-                    None
-                }
-            };
+            let output_file_result =
+                match output::write_output_file(&output_dir, &output_file_name, &content).await {
+                    Ok(_) => Some(output_file_name.clone()),
+                    Err(write_err) => {
+                        eprintln!("Failed to write error output file: {}", write_err);
+                        None
+                    }
+                };
 
             (
                 None,
@@ -271,7 +286,7 @@ pub async fn execute_task_internal(
             )
         }
     };
-    
+
     // Update execution record
     let update = crate::models::execution::UpdateExecution {
         session_id,
@@ -280,12 +295,14 @@ pub async fn execute_task_internal(
         output_file: output_file.clone(),
         error_message: error_message.clone(),
     };
-    
+
     crate::models::execution::update_execution(&pool, &execution.id, update)
         .await
         .map_err(|e| format!("Failed to update execution: {}", e))?;
-    
+
+    enforce_execution_history_limit(&pool, &output_dir).await;
+
     let _ = app.emit("execution-finished", &task_id);
-    
+
     Ok(())
 }

@@ -4,6 +4,8 @@ use sqlx::SqlitePool;
 use std::str::FromStr;
 use uuid::Uuid;
 
+pub const EXECUTION_HISTORY_LIMIT: i64 = 20;
+
 /// Execution status enum
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -81,6 +83,124 @@ pub struct UpdateExecution {
 pub fn generate_output_file_name(execution_id: &str, timestamp: &DateTime<Utc>) -> String {
     let ts = timestamp.format("%Y%m%d_%H%M%S_%3f");
     format!("{}_{}.txt", execution_id, ts)
+}
+
+pub async fn get_execution_ids_exceeding_limit(
+    pool: &SqlitePool,
+    keep_latest: i64,
+) -> Result<Vec<String>, sqlx::Error> {
+    let keep_latest = keep_latest.max(0);
+
+    sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT id
+        FROM executions
+        ORDER BY started_at DESC, id DESC
+        LIMIT -1 OFFSET ?
+        "#,
+    )
+    .bind(keep_latest)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn get_stale_terminal_executions(
+    pool: &SqlitePool,
+    keep_latest: i64,
+) -> Result<Vec<Execution>, sqlx::Error> {
+    let keep_latest = keep_latest.max(0);
+
+    sqlx::query_as::<_, Execution>(
+        r#"
+        SELECT id, task_id, session_id, status, started_at, finished_at, output_file, error_message
+        FROM executions
+        WHERE status != 'running' AND id IN (
+            SELECT id
+            FROM executions
+            WHERE status != 'running'
+            ORDER BY started_at DESC, id DESC
+            LIMIT -1 OFFSET ?
+        )
+        ORDER BY started_at ASC, id ASC
+        "#,
+    )
+    .bind(keep_latest)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn delete_executions_by_ids(
+    pool: &SqlitePool,
+    execution_ids: &[String],
+) -> Result<u64, sqlx::Error> {
+    if execution_ids.is_empty() {
+        return Ok(0);
+    }
+
+    let mut tx = pool.begin().await?;
+    let mut deleted_count = 0;
+
+    for execution_id in execution_ids {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM executions
+            WHERE id = ?
+            "#,
+        )
+        .bind(execution_id)
+        .execute(&mut *tx)
+        .await?;
+
+        deleted_count += result.rows_affected();
+    }
+
+    tx.commit().await?;
+
+    Ok(deleted_count)
+}
+
+pub async fn prune_execution_history(
+    pool: &SqlitePool,
+    keep_latest: i64,
+) -> Result<Vec<Execution>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    let keep_latest = keep_latest.max(0);
+
+    let stale_executions = sqlx::query_as::<_, Execution>(
+        r#"
+        SELECT id, task_id, session_id, status, started_at, finished_at, output_file, error_message
+        FROM executions
+        WHERE status != 'running' AND id IN (
+            SELECT id
+            FROM executions
+            WHERE status != 'running'
+            ORDER BY started_at DESC, id DESC
+            LIMIT -1 OFFSET ?
+        )
+        ORDER BY started_at ASC, id ASC
+        "#,
+    )
+    .bind(keep_latest)
+    .fetch_all(&mut *tx)
+    .await?;
+
+    if !stale_executions.is_empty() {
+        for stale_execution in &stale_executions {
+            sqlx::query(
+                r#"
+                DELETE FROM executions
+                WHERE id = ?
+                "#,
+            )
+            .bind(&stale_execution.id)
+            .execute(&mut *tx)
+            .await?;
+        }
+    }
+
+    tx.commit().await?;
+
+    Ok(stale_executions)
 }
 
 /// Create a new execution
@@ -267,6 +387,7 @@ mod tests {
     use super::*;
     use crate::db::connection::init_database;
     use crate::models::task::{create_task, NewTask};
+    use std::collections::HashSet;
     use tempfile::TempDir;
 
     async fn setup_test_db() -> (SqlitePool, TempDir) {
@@ -287,7 +408,9 @@ mod tests {
             enabled: None,
             timeout_seconds: None,
         };
-        let task = create_task(pool, new_task).await.expect("Failed to create task");
+        let task = create_task(pool, new_task)
+            .await
+            .expect("Failed to create task");
         task.id
     }
 
@@ -351,7 +474,10 @@ mod tests {
 
         assert!(result.is_ok());
         let execution = result.unwrap();
-        assert_eq!(execution.status, "pending", "Default status should be pending");
+        assert_eq!(
+            execution.status, "pending",
+            "Default status should be pending"
+        );
         assert!(execution.session_id.is_none());
 
         pool.close().await;
@@ -376,7 +502,10 @@ mod tests {
         let execution = result.unwrap();
         assert_eq!(execution.status, "running");
         assert_eq!(execution.session_id, Some("session-456".to_string()));
-        assert_eq!(execution.output_file, Some("/path/to/output.txt".to_string()));
+        assert_eq!(
+            execution.output_file,
+            Some("/path/to/output.txt".to_string())
+        );
         assert_eq!(execution.error_message, Some("Initial error".to_string()));
 
         pool.close().await;
@@ -585,10 +714,7 @@ mod tests {
         let updated = result.unwrap();
         assert_eq!(updated.status, "success");
         assert_eq!(updated.finished_at, Some(finished_at));
-        assert_eq!(
-            updated.output_file,
-            Some("/output/result.txt".to_string())
-        );
+        assert_eq!(updated.output_file, Some("/output/result.txt".to_string()));
 
         pool.close().await;
     }
@@ -628,10 +754,7 @@ mod tests {
             Some("session-original".to_string()),
             "session_id should be preserved"
         );
-        assert_eq!(
-            updated.error_message,
-            Some("Task failed".to_string())
-        );
+        assert_eq!(updated.error_message, Some("Task failed".to_string()));
         assert!(updated.finished_at.is_none());
 
         pool.close().await;
@@ -733,9 +856,7 @@ mod tests {
         assert_eq!(success.status, "success");
         assert_eq!(success.finished_at, Some(finished_at));
 
-        let fetched = get_execution(&pool, &created.id)
-            .await
-            .expect("Get failed");
+        let fetched = get_execution(&pool, &created.id).await.expect("Get failed");
         assert_eq!(fetched.status, "success");
         assert_eq!(fetched.output_file, Some("/output/final.txt".to_string()));
 
@@ -768,6 +889,206 @@ mod tests {
         assert_eq!(executions.len(), 5);
         assert_eq!(executions[0].session_id, Some("session-4".to_string()));
         assert_eq!(executions[4].session_id, Some("session-0".to_string()));
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_get_execution_ids_exceeding_limit_returns_oldest_execution_ids() {
+        let (pool, _temp_dir) = setup_test_db().await;
+        let task_id = create_test_task(&pool).await;
+
+        let mut created_execution_ids = Vec::new();
+        for i in 0..25 {
+            let execution = create_execution(
+                &pool,
+                NewExecution {
+                    task_id: task_id.clone(),
+                    session_id: Some(format!("session-{}", i)),
+                    status: Some(ExecutionStatus::Success),
+                    output_file: None,
+                    error_message: None,
+                },
+            )
+            .await
+            .expect("Failed to create execution");
+
+            created_execution_ids.push(execution.id);
+            tokio::time::sleep(tokio::time::Duration::from_millis(2)).await;
+        }
+
+        let stale_ids = get_execution_ids_exceeding_limit(&pool, 20)
+            .await
+            .expect("Failed to query stale execution ids");
+
+        assert_eq!(
+            stale_ids.len(),
+            5,
+            "Should return only 5 stale execution ids"
+        );
+
+        let expected_ids: HashSet<String> = created_execution_ids[..5].iter().cloned().collect();
+        let actual_ids: HashSet<String> = stale_ids.into_iter().collect();
+        assert_eq!(
+            actual_ids, expected_ids,
+            "Should target the oldest 5 executions"
+        );
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_delete_executions_by_ids_removes_only_selected_records() {
+        let (pool, _temp_dir) = setup_test_db().await;
+        let task_id = create_test_task(&pool).await;
+
+        let mut created_execution_ids = Vec::new();
+        for i in 0..3 {
+            let execution = create_execution(
+                &pool,
+                NewExecution {
+                    task_id: task_id.clone(),
+                    session_id: Some(format!("session-{}", i)),
+                    status: Some(ExecutionStatus::Success),
+                    output_file: None,
+                    error_message: None,
+                },
+            )
+            .await
+            .expect("Failed to create execution");
+
+            created_execution_ids.push(execution.id);
+        }
+
+        let deleted_count = delete_executions_by_ids(&pool, &created_execution_ids[..2])
+            .await
+            .expect("Failed to delete executions");
+
+        assert_eq!(
+            deleted_count, 2,
+            "Should delete exactly 2 execution records"
+        );
+
+        let remaining = get_executions_by_task(&pool, &task_id)
+            .await
+            .expect("Failed to query executions");
+
+        assert_eq!(remaining.len(), 1, "Only one execution should remain");
+        assert_eq!(remaining[0].id, created_execution_ids[2]);
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_get_stale_terminal_executions_skips_running_records() {
+        let (pool, _temp_dir) = setup_test_db().await;
+        let task_id = create_test_task(&pool).await;
+
+        for i in 0..20 {
+            create_execution(
+                &pool,
+                NewExecution {
+                    task_id: task_id.clone(),
+                    session_id: Some(format!("success-{}", i)),
+                    status: Some(ExecutionStatus::Success),
+                    output_file: None,
+                    error_message: None,
+                },
+            )
+            .await
+            .expect("Failed to create success execution");
+
+            tokio::time::sleep(tokio::time::Duration::from_millis(2)).await;
+        }
+
+        let running_execution = create_execution(
+            &pool,
+            NewExecution {
+                task_id,
+                session_id: Some("running-session".to_string()),
+                status: Some(ExecutionStatus::Running),
+                output_file: None,
+                error_message: None,
+            },
+        )
+        .await
+        .expect("Failed to create running execution");
+
+        let stale = get_stale_terminal_executions(&pool, 20)
+            .await
+            .expect("Failed to query stale terminal executions");
+
+        assert_eq!(stale.len(), 0, "No terminal execution should be stale");
+        assert!(!stale.iter().any(|e| e.id == running_execution.id));
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_prune_execution_history_deletes_only_stale_terminal_records() {
+        let (pool, _temp_dir) = setup_test_db().await;
+        let task_id = create_test_task(&pool).await;
+
+        let mut terminal_execution_ids = Vec::new();
+        for i in 0..22 {
+            let execution = create_execution(
+                &pool,
+                NewExecution {
+                    task_id: task_id.clone(),
+                    session_id: Some(format!("done-{}", i)),
+                    status: Some(ExecutionStatus::Success),
+                    output_file: Some(format!("done-{}.txt", i)),
+                    error_message: None,
+                },
+            )
+            .await
+            .expect("Failed to create terminal execution");
+
+            terminal_execution_ids.push(execution.id);
+            tokio::time::sleep(tokio::time::Duration::from_millis(2)).await;
+        }
+
+        let running_execution = create_execution(
+            &pool,
+            NewExecution {
+                task_id,
+                session_id: Some("running-session".to_string()),
+                status: Some(ExecutionStatus::Running),
+                output_file: Some("running.txt".to_string()),
+                error_message: None,
+            },
+        )
+        .await
+        .expect("Failed to create running execution");
+
+        let pruned = prune_execution_history(&pool, 20)
+            .await
+            .expect("Failed to prune execution history");
+
+        assert_eq!(
+            pruned.len(),
+            2,
+            "Should prune exactly 2 stale terminal records"
+        );
+
+        let expected_pruned: HashSet<String> =
+            terminal_execution_ids[..2].iter().cloned().collect();
+        let actual_pruned: HashSet<String> = pruned.into_iter().map(|e| e.id).collect();
+        assert_eq!(actual_pruned, expected_pruned);
+
+        let still_running = get_execution(&pool, &running_execution.id)
+            .await
+            .expect("Running execution should remain");
+        assert_eq!(still_running.status, "running");
+
+        let terminal_remaining = get_executions_by_task(&pool, &still_running.task_id)
+            .await
+            .expect("Failed to query executions");
+        let terminal_count = terminal_remaining
+            .iter()
+            .filter(|execution| execution.status != "running")
+            .count();
+        assert_eq!(terminal_count, 20, "Should keep 20 terminal records");
 
         pool.close().await;
     }

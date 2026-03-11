@@ -1,41 +1,43 @@
-use std::sync::Arc;
+use scheduler::job_scheduler::Scheduler;
+use scheduler::task_queue::TaskQueue;
 use sqlx::SqlitePool;
+use std::sync::Arc;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, RunEvent,
 };
 use tokio::sync::Mutex;
-use scheduler::job_scheduler::Scheduler;
-use scheduler::task_queue::TaskQueue;
 
 pub mod commands;
 pub mod db;
+pub mod execution_retention;
 pub mod executor;
 pub mod models;
 pub mod opencode;
 pub mod scheduler;
 pub mod storage;
 
-use commands::{get_tasks, get_task, create_task, update_task, delete_task, run_task};
-use commands::{get_executions, get_execution, get_running_executions};
-use commands::{get_scheduler_status, start_scheduler, stop_scheduler, reload_scheduler};
-use commands::{get_output, delete_output};
-use commands::{test_channel_stream};
-use commands::{execute_task_streaming};
-use models::execution::{get_executions_by_status, ExecutionStatus, UpdateExecution};
 use chrono::Utc;
+use commands::execute_task_streaming;
+use commands::test_channel_stream;
+use commands::{create_task, delete_task, get_task, get_tasks, run_task, update_task};
+use commands::{delete_output, get_output};
+use commands::{get_execution, get_executions, get_running_executions};
+use commands::{get_scheduler_status, reload_scheduler, start_scheduler, stop_scheduler};
+use models::execution::{get_executions_by_status, ExecutionStatus, UpdateExecution};
 
 fn mark_running_as_failed_blocking(pool: &SqlitePool) {
     let runtime = tokio::runtime::Runtime::new().expect("Failed to create runtime");
     let count = runtime.block_on(async {
-        let running_executions = match get_executions_by_status(pool, ExecutionStatus::Running).await {
-            Ok(execs) => execs,
-            Err(e) => {
-                eprintln!("Failed to get running executions: {}", e);
-                return 0;
-            }
-        };
+        let running_executions =
+            match get_executions_by_status(pool, ExecutionStatus::Running).await {
+                Ok(execs) => execs,
+                Err(e) => {
+                    eprintln!("Failed to get running executions: {}", e);
+                    return 0;
+                }
+            };
 
         let mut updated_count = 0;
         let now = Utc::now().to_rfc3339();
@@ -97,8 +99,6 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         })
         .build(app)?;
 
-
-
     Ok(())
 }
 
@@ -132,15 +132,23 @@ pub fn run() {
             })
             .expect("Failed to initialize database");
 
+            if let Ok(output_dir) = storage::output::get_output_directory(app.handle()) {
+                tauri::async_runtime::block_on(async {
+                    execution_retention::enforce_execution_history_limit(&pool, &output_dir).await;
+                });
+            }
+
             mark_running_as_failed_blocking(&pool);
 
-            let app_data_dir = app.path().app_data_dir()
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
                 .expect("Failed to get app data directory");
             scheduler::cleanup_orphan_processes(&app_data_dir);
 
             let pool_arc = Arc::new(pool);
             app.manage(pool_arc.clone());
-            
+
             let scheduler = Arc::new(Mutex::new(Scheduler::new()));
             app.manage(scheduler.clone());
 
@@ -149,60 +157,68 @@ pub fn run() {
             app.manage(task_queue.clone());
 
             setup_tray(app)?;
-            
+
             let scheduler_clone = scheduler.clone();
             let pool_clone = pool_arc.clone();
             let task_queue_clone = task_queue.clone();
-            
+
             tauri::async_runtime::block_on(async {
                 let scheduler = scheduler_clone.lock().await;
-                
+
                 let tasks = crate::models::task::get_all_tasks(&pool_clone)
                     .await
                     .expect("Failed to get tasks");
-                
+
                 for task in tasks.iter() {
                     if task.enabled != 1 {
                         continue;
                     }
-                    
+
                     let cron_expression = crate::scheduler::get_task_cron_expression(task);
 
                     if cron_expression.is_none() {
                         eprintln!("Task {} has no schedule, skipping", task.id);
                         continue;
                     }
-                    
+
                     let Some(cron_exp) = cron_expression else {
                         continue;
                     };
-                    
+
                     let pool_inner = pool_clone.clone();
                     let app_handle = app.handle().clone();
                     let task_id = task.id.clone();
                     let timeout = task.timeout_seconds as u64;
                     let task_queue_inner = task_queue_clone.clone();
-                    
+
                     let callback = Arc::new(move || {
                         let pool = pool_inner.clone();
                         let app = app_handle.clone();
                         let task_id = task_id.clone();
                         let timeout_secs = timeout;
                         let task_queue = task_queue_inner.clone();
-                        
+
                         Box::pin(async move {
-                            let _ = crate::commands::execute_task_internal(task_id, pool, app, timeout_secs, task_queue).await;
-                        }) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+                            let _ = crate::commands::execute_task_internal(
+                                task_id,
+                                pool,
+                                app,
+                                timeout_secs,
+                                task_queue,
+                            )
+                            .await;
+                        })
+                            as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
                     });
-                    
+
                     if let Err(e) = scheduler.add_job(&task.id, &cron_exp, callback).await {
                         eprintln!("Failed to add job for task {}: {}", task.id, e);
                     }
                 }
-                
+
                 scheduler.start().await.expect("Failed to start scheduler");
             });
-            
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -215,20 +231,18 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
-    app.run(|app_handle, event| {
-        match event {
-            RunEvent::Exit => {
-                scheduler::kill_all_processes();
-                println!("Application exiting...");
-            }
-            #[cfg(target_os = "macos")]
-            RunEvent::Reopen { .. } => {
-                if let Some(window) = app_handle.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
-            }
-            _ => {}
+    app.run(|app_handle, event| match event {
+        RunEvent::Exit => {
+            scheduler::kill_all_processes();
+            println!("Application exiting...");
         }
+        #[cfg(target_os = "macos")]
+        RunEvent::Reopen { .. } => {
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }
+        _ => {}
     });
 }
