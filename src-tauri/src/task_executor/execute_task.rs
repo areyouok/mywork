@@ -81,17 +81,15 @@ pub async fn execute_task(
             let error_msg = format!("{}", e);
             let content = format!("Error: {}", error_msg);
             
-            let file_path = output::write_output_file(&output_dir, &execution.id, &content)
+            let _file_path = output::write_output_file(&output_dir, &execution.id, &content)
                 .await
                 .ok();
-            
-            let file_path_str = file_path.map(|p| p.to_string_lossy().to_string());
             
             (
                 None,
                 ExecutionStatus::Failed,
                 Utc::now().to_rfc3339(),
-                file_path_str,
+                Some(format!("{}.txt", execution.id)),
                 Some(error_msg),
             )
         }

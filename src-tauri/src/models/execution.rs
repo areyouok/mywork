@@ -2,7 +2,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::str::FromStr;
-use uuid::Uuid;
 
 /// Execution status enum
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -92,7 +91,9 @@ pub async fn create_execution(
     new_execution: NewExecution,
 ) -> Result<Execution, sqlx::Error> {
     let now: DateTime<Utc> = Utc::now();
-    let id = Uuid::new_v4().to_string();
+    // Generate human-friendly ID: task_id + timestamp (filesystem-safe)
+    let timestamp = now.format("%Y%m%d_%H%M%S").to_string();
+    let id = format!("{}_{}", new_execution.task_id, timestamp);
     let started_at = now.to_rfc3339();
     let status = new_execution
         .status
