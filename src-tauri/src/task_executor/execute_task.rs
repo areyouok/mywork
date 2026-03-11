@@ -73,7 +73,7 @@ pub async fn execute_task(
                 Some(opencode_output.session_id),
                 final_status,
                 Utc::now().to_rfc3339(),
-                Some(execution.id.clone()),
+                Some(format!("{}.txt", execution.id)),
                 err_msg,
             )
         }

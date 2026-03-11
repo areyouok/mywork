@@ -76,7 +76,7 @@ pub async fn run_task(
             session_id: None,
             status: None,
             finished_at: None,
-            output_file: Some(execution.id.clone()),
+            output_file: Some(format!("{}.txt", execution.id)),
             error_message: None,
         },
     )
