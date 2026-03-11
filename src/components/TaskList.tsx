@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { TaskListProps, Task } from '@/types/task';
+import { formatSimpleSchedule } from '@/utils/format';
 import './TaskList.css';
 
 export function TaskList({
@@ -44,34 +45,7 @@ export function TaskList({
     if (task.cron_expression) {
       return task.cron_expression;
     }
-    if (task.simple_schedule) {
-      try {
-        const schedule = JSON.parse(task.simple_schedule);
-
-        if (schedule.type === 'interval') {
-          return `Every ${schedule.value} ${schedule.unit}`;
-        } else if (schedule.type === 'daily') {
-          return `Daily at ${schedule.time}`;
-        } else if (schedule.type === 'weekly') {
-          const dayMap: Record<string, string> = {
-            monday: 'Mon',
-            tuesday: 'Tue',
-            wednesday: 'Wed',
-            thursday: 'Thu',
-            friday: 'Fri',
-            saturday: 'Sat',
-            sunday: 'Sun',
-          };
-          const day = dayMap[schedule.day.toLowerCase()] || schedule.day;
-          return `${day} at ${schedule.time}`;
-        }
-
-        return JSON.stringify(schedule);
-      } catch {
-        return 'Custom schedule';
-      }
-    }
-    return 'No schedule';
+    return formatSimpleSchedule(task.simple_schedule);
   };
 
   return (

@@ -159,7 +159,11 @@ function App() {
         ? ({ id: execution, task_id: '', status: 'pending', started_at: '' } as Execution)
         : execution;
     setSelectedExecution(exec);
-    await loadOutput(execution);
+    try {
+      await loadOutput(execution);
+    } catch (error) {
+      console.error('Failed to load output view:', error);
+    }
     setViewMode('output');
   };
 

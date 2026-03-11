@@ -27,23 +27,38 @@ export function useTasks() {
       enabled?: number;
       timeout_seconds?: number;
     }) => {
-      const newTask = await api.createTask(data);
-      setTasks((prev) => [...prev, newTask]);
-      await api.reloadScheduler();
-      return newTask;
+      try {
+        const newTask = await api.createTask(data);
+        setTasks((prev) => [...prev, newTask]);
+        await api.reloadScheduler();
+        return newTask;
+      } catch (error) {
+        console.error('Failed to create task:', error);
+        throw error;
+      }
     },
     []
   );
 
   const updateTask = useCallback(async (id: string, data: Parameters<typeof api.updateTask>[1]) => {
-    const updated = await api.updateTask(id, data);
-    setTasks((prev) => prev.map((task) => (task.id === id ? updated : task)));
-    return updated;
+    try {
+      const updated = await api.updateTask(id, data);
+      setTasks((prev) => prev.map((task) => (task.id === id ? updated : task)));
+      return updated;
+    } catch (error) {
+      console.error('Failed to update task:', error);
+      throw error;
+    }
   }, []);
 
   const deleteTask = useCallback(async (id: string) => {
-    await api.deleteTask(id);
-    setTasks((prev) => prev.filter((task) => task.id !== id));
+    try {
+      await api.deleteTask(id);
+      setTasks((prev) => prev.filter((task) => task.id !== id));
+    } catch (error) {
+      console.error('Failed to delete task:', error);
+      throw error;
+    }
   }, []);
 
   return { tasks, loading, loadTasks, createTask, updateTask, deleteTask };

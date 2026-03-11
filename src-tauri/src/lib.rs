@@ -166,14 +166,12 @@ pub fn run() {
                         continue;
                     }
                     
-                    let cron_expression = match (&task.cron_expression, &task.simple_schedule) {
-                        (Some(cron), _) => Some(cron.clone()),
-                        (_, Some(json)) => crate::scheduler::parse_simple_schedule(json).ok(),
-                        _ => {
-                            eprintln!("Task {} has no schedule, skipping", task.id);
-                            continue;
-                        },
-                    };
+                    let cron_expression = crate::scheduler::get_task_cron_expression(task);
+
+                    if cron_expression.is_none() {
+                        eprintln!("Task {} has no schedule, skipping", task.id);
+                        continue;
+                    }
                     
                     let Some(cron_exp) = cron_expression else {
                         continue;

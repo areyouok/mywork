@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, type RefObject } from 'react';
 import * as api from '@/api/tasks';
 
 export function useTaskActions(
@@ -7,7 +7,7 @@ export function useTaskActions(
   addRunningTask: (taskId: string) => void,
   removeRunningTask: (taskId: string) => void,
   loadExecutions: (taskId: string | null) => Promise<void>,
-  selectedTaskIdRef: React.MutableRefObject<string | null>,
+  selectedTaskIdRef: RefObject<string | null>,
   loadTasks: () => Promise<void>
 ) {
   const handleToggle = useCallback(
@@ -43,7 +43,11 @@ export function useTaskActions(
       } finally {
         removeRunningTask(taskId);
         if (selectedTaskIdRef.current === taskId) {
-          loadExecutions(taskId);
+          try {
+            await loadExecutions(taskId);
+          } catch (error) {
+            console.error('Failed to refresh executions after run:', error);
+          }
         }
       }
     },

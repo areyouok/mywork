@@ -44,7 +44,7 @@ pub async fn create_task(
         .map_err(|e| format!("Failed to create task: {}", e))?;
     
     if task.enabled == 1 {
-        let cron_expression = get_task_schedule(&task);
+        let cron_expression = crate::scheduler::get_task_cron_expression(&task);
         
         if let Some(cron_exp) = cron_expression {
             add_task_to_scheduler(&scheduler, &task_queue, &task, &cron_exp, &pool, &app).await?;
@@ -78,7 +78,7 @@ pub async fn update_task(
         .map_err(|e| format!("Failed to update task: {}", e))?;
     
     if task.enabled == 1 {
-        let cron_expression = get_task_schedule(&task);
+        let cron_expression = crate::scheduler::get_task_cron_expression(&task);
         
         if let Some(cron_exp) = cron_expression {
             add_task_to_scheduler(&scheduler, &task_queue, &task, &cron_exp, &pool, &app).await?;
@@ -106,16 +106,6 @@ pub async fn delete_task(
     crate::models::task::delete_task(&pool, &id)
         .await
         .map_err(|e| format!("Failed to delete task: {}", e))
-}
-
-fn get_task_schedule(task: &Task) -> Option<String> {
-    if let Some(cron) = &task.cron_expression {
-        Some(cron.clone())
-    } else if let Some(json) = &task.simple_schedule {
-        crate::scheduler::parse_simple_schedule(json).ok()
-    } else {
-        None
-    }
 }
 
 async fn add_task_to_scheduler(

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type SyntheticEvent } from 'react';
 import type { Task } from '@/types/task';
 import { CronInput } from './CronInput';
 import { SimpleScheduleInput } from './SimpleScheduleInput';
@@ -90,7 +90,7 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!validateForm()) {
@@ -225,7 +225,10 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
           id="timeout"
           type="number"
           value={timeoutSeconds}
-          onChange={(e) => setTimeoutSeconds(parseInt(e.target.value) || 0)}
+          onChange={(e) => {
+            const parsed = Number.parseInt(e.target.value, 10);
+            setTimeoutSeconds(Number.isNaN(parsed) ? 0 : parsed);
+          }}
           aria-invalid={!!errors.timeout_seconds}
           aria-describedby={errors.timeout_seconds ? 'timeout-error' : undefined}
           disabled={isSubmitting}

@@ -1,5 +1,4 @@
 use crate::scheduler::job_scheduler::{JobCallback, Scheduler, SchedulerState};
-use crate::scheduler::parse_simple_schedule;
 use crate::scheduler::task_queue::{TaskQueue, SkipResult};
 use crate::db::connection;
 use sqlx::SqlitePool;
@@ -58,17 +57,6 @@ pub async fn get_scheduler_status(
     Ok(format!("{} ({} jobs)", status, job_count))
 }
 
-/// Get cron expression from task
-fn get_task_cron_expression(task: &crate::models::task::Task) -> Option<String> {
-    if let Some(cron) = &task.cron_expression {
-        Some(cron.as_str().to_string())
-    } else if let Some(json) = &task.simple_schedule {
-        parse_simple_schedule(json).ok()
-    } else {
-        None
-    }
-}
-
 /// Reload scheduler with all enabled tasks from database
 #[tauri::command]
 pub async fn reload_scheduler(
@@ -106,7 +94,7 @@ pub async fn reload_scheduler(
         }
         
         // Get cron expression
-        let cron_expr = match get_task_cron_expression(task) {
+        let cron_expr = match crate::scheduler::get_task_cron_expression(task) {
         Some(expr) => expr,
         None => {
             errors.push(format!("Task '{}' has no valid schedule", task.id));
