@@ -31,11 +31,13 @@ pub async fn get_execution(
 #[tauri::command]
 pub async fn get_running_executions(
     pool: State<'_, Arc<SqlitePool>>,
-) -> Result<Vec<Execution>, String> {
+) -> Result<Vec<String>, String> {
     let pool = pool.inner().clone();
-    crate::models::execution::get_executions_by_status(&pool, ExecutionStatus::Running)
+    let running = crate::models::execution::get_executions_by_status(&pool, ExecutionStatus::Running)
         .await
-        .map_err(|e| format!("Failed to get running executions: {}", e))
+        .map_err(|e| format!("Failed to get running executions: {}", e))?;
+
+    Ok(running.into_iter().map(|execution| execution.task_id).collect())
 }
 
 /// Create a new execution (for testing/debugging)

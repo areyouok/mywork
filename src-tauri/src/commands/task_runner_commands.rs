@@ -7,7 +7,7 @@ use crate::db::connection;
 use chrono::Utc;
 use sqlx::SqlitePool;
 use std::sync::Arc;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 use tokio::time::{timeout, Duration};
 
@@ -41,13 +41,15 @@ pub async fn run_task(
         task_id: task_id.clone(),
         session_id: None,
         status: Some(ExecutionStatus::Running),
-        output_file: Some(task_id.clone()),
+        output_file: None,
         error_message: None,
     };
     
     let execution = create_execution(&pool, new_execution)
         .await
         .map_err(|e| format!("Failed to create execution: {}", e))?;
+
+    let _ = app.emit("execution-started", &task_id);
     
     let timeout_secs = task.timeout_seconds as u64;
 
@@ -66,6 +68,20 @@ pub async fn run_task(
     output::write_output_file(&output_dir, &execution.id, "")
         .await
         .map_err(|e| format!("Failed to initialize output file: {}", e))?;
+
+    update_execution(
+        &pool,
+        &execution.id,
+        UpdateExecution {
+            session_id: None,
+            status: None,
+            finished_at: None,
+            output_file: Some(execution.id.clone()),
+            error_message: None,
+        },
+    )
+    .await
+    .map_err(|e| format!("Failed to set output file on execution: {}", e))?;
 
     let args: Vec<&str> = vec!["run", &task.prompt];
     let mut executor = StreamingExecutor::spawn("opencode", &args, cwd)
@@ -141,6 +157,8 @@ pub async fn run_task(
     update_execution(&pool, &execution.id, update)
         .await
         .map_err(|e| format!("Failed to update execution: {}", e))?;
+
+    let _ = app.emit("execution-finished", &task_id);
     
     if status == ExecutionStatus::Success {
         Ok(execution.id)

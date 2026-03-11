@@ -49,17 +49,27 @@ function App() {
         return;
       }
 
-      void listen<string>('execution-started', () => loadExecutions(selectedTaskId)).then(
-        (unlisten) => {
-          unlistenStarted = unlisten;
-        }
-      );
+      void listen<string>('execution-started', (event) => {
+        const taskId = event.payload;
+        addRunningTask(taskId);
 
-      void listen<string>('execution-finished', () => loadExecutions(selectedTaskId)).then(
-        (unlisten) => {
-          unlistenFinished = unlisten;
+        if (selectedTaskIdRef.current === taskId) {
+          void loadExecutions(taskId);
         }
-      );
+      }).then((unlisten) => {
+        unlistenStarted = unlisten;
+      });
+
+      void listen<string>('execution-finished', (event) => {
+        const taskId = event.payload;
+        removeRunningTask(taskId);
+
+        if (selectedTaskIdRef.current === taskId) {
+          void loadExecutions(taskId);
+        }
+      }).then((unlisten) => {
+        unlistenFinished = unlisten;
+      });
     });
 
     return () => {
@@ -67,7 +77,7 @@ function App() {
       unlistenStarted?.();
       unlistenFinished?.();
     };
-  }, [loadExecutions, selectedTaskId]);
+  }, [addRunningTask, loadExecutions, removeRunningTask]);
 
   const { handleToggle, handleDelete, handleRun } = useTaskActions(
     updateTask,
@@ -280,6 +290,9 @@ function App() {
                   executions={executions}
                   onViewOutput={handleViewOutput}
                   taskId={selectedTask.id}
+                  onRefresh={() => {
+                    void loadExecutions(selectedTask.id);
+                  }}
                 />
               </div>
             </div>

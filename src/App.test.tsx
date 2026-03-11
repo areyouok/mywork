@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import App from './App';
 import * as api from './api/tasks';
+import { listen } from '@tauri-apps/api/event';
 
 vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn(async () => () => {}),
@@ -218,6 +219,52 @@ describe('App', () => {
 
   it('should update output status badge when execution finishes while staying on output page', async () => {
     expect(true).toBe(true);
+  });
+
+  it('should show run button as running when scheduler emits execution-started and reset on execution-finished', async () => {
+    const user = userEvent.setup();
+    const listeners: Record<string, (event: { payload: string }) => void> = {};
+    Reflect.set(window, '__TAURI_INTERNALS__', {});
+
+    vi.mocked(listen).mockImplementation(async (eventName, handler) => {
+      listeners[eventName] = handler as (event: { payload: string }) => void;
+      return () => {
+        delete listeners[eventName];
+      };
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Daily Code Review')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Daily Code Review'));
+
+    await waitFor(() => {
+      expect(listeners['execution-started']).toBeDefined();
+      expect(listeners['execution-finished']).toBeDefined();
+    });
+
+    const runButton = screen.getByRole('button', { name: /run daily code review/i });
+    expect(runButton).toHaveTextContent('Run');
+    expect(runButton).not.toBeDisabled();
+
+    listeners['execution-started']?.({ payload: '1' });
+
+    await waitFor(() => {
+      expect(runButton).toHaveTextContent('Running...');
+      expect(runButton).toBeDisabled();
+    });
+
+    listeners['execution-finished']?.({ payload: '1' });
+
+    await waitFor(() => {
+      expect(runButton).toHaveTextContent('Run');
+      expect(runButton).not.toBeDisabled();
+    });
+
+    Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
   });
 
   it('should toggle task enabled status', async () => {

@@ -146,6 +146,23 @@ describe('ExecutionHistory', () => {
   });
 
   describe('Interaction', () => {
+    it('should allow opening failed execution details when output file exists', async () => {
+      const user = userEvent.setup();
+      const onViewOutput = vi.fn();
+      const execution = createMockExecution({
+        status: 'failed',
+        output_file: 'exec-failed-1',
+        error_message: 'Process exited with code 137',
+      });
+
+      render(<ExecutionHistory executions={[execution]} onViewOutput={onViewOutput} />);
+
+      const item = screen.getByRole('listitem');
+      await user.click(item);
+
+      expect(onViewOutput).toHaveBeenCalledWith(execution);
+    });
+
     it('should call onViewOutput when execution with output is clicked', async () => {
       const user = userEvent.setup();
       const executions = [createMockExecution({ output_file: '/output/result.txt' })];
@@ -307,6 +324,32 @@ describe('ExecutionHistory', () => {
       render(<ExecutionHistory executions={[]} loading={true} />);
 
       expect(screen.getByRole('status', { name: /loading/i })).toBeInTheDocument();
+    });
+  });
+
+  describe('Auto Refresh', () => {
+    it('should call onRefresh repeatedly when there is running execution', async () => {
+      vi.useFakeTimers();
+      const onRefresh = vi.fn();
+      const executions = [createMockExecution({ status: 'running', finished_at: undefined })];
+
+      render(<ExecutionHistory executions={executions} onRefresh={onRefresh} />);
+
+      vi.advanceTimersByTime(1100);
+      expect(onRefresh).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
+
+    it('should not call onRefresh when there is no running execution', async () => {
+      vi.useFakeTimers();
+      const onRefresh = vi.fn();
+      const executions = [createMockExecution({ status: 'success' })];
+
+      render(<ExecutionHistory executions={executions} onRefresh={onRefresh} />);
+
+      vi.advanceTimersByTime(1200);
+      expect(onRefresh).not.toHaveBeenCalled();
+      vi.useRealTimers();
     });
   });
 
