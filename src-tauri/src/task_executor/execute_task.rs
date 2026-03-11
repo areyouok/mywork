@@ -1,5 +1,5 @@
 use crate::models::execution::{create_execution, update_execution, ExecutionStatus, NewExecution, UpdateExecution};
-use crate::models::task::get_task;
+use crate::models::task::{get_task, touch_task};
 use crate::opencode::executor::run_opencode_task;
 use crate::storage::output;
 use crate::db::connection;
@@ -30,6 +30,10 @@ pub async fn execute_task(
     let execution = create_execution(pool, new_execution)
         .await
         .map_err(|e| format!("Failed to create execution: {}", e))?;
+
+    touch_task(pool, task_id)
+        .await
+        .map_err(|e| format!("Failed to update task timestamp: {}", e))?;
     
     let db_path = connection::get_database_directory(app)
         .map_err(|e| format!("Failed to get database directory: {}", e))?;

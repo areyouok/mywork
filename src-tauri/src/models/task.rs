@@ -123,7 +123,7 @@ pub async fn get_all_tasks(pool: &SqlitePool) -> Result<Vec<Task>, sqlx::Error> 
         r#"
         SELECT id, name, prompt, cron_expression, simple_schedule, enabled, timeout_seconds, created_at, updated_at
         FROM tasks
-        ORDER BY created_at DESC
+        ORDER BY updated_at DESC
         "#,
     )
     .fetch_all(pool)
@@ -198,6 +198,33 @@ pub async fn delete_task(pool: &SqlitePool, id: &str) -> Result<bool, sqlx::Erro
         .await?;
 
     Ok(result.rows_affected() > 0)
+}
+
+/// Update task's updated_at timestamp
+///
+/// # Arguments
+/// * `pool` - SQLite connection pool
+/// * `id` - Task ID
+///
+/// # Returns
+/// * `Ok(())` - Successfully updated
+/// * `Err(sqlx::Error)` - Database error
+pub async fn touch_task(pool: &SqlitePool, id: &str) -> Result<(), sqlx::Error> {
+    let updated_at = Utc::now().to_rfc3339();
+
+    sqlx::query(
+        r#"
+        UPDATE tasks
+        SET updated_at = ?
+        WHERE id = ?
+        "#,
+    )
+    .bind(&updated_at)
+    .bind(id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }
 
 #[cfg(test)]
