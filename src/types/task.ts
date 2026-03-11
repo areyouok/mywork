@@ -4,6 +4,7 @@ export interface Task {
   prompt: string;
   cron_expression?: string;
   simple_schedule?: string;
+  once_at?: string;
   enabled: boolean;
   timeout_seconds: number;
   created_at: string;

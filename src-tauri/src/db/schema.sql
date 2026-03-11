@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     prompt TEXT NOT NULL,
     cron_expression TEXT,
     simple_schedule TEXT, -- JSON: {"type": "interval", "value": 5, "unit": "minutes"}
+    once_at TEXT,
     enabled INTEGER DEFAULT 1,
     timeout_seconds INTEGER DEFAULT 300,
     created_at TEXT NOT NULL,

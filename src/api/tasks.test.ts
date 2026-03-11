@@ -43,6 +43,7 @@ describe('API Tasks', () => {
         prompt: 'My prompt',
         cron_expression: '0 * * * *',
         simple_schedule: undefined,
+        once_at: undefined,
         enabled: 1,
         timeout_seconds: 600,
         created_at: '2024-01-01T00:00:00Z',

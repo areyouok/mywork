@@ -7,15 +7,18 @@ interface NewTask {
   prompt: string;
   cron_expression?: string;
   simple_schedule?: string;
+  once_at?: string;
   enabled?: number;
   timeout_seconds?: number;
 }
 
 interface UpdateTask {
+  schedule_type?: 'cron' | 'simple' | 'once';
   name?: string;
   prompt?: string;
-  cron_expression?: string;
-  simple_schedule?: string;
+  cron_expression?: string | null;
+  simple_schedule?: string | null;
+  once_at?: string | null;
   enabled?: number;
   timeout_seconds?: number;
 }
@@ -42,6 +45,7 @@ export interface RawTask {
   prompt: string;
   cron_expression?: string;
   simple_schedule?: string;
+  once_at?: string;
   enabled: number;
   timeout_seconds: number;
   created_at: string;

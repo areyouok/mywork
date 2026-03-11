@@ -11,6 +11,7 @@ pub struct Task {
     pub prompt: String,
     pub cron_expression: Option<String>,
     pub simple_schedule: Option<String>,
+    pub once_at: Option<String>,
     pub enabled: i32,
     pub timeout_seconds: i32,
     pub created_at: String,
@@ -24,6 +25,7 @@ pub struct NewTask {
     pub prompt: String,
     pub cron_expression: Option<String>,
     pub simple_schedule: Option<String>,
+    pub once_at: Option<String>,
     pub enabled: Option<i32>,
     pub timeout_seconds: Option<i32>,
 }
@@ -33,8 +35,10 @@ pub struct NewTask {
 pub struct UpdateTask {
     pub name: Option<String>,
     pub prompt: Option<String>,
-    pub cron_expression: Option<String>,
-    pub simple_schedule: Option<String>,
+    pub cron_expression: Option<Option<String>>,
+    pub simple_schedule: Option<Option<String>>,
+    pub once_at: Option<Option<String>>,
+    pub schedule_type: Option<String>,
     pub enabled: Option<i32>,
     pub timeout_seconds: Option<i32>,
 }
@@ -57,10 +61,36 @@ pub async fn create_task(pool: &SqlitePool, new_task: NewTask) -> Result<Task, s
     let enabled = new_task.enabled.unwrap_or(1);
     let timeout_seconds = new_task.timeout_seconds.unwrap_or(300);
 
+    let active_schedule_fields = [
+        new_task.cron_expression.is_some(),
+        new_task.simple_schedule.is_some(),
+        new_task.once_at.is_some(),
+    ]
+    .into_iter()
+    .filter(|present| *present)
+    .count();
+
+    if active_schedule_fields > 1 {
+        return Err(sqlx::Error::Protocol(
+            "Task must not have multiple schedule types".into(),
+        ));
+    }
+
+    if let Some(once_at) = &new_task.once_at {
+        let once_dt = DateTime::parse_from_rfc3339(once_at)
+            .map_err(|_| sqlx::Error::Protocol("Invalid once_at format".into()))?;
+
+        if once_dt.with_timezone(&Utc) <= Utc::now() {
+            return Err(sqlx::Error::Protocol(
+                "once_at must be a future timestamp".into(),
+            ));
+        }
+    }
+
     sqlx::query(
         r#"
-        INSERT INTO tasks (id, name, prompt, cron_expression, simple_schedule, enabled, timeout_seconds, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tasks (id, name, prompt, cron_expression, simple_schedule, once_at, enabled, timeout_seconds, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&id)
@@ -68,6 +98,7 @@ pub async fn create_task(pool: &SqlitePool, new_task: NewTask) -> Result<Task, s
     .bind(&new_task.prompt)
     .bind(&new_task.cron_expression)
     .bind(&new_task.simple_schedule)
+    .bind(&new_task.once_at)
     .bind(enabled)
     .bind(timeout_seconds)
     .bind(&created_at)
@@ -81,6 +112,7 @@ pub async fn create_task(pool: &SqlitePool, new_task: NewTask) -> Result<Task, s
         prompt: new_task.prompt,
         cron_expression: new_task.cron_expression,
         simple_schedule: new_task.simple_schedule,
+        once_at: new_task.once_at,
         enabled,
         timeout_seconds,
         created_at,
@@ -100,7 +132,7 @@ pub async fn create_task(pool: &SqlitePool, new_task: NewTask) -> Result<Task, s
 pub async fn get_task(pool: &SqlitePool, id: &str) -> Result<Task, sqlx::Error> {
     sqlx::query_as::<_, Task>(
         r#"
-        SELECT id, name, prompt, cron_expression, simple_schedule, enabled, timeout_seconds, created_at, updated_at
+        SELECT id, name, prompt, cron_expression, simple_schedule, once_at, enabled, timeout_seconds, created_at, updated_at
         FROM tasks
         WHERE id = ?
         "#,
@@ -121,7 +153,7 @@ pub async fn get_task(pool: &SqlitePool, id: &str) -> Result<Task, sqlx::Error> 
 pub async fn get_all_tasks(pool: &SqlitePool) -> Result<Vec<Task>, sqlx::Error> {
     sqlx::query_as::<_, Task>(
         r#"
-        SELECT id, name, prompt, cron_expression, simple_schedule, enabled, timeout_seconds, created_at, updated_at
+        SELECT id, name, prompt, cron_expression, simple_schedule, once_at, enabled, timeout_seconds, created_at, updated_at
         FROM tasks
         ORDER BY updated_at DESC
         "#,
@@ -145,8 +177,85 @@ pub async fn update_task(pool: &SqlitePool, id: &str, update: UpdateTask) -> Res
 
     let name = update.name.unwrap_or(existing.name);
     let prompt = update.prompt.unwrap_or(existing.prompt);
-    let cron_expression = update.cron_expression.or(existing.cron_expression);
-    let simple_schedule = update.simple_schedule.or(existing.simple_schedule);
+    let schedule_type = update.schedule_type.clone();
+
+    let schedule_fields_missing = update.cron_expression.is_none()
+        && update.simple_schedule.is_none()
+        && update.once_at.is_none();
+
+    let (cron_expression, simple_schedule, once_at) = if let Some(kind) = schedule_type {
+        match kind.as_str() {
+            "cron" => {
+                let cron = update.cron_expression.unwrap_or(existing.cron_expression);
+                if cron.is_none() {
+                    return Err(sqlx::Error::Protocol(
+                        "cron schedule requires cron_expression".into(),
+                    ));
+                }
+                (cron, None, None)
+            }
+            "simple" => {
+                let simple = update.simple_schedule.unwrap_or(existing.simple_schedule);
+                if simple.is_none() {
+                    return Err(sqlx::Error::Protocol(
+                        "simple schedule requires simple_schedule".into(),
+                    ));
+                }
+                (None, simple, None)
+            }
+            "once" => {
+                let once = update.once_at.unwrap_or(existing.once_at);
+                let Some(value) = once.clone() else {
+                    return Err(sqlx::Error::Protocol(
+                        "once schedule requires once_at".into(),
+                    ));
+                };
+
+                let parsed = DateTime::parse_from_rfc3339(&value)
+                    .map_err(|_| sqlx::Error::Protocol("Invalid once_at format".into()))?;
+                if parsed.with_timezone(&Utc) <= Utc::now() {
+                    return Err(sqlx::Error::Protocol(
+                        "once_at must be a future timestamp".into(),
+                    ));
+                }
+
+                (None, None, Some(value))
+            }
+            _ => {
+                return Err(sqlx::Error::Protocol(
+                    "schedule_type must be cron, simple, or once".into(),
+                ))
+            }
+        }
+    } else {
+        let cron = update.cron_expression.unwrap_or(existing.cron_expression);
+        let simple = update.simple_schedule.unwrap_or(existing.simple_schedule);
+        let once = update.once_at.unwrap_or(existing.once_at);
+
+        if !schedule_fields_missing {
+            let active_schedule_fields = [cron.is_some(), simple.is_some(), once.is_some()]
+                .into_iter()
+                .filter(|present| *present)
+                .count();
+            if active_schedule_fields > 1 {
+                return Err(sqlx::Error::Protocol(
+                    "Task must not have multiple schedule types".into(),
+                ));
+            }
+
+            if let Some(once_at_value) = &once {
+                let parsed = DateTime::parse_from_rfc3339(once_at_value)
+                    .map_err(|_| sqlx::Error::Protocol("Invalid once_at format".into()))?;
+                if parsed.with_timezone(&Utc) <= Utc::now() {
+                    return Err(sqlx::Error::Protocol(
+                        "once_at must be a future timestamp".into(),
+                    ));
+                }
+            }
+        }
+
+        (cron, simple, once)
+    };
     let enabled = update.enabled.unwrap_or(existing.enabled);
     let timeout_seconds = update.timeout_seconds.unwrap_or(existing.timeout_seconds);
     let updated_at = Utc::now().to_rfc3339();
@@ -154,7 +263,7 @@ pub async fn update_task(pool: &SqlitePool, id: &str, update: UpdateTask) -> Res
     sqlx::query(
         r#"
         UPDATE tasks
-        SET name = ?, prompt = ?, cron_expression = ?, simple_schedule = ?, enabled = ?, timeout_seconds = ?, updated_at = ?
+        SET name = ?, prompt = ?, cron_expression = ?, simple_schedule = ?, once_at = ?, enabled = ?, timeout_seconds = ?, updated_at = ?
         WHERE id = ?
         "#,
     )
@@ -162,6 +271,7 @@ pub async fn update_task(pool: &SqlitePool, id: &str, update: UpdateTask) -> Res
     .bind(&prompt)
     .bind(&cron_expression)
     .bind(&simple_schedule)
+    .bind(&once_at)
     .bind(enabled)
     .bind(timeout_seconds)
     .bind(&updated_at)
@@ -175,6 +285,7 @@ pub async fn update_task(pool: &SqlitePool, id: &str, update: UpdateTask) -> Res
         prompt,
         cron_expression,
         simple_schedule,
+        once_at,
         enabled,
         timeout_seconds,
         created_at: existing.created_at,
@@ -260,6 +371,7 @@ mod tests {
             prompt: "This is a test prompt".to_string(),
             cron_expression: Some("0 * * * *".to_string()),
             simple_schedule: None,
+            once_at: None,
             enabled: Some(1),
             timeout_seconds: Some(300),
         };
@@ -288,6 +400,7 @@ mod tests {
             prompt: "Simple prompt".to_string(),
             cron_expression: None,
             simple_schedule: None,
+            once_at: None,
             enabled: None,
             timeout_seconds: None,
         };
@@ -310,6 +423,7 @@ mod tests {
             prompt: "Get this task".to_string(),
             cron_expression: None,
             simple_schedule: Some(r#"{"type":"interval","value":5,"unit":"minutes"}"#.to_string()),
+            once_at: None,
             enabled: Some(1),
             timeout_seconds: Some(600),
         };
@@ -363,6 +477,7 @@ mod tests {
             prompt: "Prompt 1".to_string(),
             cron_expression: None,
             simple_schedule: None,
+            once_at: None,
             enabled: None,
             timeout_seconds: None,
         };
@@ -371,6 +486,7 @@ mod tests {
             prompt: "Prompt 2".to_string(),
             cron_expression: None,
             simple_schedule: None,
+            once_at: None,
             enabled: None,
             timeout_seconds: None,
         };
@@ -395,6 +511,7 @@ mod tests {
             prompt: "Original prompt".to_string(),
             cron_expression: Some("0 0 * * *".to_string()),
             simple_schedule: None,
+            once_at: None,
             enabled: Some(1),
             timeout_seconds: Some(300),
         };
@@ -408,6 +525,8 @@ mod tests {
             prompt: Some("Updated prompt".to_string()),
             cron_expression: None,
             simple_schedule: None,
+            once_at: None,
+            schedule_type: None,
             enabled: Some(0),
             timeout_seconds: Some(600),
         };
@@ -436,6 +555,7 @@ mod tests {
             prompt: "Original prompt".to_string(),
             cron_expression: None,
             simple_schedule: None,
+            once_at: None,
             enabled: Some(1),
             timeout_seconds: Some(300),
         };
@@ -447,6 +567,8 @@ mod tests {
             prompt: None,
             cron_expression: None,
             simple_schedule: None,
+            once_at: None,
+            schedule_type: None,
             enabled: None,
             timeout_seconds: None,
         };
@@ -471,6 +593,8 @@ mod tests {
             prompt: None,
             cron_expression: None,
             simple_schedule: None,
+            once_at: None,
+            schedule_type: None,
             enabled: None,
             timeout_seconds: None,
         };
@@ -490,6 +614,7 @@ mod tests {
             prompt: "Delete this".to_string(),
             cron_expression: None,
             simple_schedule: None,
+            once_at: None,
             enabled: None,
             timeout_seconds: None,
         };
@@ -529,6 +654,7 @@ mod tests {
             prompt: "Delete this with executions".to_string(),
             cron_expression: None,
             simple_schedule: None,
+            once_at: None,
             enabled: None,
             timeout_seconds: None,
         };
@@ -575,6 +701,7 @@ mod tests {
             prompt: "Test full lifecycle".to_string(),
             cron_expression: None,
             simple_schedule: None,
+            once_at: None,
             enabled: Some(1),
             timeout_seconds: Some(300),
         };
@@ -589,6 +716,8 @@ mod tests {
             prompt: None,
             cron_expression: None,
             simple_schedule: None,
+            once_at: None,
+            schedule_type: None,
             enabled: None,
             timeout_seconds: None,
         };
@@ -600,6 +729,257 @@ mod tests {
 
         let get_result = get_task(&pool, &created.id).await;
         assert!(get_result.is_err());
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_update_task_can_clear_and_switch_schedule_fields() {
+        let (pool, _temp_dir) = setup_test_db().await;
+        let new_task = NewTask {
+            name: "Switch Schedule".to_string(),
+            prompt: "Switch schedule types".to_string(),
+            cron_expression: Some("0 8 * * *".to_string()),
+            simple_schedule: None,
+            once_at: None,
+            enabled: Some(1),
+            timeout_seconds: Some(300),
+        };
+
+        let created = create_task(&pool, new_task).await.expect("Failed to create task");
+
+        let switch_to_once = UpdateTask {
+            name: None,
+            prompt: None,
+            cron_expression: Some(None),
+            simple_schedule: Some(None),
+            once_at: Some(Some("2099-01-01T00:00:00Z".to_string())),
+            schedule_type: Some("once".to_string()),
+            enabled: None,
+            timeout_seconds: None,
+        };
+
+        let once_task = update_task(&pool, &created.id, switch_to_once)
+            .await
+            .expect("Failed to switch to once");
+
+        assert_eq!(once_task.cron_expression, None);
+        assert_eq!(once_task.simple_schedule, None);
+        assert_eq!(once_task.once_at, Some("2099-01-01T00:00:00Z".to_string()));
+
+        let switch_to_simple = UpdateTask {
+            name: None,
+            prompt: None,
+            cron_expression: Some(None),
+            simple_schedule: Some(Some(
+                r#"{"type":"daily","time":"09:30"}"#.to_string(),
+            )),
+            once_at: Some(None),
+            schedule_type: Some("simple".to_string()),
+            enabled: None,
+            timeout_seconds: None,
+        };
+
+        let simple_task = update_task(&pool, &created.id, switch_to_simple)
+            .await
+            .expect("Failed to switch to simple");
+
+        assert_eq!(simple_task.cron_expression, None);
+        assert_eq!(
+            simple_task.simple_schedule,
+            Some(r#"{"type":"daily","time":"09:30"}"#.to_string())
+        );
+        assert_eq!(simple_task.once_at, None);
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_create_task_with_once_schedule() {
+        let (pool, _temp_dir) = setup_test_db().await;
+        let new_task = NewTask {
+            name: "One-time Task".to_string(),
+            prompt: "Run once".to_string(),
+            cron_expression: None,
+            simple_schedule: None,
+            once_at: Some("2099-02-01T10:00:00Z".to_string()),
+            enabled: Some(1),
+            timeout_seconds: Some(120),
+        };
+
+        let task = create_task(&pool, new_task)
+            .await
+            .expect("Task creation should succeed");
+
+        assert_eq!(task.cron_expression, None);
+        assert_eq!(task.simple_schedule, None);
+        assert_eq!(task.once_at, Some("2099-02-01T10:00:00Z".to_string()));
+        assert_eq!(task.timeout_seconds, 120);
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_create_task_requires_exactly_one_schedule_field() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        let new_task = NewTask {
+            name: "Invalid schedule".to_string(),
+            prompt: "Has both cron and simple".to_string(),
+            cron_expression: Some("0 1 * * *".to_string()),
+            simple_schedule: Some(r#"{"type":"daily","time":"09:30"}"#.to_string()),
+            once_at: None,
+            enabled: Some(1),
+            timeout_seconds: Some(300),
+        };
+
+        let result = create_task(&pool, new_task).await;
+        assert!(result.is_err(), "create should fail when multiple schedules are set");
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_create_task_rejects_past_once_at() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        let new_task = NewTask {
+            name: "Past once".to_string(),
+            prompt: "invalid once".to_string(),
+            cron_expression: None,
+            simple_schedule: None,
+            once_at: Some("2000-01-01T00:00:00Z".to_string()),
+            enabled: Some(1),
+            timeout_seconds: Some(300),
+        };
+
+        let result = create_task(&pool, new_task).await;
+        assert!(result.is_err(), "create should fail when once_at is in the past");
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_update_task_rejects_invalid_schedule_type() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        let created = create_task(
+            &pool,
+            NewTask {
+                name: "Update invalid type".to_string(),
+                prompt: "baseline".to_string(),
+                cron_expression: Some("0 2 * * *".to_string()),
+                simple_schedule: None,
+                once_at: None,
+                enabled: Some(1),
+                timeout_seconds: Some(300),
+            },
+        )
+        .await
+        .expect("baseline task create failed");
+
+        let result = update_task(
+            &pool,
+            &created.id,
+            UpdateTask {
+                name: None,
+                prompt: None,
+                cron_expression: None,
+                simple_schedule: None,
+                once_at: None,
+                schedule_type: Some("bad-type".to_string()),
+                enabled: None,
+                timeout_seconds: None,
+            },
+        )
+        .await;
+
+        assert!(result.is_err(), "update should fail for invalid schedule_type");
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_update_task_rejects_multiple_schedule_fields_without_schedule_type() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        let created = create_task(
+            &pool,
+            NewTask {
+                name: "Update multi schedule".to_string(),
+                prompt: "baseline".to_string(),
+                cron_expression: Some("0 3 * * *".to_string()),
+                simple_schedule: None,
+                once_at: None,
+                enabled: Some(1),
+                timeout_seconds: Some(300),
+            },
+        )
+        .await
+        .expect("baseline task create failed");
+
+        let result = update_task(
+            &pool,
+            &created.id,
+            UpdateTask {
+                name: None,
+                prompt: None,
+                cron_expression: Some(Some("0 4 * * *".to_string())),
+                simple_schedule: Some(Some(
+                    r#"{"type":"daily","time":"10:30"}"#.to_string(),
+                )),
+                once_at: None,
+                schedule_type: None,
+                enabled: None,
+                timeout_seconds: None,
+            },
+        )
+        .await;
+
+        assert!(
+            result.is_err(),
+            "update should fail when multiple schedules are set without schedule_type"
+        );
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_update_task_rejects_past_once_at_with_schedule_type_once() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        let created = create_task(
+            &pool,
+            NewTask {
+                name: "Update past once".to_string(),
+                prompt: "baseline".to_string(),
+                cron_expression: Some("0 5 * * *".to_string()),
+                simple_schedule: None,
+                once_at: None,
+                enabled: Some(1),
+                timeout_seconds: Some(300),
+            },
+        )
+        .await
+        .expect("baseline task create failed");
+
+        let result = update_task(
+            &pool,
+            &created.id,
+            UpdateTask {
+                name: None,
+                prompt: None,
+                cron_expression: Some(None),
+                simple_schedule: Some(None),
+                once_at: Some(Some("2000-01-01T00:00:00Z".to_string())),
+                schedule_type: Some("once".to_string()),
+                enabled: None,
+                timeout_seconds: None,
+            },
+        )
+        .await;
+
+        assert!(result.is_err(), "update should fail when once_at is in the past");
 
         pool.close().await;
     }

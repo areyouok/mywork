@@ -7,9 +7,10 @@ import './TaskForm.css';
 export interface TaskFormData {
   name: string;
   prompt: string;
-  schedule_type: 'cron' | 'simple';
+  schedule_type: 'cron' | 'simple' | 'once';
   cron_expression?: string;
   simple_schedule?: string;
+  once_at?: string;
   timeout_seconds: number;
 }
 
@@ -24,18 +25,44 @@ interface FormErrors {
   prompt?: string;
   cron_expression?: string;
   simple_schedule?: string;
+  once_at?: string;
   timeout_seconds?: string;
   submit?: string;
+}
+
+function detectScheduleType(task?: Task): 'cron' | 'simple' | 'once' {
+  if (task?.cron_expression) {
+    return 'cron';
+  }
+  if (task?.once_at) {
+    return 'once';
+  }
+  return 'simple';
+}
+
+function toLocalDateTimeInputValue(iso?: string): string {
+  if (!iso) {
+    return '';
+  }
+
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
   const [name, setName] = useState(initialData?.name || '');
   const [prompt, setPrompt] = useState(initialData?.prompt || '');
-  const [scheduleType, setScheduleType] = useState<'cron' | 'simple'>(
-    initialData?.cron_expression ? 'cron' : 'simple'
+  const [scheduleType, setScheduleType] = useState<'cron' | 'simple' | 'once'>(
+    detectScheduleType(initialData)
   );
   const [cronExpression, setCronExpression] = useState(initialData?.cron_expression || '');
   const [simpleSchedule, setSimpleSchedule] = useState(initialData?.simple_schedule || '');
+  const [onceAt, setOnceAt] = useState(toLocalDateTimeInputValue(initialData?.once_at));
   const [timeoutSeconds, setTimeoutSeconds] = useState(initialData?.timeout_seconds || 300);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,9 +71,10 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
     if (initialData) {
       setName(initialData.name);
       setPrompt(initialData.prompt);
-      setScheduleType(initialData.cron_expression ? 'cron' : 'simple');
+      setScheduleType(detectScheduleType(initialData));
       setCronExpression(initialData.cron_expression || '');
       setSimpleSchedule(initialData.simple_schedule || '');
+      setOnceAt(toLocalDateTimeInputValue(initialData.once_at));
       setTimeoutSeconds(initialData.timeout_seconds);
     }
   }, [initialData]);
@@ -74,9 +102,20 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
       } else if (!validateCronExpression(cronExpression)) {
         newErrors.cron_expression = 'Invalid cron expression';
       }
-    } else {
+    } else if (scheduleType === 'simple') {
       if (!simpleSchedule.trim()) {
         newErrors.simple_schedule = 'Simple schedule is required';
+      }
+    } else {
+      if (!onceAt.trim()) {
+        newErrors.once_at = 'Run time is required';
+      } else {
+        const runAt = new Date(onceAt);
+        if (Number.isNaN(runAt.getTime())) {
+          newErrors.once_at = 'Invalid run time';
+        } else if (runAt.getTime() <= Date.now()) {
+          newErrors.once_at = 'Run time must be in the future';
+        }
       }
     }
 
@@ -107,6 +146,7 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
         schedule_type: scheduleType,
         cron_expression: scheduleType === 'cron' ? cronExpression.trim() : undefined,
         simple_schedule: scheduleType === 'simple' ? simpleSchedule.trim() : undefined,
+        once_at: scheduleType === 'once' ? new Date(onceAt).toISOString() : undefined,
         timeout_seconds: timeoutSeconds,
       });
 
@@ -115,6 +155,7 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
         setPrompt('');
         setCronExpression('');
         setSimpleSchedule('');
+        setOnceAt('');
         setTimeoutSeconds(300);
         setScheduleType('simple');
       } else {
@@ -198,6 +239,17 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
             />
             <span>Simple</span>
           </label>
+          <label className="radio-label">
+            <input
+              type="radio"
+              name="schedule-type"
+              value="once"
+              checked={scheduleType === 'once'}
+              onChange={() => setScheduleType('once')}
+              disabled={isSubmitting}
+            />
+            <span>Once</span>
+          </label>
         </div>
       </div>
 
@@ -217,6 +269,28 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
           error={errors.simple_schedule}
           disabled={isSubmitting}
         />
+      )}
+
+      {scheduleType === 'once' && (
+        <div className="form-field">
+          <label htmlFor="once-at">
+            Run At <span className="required">*</span>
+          </label>
+          <input
+            id="once-at"
+            type="datetime-local"
+            value={onceAt}
+            onChange={(e) => setOnceAt(e.target.value)}
+            aria-invalid={!!errors.once_at}
+            aria-describedby={errors.once_at ? 'once-at-error' : undefined}
+            disabled={isSubmitting}
+          />
+          {errors.once_at && (
+            <span id="once-at-error" className="field-error">
+              {errors.once_at}
+            </span>
+          )}
+        </div>
       )}
 
       <div className="form-field">

@@ -1,9 +1,12 @@
 use crate::db::connection;
 use crate::execution_retention::enforce_execution_history_limit;
+use crate::scheduler::TaskSchedule;
 use crate::scheduler::job_scheduler::{JobCallback, Scheduler, SchedulerState};
 use crate::scheduler::task_queue::{TaskQueue, TaskQueueError};
+use chrono::Utc;
 use sqlx::SqlitePool;
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
@@ -92,9 +95,8 @@ pub async fn reload_scheduler(
             continue;
         }
 
-        // Get cron expression
-        let cron_expr = match crate::scheduler::get_task_cron_expression(task) {
-            Some(expr) => expr,
+        let schedule = match crate::scheduler::get_task_schedule(task) {
+            Some(schedule) => schedule,
             None => {
                 errors.push(format!("Task '{}' has no valid schedule", task.id));
                 continue;
@@ -126,12 +128,31 @@ pub async fn reload_scheduler(
 
         // Add job to scheduler
         let scheduler_guard = scheduler.lock().await;
-        match scheduler_guard
-            .add_job(&task.id, &cron_expr, callback)
-            .await
-        {
-            Ok(_) => loaded_count += 1,
-            Err(e) => errors.push(format!("Failed to add job for task '{}': {}", task.id, e)),
+        let add_result = match schedule {
+            TaskSchedule::Cron(cron_expr) => {
+                scheduler_guard.add_job(&task.id, &cron_expr, callback).await
+            }
+            TaskSchedule::Once(run_at) => {
+                let now = Utc::now();
+                if run_at <= now {
+                    continue;
+                }
+                let duration = (run_at - now)
+                    .to_std()
+                    .unwrap_or_else(|_| Duration::from_secs(0));
+                scheduler_guard
+                    .add_one_shot_job(&task.id, duration, callback)
+                    .await
+            }
+        };
+
+        match add_result {
+            Ok(_) => {
+                loaded_count += 1;
+            }
+            Err(e) => {
+                errors.push(format!("Failed to add job for task '{}': {}", task.id, e));
+            }
         }
     }
 

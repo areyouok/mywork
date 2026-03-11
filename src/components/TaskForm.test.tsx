@@ -24,6 +24,7 @@ describe('TaskForm', () => {
       expect(screen.getByLabelText(/prompt/i)).toBeInTheDocument();
       expect(screen.getByRole('radio', { name: /cron/i })).toBeInTheDocument();
       expect(screen.getByRole('radio', { name: /simple/i })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /once/i })).toBeInTheDocument();
       expect(screen.getByLabelText(/timeout/i)).toBeInTheDocument();
     });
 
@@ -64,6 +65,14 @@ describe('TaskForm', () => {
 
       await user.click(screen.getByRole('radio', { name: /simple/i }));
       expect(screen.getByLabelText(/simple schedule/i)).toBeInTheDocument();
+    });
+
+    it('shows once input when once schedule type is selected', async () => {
+      const user = userEvent.setup();
+      render(<TaskForm onSubmit={vi.fn()} />);
+
+      await user.click(screen.getByRole('radio', { name: /once/i }));
+      expect(screen.getByLabelText(/run at/i)).toBeInTheDocument();
     });
   });
 
@@ -145,6 +154,31 @@ describe('TaskForm', () => {
 
       await user.click(screen.getByRole('button', { name: /create task/i }));
       expect(screen.getByText(/cron expression is required/i)).toBeInTheDocument();
+    });
+
+    it('requires once run time when once type is selected', async () => {
+      const user = userEvent.setup();
+      render(<TaskForm onSubmit={vi.fn()} />);
+
+      await user.type(screen.getByLabelText(/task name/i), 'Test Task');
+      await user.type(screen.getByLabelText(/prompt/i), 'Test prompt');
+      await user.click(screen.getByRole('radio', { name: /once/i }));
+
+      await user.click(screen.getByRole('button', { name: /create task/i }));
+      expect(screen.getByText(/run time is required/i)).toBeInTheDocument();
+    });
+
+    it('validates once run time must be in the future', async () => {
+      const user = userEvent.setup();
+      render(<TaskForm onSubmit={vi.fn()} />);
+
+      await user.type(screen.getByLabelText(/task name/i), 'Test Task');
+      await user.type(screen.getByLabelText(/prompt/i), 'Test prompt');
+      await user.click(screen.getByRole('radio', { name: /once/i }));
+      await user.type(screen.getByLabelText(/run at/i), '2000-01-01T00:00');
+
+      await user.click(screen.getByRole('button', { name: /create task/i }));
+      expect(screen.getByText(/run time must be in the future/i)).toBeInTheDocument();
     });
   });
 
@@ -317,6 +351,10 @@ describe('TaskForm', () => {
       await user.click(screen.getByRole('radio', { name: /simple/i }));
       expect(screen.getByLabelText(/simple schedule/i)).toBeInTheDocument();
       expect(screen.queryByLabelText(/cron expression/i)).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('radio', { name: /once/i }));
+      expect(screen.getByLabelText(/run at/i)).toBeInTheDocument();
+      expect(screen.queryByLabelText(/simple schedule/i)).not.toBeInTheDocument();
     });
   });
 

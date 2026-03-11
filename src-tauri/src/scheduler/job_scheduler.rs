@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use uuid::Uuid;
@@ -188,6 +189,62 @@ impl Scheduler {
             task_id: task_id.to_string(),
             job_id,
             cron_expression: cron_expression.to_string(),
+        };
+
+        let mut jobs = self.jobs.lock().await;
+        jobs.insert(task_id.to_string(), job_info);
+
+        Ok(job_id)
+    }
+
+    pub async fn add_one_shot_job(
+        &self,
+        task_id: &str,
+        duration: Duration,
+        callback: JobCallback,
+    ) -> Result<Uuid, SchedulerError> {
+        let jobs_map = self.jobs.clone();
+        let task_id_for_cleanup = task_id.to_string();
+        let job = Job::new_one_shot_async(duration, move |_uuid, _l| {
+            let cb = callback.clone();
+            let jobs = jobs_map.clone();
+            let cleanup_task_id = task_id_for_cleanup.clone();
+            Box::pin(async move {
+                cb().await;
+                jobs.lock().await.remove(&cleanup_task_id);
+            })
+        })
+        .map_err(|e| SchedulerError::JobAddFailed {
+            task_id: task_id.to_string(),
+            message: e.to_string(),
+        })?;
+
+        let job_id = job.guid();
+
+        let mut scheduler_guard = self.scheduler.lock().await;
+        if scheduler_guard.is_none() {
+            let new_scheduler = JobScheduler::new()
+                .await
+                .map_err(|e| SchedulerError::SchedulerCreationFailed {
+                    message: e.to_string(),
+                })?;
+            *scheduler_guard = Some(new_scheduler);
+        }
+
+        if let Some(sched) = scheduler_guard.as_ref() {
+            sched
+                .add(job)
+                .await
+                .map_err(|e| SchedulerError::JobAddFailed {
+                    task_id: task_id.to_string(),
+                    message: e.to_string(),
+                })?;
+        }
+
+        let job_info = JobInfo {
+            task_id: task_id.to_string(),
+            job_id,
+            cron_expression: format!("@once+{}s", duration.as_secs()),
         };
 
         let mut jobs = self.jobs.lock().await;

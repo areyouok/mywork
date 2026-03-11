@@ -174,14 +174,14 @@ pub fn run() {
                         continue;
                     }
 
-                    let cron_expression = crate::scheduler::get_task_cron_expression(task);
+                    let schedule = crate::scheduler::get_task_schedule(task);
 
-                    if cron_expression.is_none() {
+                    if schedule.is_none() {
                         eprintln!("Task {} has no schedule, skipping", task.id);
                         continue;
                     }
 
-                    let Some(cron_exp) = cron_expression else {
+                    let Some(schedule) = schedule else {
                         continue;
                     };
 
@@ -211,7 +211,23 @@ pub fn run() {
                             as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
                     });
 
-                    if let Err(e) = scheduler.add_job(&task.id, &cron_exp, callback).await {
+                    let add_result = match schedule {
+                        crate::scheduler::TaskSchedule::Cron(cron_exp) => {
+                            scheduler.add_job(&task.id, &cron_exp, callback).await
+                        }
+                        crate::scheduler::TaskSchedule::Once(run_at) => {
+                            let now = chrono::Utc::now();
+                            if run_at <= now {
+                                continue;
+                            }
+                            let duration = (run_at - now)
+                                .to_std()
+                                .unwrap_or_else(|_| std::time::Duration::from_secs(0));
+                            scheduler.add_one_shot_job(&task.id, duration, callback).await
+                        }
+                    };
+
+                    if let Err(e) = add_result {
                         eprintln!("Failed to add job for task {}: {}", task.id, e);
                     }
                 }

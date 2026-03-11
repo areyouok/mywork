@@ -25,6 +25,16 @@ const mockTasks: Task[] = [
     created_at: '2024-01-02T00:00:00Z',
     updated_at: '2024-01-02T00:00:00Z',
   },
+  {
+    id: '3',
+    name: 'Once Task',
+    prompt: 'Run once task',
+    once_at: '2099-01-01T09:30:00Z',
+    enabled: true,
+    timeout_seconds: 300,
+    created_at: '2024-01-03T00:00:00Z',
+    updated_at: '2024-01-03T00:00:00Z',
+  },
 ];
 
 describe('TaskList', () => {
@@ -50,6 +60,7 @@ describe('TaskList', () => {
     it('displays schedule information', () => {
       render(<TaskList tasks={mockTasks} />);
       expect(screen.getByText(/0 9 \* \* \*/i)).toBeInTheDocument();
+      expect(screen.getByText(/one-time at/i)).toBeInTheDocument();
     });
 
     it('displays enabled state correctly', () => {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { TaskListProps, Task } from '@/types/task';
-import { formatSimpleSchedule } from '@/utils/format';
+import { formatOnceAt, formatSimpleSchedule } from '@/utils/format';
 import './TaskList.css';
 
 export function TaskList({
@@ -44,6 +44,9 @@ export function TaskList({
   const formatSchedule = (task: Task): string => {
     if (task.cron_expression) {
       return task.cron_expression;
+    }
+    if (task.once_at) {
+      return formatOnceAt(task.once_at);
     }
     return formatSimpleSchedule(task.simple_schedule);
   };

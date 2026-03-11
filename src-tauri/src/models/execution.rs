@@ -405,6 +405,7 @@ mod tests {
             prompt: "Test prompt".to_string(),
             cron_expression: None,
             simple_schedule: None,
+            once_at: None,
             enabled: None,
             timeout_seconds: None,
         };

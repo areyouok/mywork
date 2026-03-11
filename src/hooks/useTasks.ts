@@ -24,6 +24,7 @@ export function useTasks() {
       prompt: string;
       cron_expression?: string;
       simple_schedule?: string;
+      once_at?: string;
       enabled?: number;
       timeout_seconds?: number;
     }) => {

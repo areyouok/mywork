@@ -101,3 +101,22 @@ export function formatSimpleSchedule(simpleSchedule: string | undefined): string
     return 'Custom schedule';
   }
 }
+
+export function formatOnceAt(onceAt: string | undefined): string {
+  if (!onceAt) {
+    return 'No schedule';
+  }
+
+  const date = new Date(onceAt);
+  if (Number.isNaN(date.getTime())) {
+    return 'One-time (invalid date)';
+  }
+
+  return `One-time at ${date.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })}`;
+}

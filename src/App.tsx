@@ -126,8 +126,10 @@ function App() {
         await updateTask(editingTask.id, {
           name: data.name,
           prompt: data.prompt,
-          cron_expression: data.cron_expression,
-          simple_schedule: data.simple_schedule,
+          schedule_type: data.schedule_type,
+          cron_expression: data.cron_expression ?? null,
+          simple_schedule: data.simple_schedule ?? null,
+          once_at: data.once_at ?? null,
           timeout_seconds: data.timeout_seconds,
         });
         setEditingTask(null);
@@ -137,6 +139,7 @@ function App() {
           prompt: data.prompt,
           cron_expression: data.cron_expression,
           simple_schedule: data.simple_schedule,
+          once_at: data.once_at,
           timeout_seconds: data.timeout_seconds,
           enabled: 1,
         });

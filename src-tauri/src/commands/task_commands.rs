@@ -1,9 +1,12 @@
 use crate::models::task::{NewTask, Task, UpdateTask};
 use crate::scheduler::job_scheduler::Scheduler;
+use crate::scheduler::TaskSchedule;
 use crate::scheduler::task_queue::TaskQueue;
 use crate::storage::output;
+use chrono::Utc;
 use sqlx::SqlitePool;
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{AppHandle, State};
 use tokio::sync::Mutex;
 
@@ -45,11 +48,7 @@ pub async fn create_task(
         .map_err(|e| format!("Failed to create task: {}", e))?;
     
     if task.enabled == 1 {
-        let cron_expression = crate::scheduler::get_task_cron_expression(&task);
-        
-        if let Some(cron_exp) = cron_expression {
-            add_task_to_scheduler(&scheduler, &task_queue, &task, &cron_exp, &pool, &app).await?;
-        }
+        add_task_to_scheduler(&scheduler, &task_queue, &task, &pool, &app).await?;
     }
     
     Ok(task)
@@ -79,11 +78,7 @@ pub async fn update_task(
         .map_err(|e| format!("Failed to update task: {}", e))?;
     
     if task.enabled == 1 {
-        let cron_expression = crate::scheduler::get_task_cron_expression(&task);
-        
-        if let Some(cron_exp) = cron_expression {
-            add_task_to_scheduler(&scheduler, &task_queue, &task, &cron_exp, &pool, &app).await?;
-        }
+        add_task_to_scheduler(&scheduler, &task_queue, &task, &pool, &app).await?;
     }
     
     Ok(task)
@@ -155,34 +150,57 @@ async fn add_task_to_scheduler(
     scheduler: &Arc<Mutex<Scheduler>>,
     task_queue: &Arc<Mutex<TaskQueue>>,
     task: &Task,
-    cron_expression: &str,
     pool: &Arc<SqlitePool>,
     app: &AppHandle,
 ) -> Result<(), String> {
+    let schedule = match crate::scheduler::get_task_schedule(task) {
+        Some(value) => value,
+        None => return Ok(()),
+    };
+
     let scheduler_guard = scheduler.lock().await;
-    
+
     let pool_clone = pool.clone();
     let app_handle = app.clone();
     let task_id = task.id.clone();
     let timeout = task.timeout_seconds as u64;
     let task_queue_clone = task_queue.clone();
-    
+
     let callback = Arc::new(move || {
         let pool = pool_clone.clone();
         let app = app_handle.clone();
         let task_id = task_id.clone();
         let timeout_secs = timeout;
         let task_queue = task_queue_clone.clone();
-        
+
         Box::pin(async move {
             let _ = crate::commands::execute_task_internal(task_id, pool, app, timeout_secs, task_queue).await;
         }) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
     });
-    
-    let _job_id = scheduler_guard
-        .add_job(&task.id, cron_expression, callback)
-        .await
-        .map_err(|e| format!("Failed to add job to scheduler: {}", e))?;
-    
+
+    match schedule {
+        TaskSchedule::Cron(cron_expression) => {
+            let _job_id = scheduler_guard
+                .add_job(&task.id, &cron_expression, callback)
+                .await
+                .map_err(|e| format!("Failed to add job to scheduler: {}", e))?;
+        }
+        TaskSchedule::Once(run_at) => {
+            let now = Utc::now();
+            if run_at <= now {
+                return Ok(());
+            }
+
+            let duration = (run_at - now)
+                .to_std()
+                .unwrap_or_else(|_| Duration::from_secs(0));
+
+            let _job_id = scheduler_guard
+                .add_one_shot_job(&task.id, duration, callback)
+                .await
+                .map_err(|e| format!("Failed to add one-time job to scheduler: {}", e))?;
+        }
+    }
+
     Ok(())
 }
