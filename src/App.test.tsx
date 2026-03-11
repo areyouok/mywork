@@ -218,7 +218,68 @@ describe('App', () => {
   });
 
   it('should update output status badge when execution finishes while staying on output page', async () => {
-    expect(true).toBe(true);
+    const user = userEvent.setup();
+    const listeners: Record<string, (event: { payload: string }) => void> = {};
+    Reflect.set(window, '__TAURI_INTERNALS__', {});
+
+    const runningExecution = {
+      id: 'exec-live',
+      task_id: '1',
+      status: 'running' as const,
+      started_at: '2024-01-01T10:00:00Z',
+      output_file: 'exec-live',
+    };
+    const finishedExecution = {
+      ...runningExecution,
+      status: 'success' as const,
+      finished_at: '2024-01-01T10:05:00Z',
+    };
+
+    let shouldReturnFinished = false;
+    vi.mocked(api.getExecutions).mockImplementation(async (taskId: string) => {
+      if (!taskId) {
+        return [];
+      }
+      return shouldReturnFinished ? [finishedExecution] : [runningExecution];
+    });
+    vi.mocked(api.getOutput).mockResolvedValue('live output');
+    vi.mocked(listen).mockImplementation(async (eventName, handler) => {
+      listeners[eventName] = handler as (event: { payload: string }) => void;
+      return () => {
+        delete listeners[eventName];
+      };
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Daily Code Review')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Daily Code Review'));
+    await user.click(screen.getByRole('button', { name: /history/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('running')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('running'));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /output - execution exec-live/i })
+      ).toBeInTheDocument();
+      expect(screen.getByText('running')).toBeInTheDocument();
+    });
+
+    shouldReturnFinished = true;
+    listeners['execution-finished']?.({ payload: '1' });
+
+    await waitFor(() => {
+      expect(screen.getByText('success')).toBeInTheDocument();
+    });
+
+    Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
   });
 
   it('should show run button as running when scheduler emits execution-started and reset on execution-finished', async () => {

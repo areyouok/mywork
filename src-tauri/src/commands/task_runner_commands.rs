@@ -1,5 +1,6 @@
 use crate::models::execution::{create_execution, update_execution, ExecutionStatus, NewExecution, UpdateExecution};
 use crate::models::task::get_task;
+use crate::opencode::session_parser::parse_session_id;
 use crate::executor::streaming_executor::{StreamLine, StreamingExecutor};
 use crate::scheduler::task_queue::{TaskQueue, SkipResult};
 use crate::storage::output;
@@ -99,10 +100,7 @@ pub async fn run_task(
             match line {
                 StreamLine::Stdout(text) => {
                     if parsed_session_id.is_none() {
-                        let trimmed = text.trim();
-                        if let Some(rest) = trimmed.strip_prefix("Session ID:") {
-                            parsed_session_id = Some(rest.trim().to_string());
-                        }
+                        parsed_session_id = parse_session_id(&text);
                     }
                     output::append_output_file(&output_dir, &execution.id, &format!("{}\n", text))
                         .await

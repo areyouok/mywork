@@ -82,6 +82,7 @@
   flex: 1;
   overflow-y: auto;
   padding: var(--space-sm);
+  min-height: 0;
 }
 
 .sidebar-task-item {

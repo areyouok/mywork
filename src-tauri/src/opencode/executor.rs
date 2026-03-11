@@ -1,4 +1,5 @@
 use crate::scheduler::timeout::{run_with_timeout, TimeoutError};
+use crate::opencode::session_parser::parse_session_id;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -177,7 +178,7 @@ pub async fn run_opencode_task(
     let result_session_id = session_id
         .map(|s| s.to_string())
         .unwrap_or_else(|| {
-            parse_session_from_output(&process_output.stdout)
+            parse_session_id(&process_output.stdout)
                 .unwrap_or_else(|| format!("sess_{}", Uuid::new_v4()))
         });
 
@@ -191,25 +192,6 @@ pub async fn run_opencode_task(
         success,
         timed_out,
     })
-}
-
-/// Parse session ID from OpenCode output
-///
-/// OpenCode outputs session ID in format: "Session: sess_xxx"
-fn parse_session_from_output(output: &str) -> Option<String> {
-    for line in output.lines() {
-        let line = line.trim();
-        if line.starts_with("Session:") || line.starts_with("session:") {
-            let parts: Vec<&str> = line.splitn(2, ':').collect();
-            if parts.len() == 2 {
-                let session_id = parts[1].trim();
-                if !session_id.is_empty() {
-                    return Some(session_id.to_string());
-                }
-            }
-        }
-    }
-    None
 }
 
 /// Create a new OpenCode session
@@ -237,7 +219,7 @@ pub async fn create_session(
     }
 
     // Parse session ID from output
-    parse_session_from_output(&output.stdout).ok_or_else(|| {
+    parse_session_id(&output.stdout).ok_or_else(|| {
         OpenCodeError::OutputParseFailed {
             message: "Failed to parse session ID from output".to_string(),
         }
@@ -325,21 +307,21 @@ mod tests {
     #[test]
     fn test_parse_session_from_output() {
         let output = "Starting OpenCode...\nSession: sess_abc123\nProcessing...";
-        let session_id = parse_session_from_output(output);
+        let session_id = parse_session_id(output);
         assert_eq!(session_id, Some("sess_abc123".to_string()));
     }
 
     #[test]
     fn test_parse_session_from_output_lowercase() {
         let output = "session: sess_xyz789";
-        let session_id = parse_session_from_output(output);
+        let session_id = parse_session_id(output);
         assert_eq!(session_id, Some("sess_xyz789".to_string()));
     }
 
     #[test]
     fn test_parse_session_from_output_no_session() {
         let output = "Some output without session ID";
-        let session_id = parse_session_from_output(output);
+        let session_id = parse_session_id(output);
         assert!(session_id.is_none());
     }
 

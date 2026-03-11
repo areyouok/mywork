@@ -44,7 +44,7 @@ pub async fn execute_task(
         .await
         .map_err(|e| format!("Failed to create output directory: {}", e))?;
     
-    let (status, finished_at, output_file, error_message) = match result {
+    let (session_id, status, finished_at, output_file, error_message) = match result {
         Ok(opencode_output) => {
             let (final_status, err_msg) = if opencode_output.timed_out {
                 (ExecutionStatus::Timeout, Some("Execution timed out".to_string()))
@@ -70,10 +70,11 @@ pub async fn execute_task(
                 .map_err(|e| format!("Failed to write output file: {}", e))?;
             
             (
-                final_status, 
-                Utc::now().to_rfc3339(), 
-                Some(execution.id.clone()), 
-                err_msg
+                Some(opencode_output.session_id),
+                final_status,
+                Utc::now().to_rfc3339(),
+                Some(execution.id.clone()),
+                err_msg,
             )
         }
         Err(e) => {
@@ -87,16 +88,17 @@ pub async fn execute_task(
             let file_path_str = file_path.map(|p| p.to_string_lossy().to_string());
             
             (
-                ExecutionStatus::Failed, 
-                Utc::now().to_rfc3339(), 
-                file_path_str, 
-                Some(error_msg)
+                None,
+                ExecutionStatus::Failed,
+                Utc::now().to_rfc3339(),
+                file_path_str,
+                Some(error_msg),
             )
         }
     };
     
     let update = UpdateExecution {
-        session_id: None,
+        session_id,
         status: Some(status.clone()),
         finished_at: Some(finished_at),
         output_file: output_file.clone(),

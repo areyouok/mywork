@@ -4,8 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::os::unix::process::ExitStatusExt;
 use std::process::ExitStatus;
 use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::Command;
+use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
 use super::process_tracker;
@@ -82,6 +83,43 @@ pub fn kill_process(pid: u32, kill_process_group: bool) -> Result<(), TimeoutErr
     })
 }
 
+fn spawn_output_reader<R>(stream: Option<R>) -> Option<JoinHandle<Result<String, TimeoutError>>>
+where
+    R: AsyncRead + Unpin + Send + 'static,
+{
+    stream.map(|s| tokio::spawn(async move { read_stream_to_string(s).await }))
+}
+
+async fn read_stream_to_string<R>(stream: R) -> Result<String, TimeoutError>
+where
+    R: AsyncRead + Unpin,
+{
+    let mut reader = BufReader::new(stream).lines();
+    let mut lines = Vec::new();
+
+    while let Some(line) = reader.next_line().await.map_err(|e| TimeoutError::ExecutionFailed {
+        message: e.to_string(),
+    })? {
+        lines.push(line);
+    }
+
+    Ok(lines.join("\n"))
+}
+
+async fn join_output_reader(
+    handle: Option<JoinHandle<Result<String, TimeoutError>>>,
+    stream_name: &str,
+) -> Result<String, TimeoutError> {
+    match handle {
+        Some(h) => h
+            .await
+            .map_err(|e| TimeoutError::ExecutionFailed {
+                message: format!("Failed to join {} reader: {}", stream_name, e),
+            })?,
+        None => Ok(String::new()),
+    }
+}
+
 /// Run a command with timeout control
 ///
 /// # Arguments
@@ -127,71 +165,54 @@ pub async fn run_with_timeout(
     
     process_tracker::register_pid(pid);
     
+    let stdout_handle = spawn_output_reader(child.stdout.take());
+    let stderr_handle = spawn_output_reader(child.stderr.take());
+
     let timeout_duration = Duration::from_secs(timeout_secs);
-    let result = timeout(timeout_duration, async {
-        let stdout = child.stdout.take();
-        let stderr = child.stderr.take();
-        
-        let status = child.wait().await.map_err(|e| TimeoutError::ExecutionFailed {
-            message: e.to_string(),
-        })?;
-        
-        process_tracker::unregister_pid(pid);
-        
-        let stdout_str = if let Some(stdout) = stdout {
-            let mut reader = BufReader::new(stdout).lines();
-            let mut lines = Vec::new();
-            while let Some(line) = reader.next_line().await.map_err(|e| TimeoutError::ExecutionFailed {
-                message: e.to_string(),
-            })? {
-                lines.push(line);
-            }
-            lines.join("\n")
-        } else {
-            String::new()
-        };
-        
-        let stderr_str = if let Some(stderr) = stderr {
-            let mut reader = BufReader::new(stderr).lines();
-            let mut lines = Vec::new();
-            while let Some(line) = reader.next_line().await.map_err(|e| TimeoutError::ExecutionFailed {
-                message: e.to_string(),
-            })? {
-                lines.push(line);
-            }
-            lines.join("\n")
-        } else {
-            String::new()
-        };
-        
-        Ok::<ProcessOutput, TimeoutError>(ProcessOutput {
-            status,
-            stdout: stdout_str,
-            stderr: stderr_str,
-            timed_out: false,
-        })
-    })
-    .await;
-    
-    match result {
-        Ok(Ok(output)) => Ok(output),
+    let wait_result = timeout(timeout_duration, child.wait()).await;
+
+    let (status, timed_out) = match wait_result {
+        Ok(Ok(status)) => (status, false),
         Ok(Err(e)) => {
+            if let Some(handle) = &stdout_handle {
+                handle.abort();
+            }
+            if let Some(handle) = &stderr_handle {
+                handle.abort();
+            }
             process_tracker::unregister_pid(pid);
-            Err(e)
+            return Err(TimeoutError::ExecutionFailed {
+                message: e.to_string(),
+            });
         }
         Err(_) => {
-            kill_process(pid, true)?;
+            if let Err(e) = kill_process(pid, true) {
+                if let Some(handle) = &stdout_handle {
+                    handle.abort();
+                }
+                if let Some(handle) = &stderr_handle {
+                    handle.abort();
+                }
+                process_tracker::unregister_pid(pid);
+                return Err(e);
+            }
+
             let _ = child.wait().await;
-            process_tracker::unregister_pid(pid);
-            
-            Ok(ProcessOutput {
-                status: std::process::ExitStatus::from_raw(137),
-                stdout: String::new(),
-                stderr: String::new(),
-                timed_out: true,
-            })
+            (std::process::ExitStatus::from_raw(137), true)
         }
-    }
+    };
+
+    process_tracker::unregister_pid(pid);
+
+    let stdout = join_output_reader(stdout_handle, "stdout").await?;
+    let stderr = join_output_reader(stderr_handle, "stderr").await?;
+
+    Ok(ProcessOutput {
+        status,
+        stdout,
+        stderr,
+        timed_out,
+    })
 }
 
 #[cfg(test)]
@@ -406,5 +427,27 @@ mod tests {
         
         assert!(output2.success());
         assert!(output2.stdout.contains("task-2"));
+    }
+
+    #[tokio::test]
+    async fn test_run_with_timeout_large_output_no_deadlock() {
+        let output = run_with_timeout(
+            "bash",
+            &[
+                "-c",
+                "for i in $(seq 1 5000); do echo out-$i; done; for i in $(seq 1 5000); do echo err-$i >&2; done",
+            ],
+            10,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert!(output.success());
+        assert!(!output.timed_out);
+        assert!(output.stdout.contains("out-1"));
+        assert!(output.stdout.contains("out-5000"));
+        assert!(output.stderr.contains("err-1"));
+        assert!(output.stderr.contains("err-5000"));
     }
 }
