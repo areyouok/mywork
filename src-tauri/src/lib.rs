@@ -208,7 +208,8 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                let _ = window.hide();
+                let app = window.app_handle();
+                let _ = app.hide();
             }
         })
         .build(tauri::generate_context!())
