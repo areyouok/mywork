@@ -5,6 +5,9 @@
   padding: var(--space-xl);
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .form-field {
