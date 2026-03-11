@@ -1,11 +1,11 @@
 # MyWork Scheduler
 
-A Tauri-based desktop application for scheduling and managing AI task executions. This macOS system tray application allows you to schedule and run OpenCode tasks automatically using cron expressions or simple time intervals.
+A Tauri-based desktop application for scheduling and managing AI task executions. This macOS system tray application allows you to schedule and run OpenCode tasks automatically using cron expressions, simple time intervals, or a one-time timestamp.
 
 ## Features
 
 - **System Tray Application**: Runs in the macOS menu bar for easy access
-- **Flexible Scheduling**: Support for both cron expressions and simple time intervals
+- **Flexible Scheduling**: Support for cron expressions, simple time intervals, and one-time execution
 - **Task Management**: Create, edit, enable/disable, and delete scheduled tasks
 - **Execution History**: View detailed history of all task executions
 - **Real-time Streaming**: View task output in real-time during execution
@@ -64,10 +64,11 @@ The built application will be available in `src-tauri/target/release/bundle/maco
    - **Schedule**: Choose between:
      - **Cron Expression**: e.g., `*/5 * * * *` (every 5 minutes)
      - **Simple Schedule**: Select from dropdown (e.g., "Every 5 minutes")
+     - **Once**: Select a future date/time to run once
    - **Timeout**: Maximum execution time in seconds (default: 300)
 4. Click "Save"
 
-Note: Tasks automatically skip execution if a previous run is still in progress.
+Note: Tasks automatically skip execution if a previous run is still in progress. Any task can still be run manually with the **Run** button, regardless of schedule type or previous automatic runs.
 
 ### Viewing Task History
 
@@ -228,6 +229,7 @@ The application uses SQLite for data persistence. The schema is defined in `src-
 | prompt | TEXT | AI prompt/task description |
 | cron_expression | TEXT | Cron expression for scheduling (optional) |
 | simple_schedule | TEXT | JSON for simple interval scheduling |
+| once_at | TEXT | RFC3339 timestamp for one-time scheduling |
 | enabled | INTEGER | Whether task is active (1=yes, 0=no) |
 | timeout_seconds | INTEGER | Execution timeout in seconds (default: 300) |
 | created_at | TEXT | Creation timestamp (ISO 8601) |

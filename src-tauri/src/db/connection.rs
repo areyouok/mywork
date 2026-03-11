@@ -46,25 +46,6 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
             .await?;
     }
 
-    let has_once_at_column: bool = match sqlx::query_scalar(
-        "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name='once_at'",
-    )
-    .fetch_one(pool)
-    .await
-    {
-        Ok(value) => value,
-        Err(e) => {
-            eprintln!("Failed to check once_at schema: {}", e);
-            false
-        }
-    };
-
-    if !has_once_at_column {
-        sqlx::query("ALTER TABLE tasks ADD COLUMN once_at TEXT")
-            .execute(pool)
-            .await?;
-    }
-
     Ok(())
 }
 
@@ -186,61 +167,4 @@ mod tests {
         pool2.close().await;
     }
 
-    #[tokio::test]
-    async fn test_migration_adds_once_at_column() {
-        let temp_dir = tempdir().expect("Failed to create temp dir");
-        let db_path = temp_dir.path().join("test.db");
-
-        let pool = SqlitePool::connect(&format!("sqlite:{}?mode=rwc", db_path.display()))
-            .await
-            .expect("Failed to connect");
-
-        sqlx::query(
-            "CREATE TABLE tasks (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                prompt TEXT NOT NULL,
-                cron_expression TEXT,
-                simple_schedule TEXT,
-                enabled INTEGER DEFAULT 1,
-                timeout_seconds INTEGER DEFAULT 300,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )",
-        )
-        .execute(&pool)
-        .await
-        .expect("Failed to create legacy tasks table");
-
-        sqlx::query(
-            "CREATE TABLE executions (
-                id TEXT PRIMARY KEY,
-                task_id TEXT NOT NULL,
-                session_id TEXT,
-                status TEXT NOT NULL,
-                started_at TEXT NOT NULL,
-                finished_at TEXT,
-                output_file TEXT,
-                error_message TEXT,
-                FOREIGN KEY (task_id) REFERENCES tasks(id)
-            )",
-        )
-        .execute(&pool)
-        .await
-        .expect("Failed to create executions table");
-
-        pool.close().await;
-
-        let pool2 = init_database(&db_path).await.expect("Failed to run migration");
-
-        let has_once_at: bool = sqlx::query_scalar(
-            "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name='once_at'",
-        )
-        .fetch_one(&pool2)
-        .await
-        .expect("Failed to check once_at column");
-
-        assert!(has_once_at, "once_at column should be added by migration");
-        pool2.close().await;
-    }
 }
