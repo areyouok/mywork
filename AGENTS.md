@@ -118,6 +118,7 @@ npm run format        # Prettier
 
 - Review changes with `git diff` before committing
 - Never commit: `dist/`, `build/`, `target/`, `*.log`, `*.tmp`, `node_modules/`, `.env`
+- Use English for commit messages
 
 ## DATA STORAGE
 
