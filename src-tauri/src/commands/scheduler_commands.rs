@@ -172,7 +172,10 @@ pub async fn execute_task_internal(
             eprintln!("Task '{}' is already running, skipping execution", task_id);
             return Ok(());
         }
-        Ok(Err(SkipResult::Execute)) => unreachable!("acquire_slot_with_skip should not return Execute in Err"),
+        Ok(Err(SkipResult::Execute)) => {
+            eprintln!("Task '{}' received unexpected execute skip result", task_id);
+            return Ok(());
+        }
         Err(e) => {
             eprintln!("Failed to acquire slot for task '{}': {}", task_id, e);
             return Ok(());

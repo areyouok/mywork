@@ -3,8 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('History View E2E', () => {
   test('should display execution history with clickable output items', async ({ page }) => {
     await page.addInitScript(() => {
-      // @ts-ignore
-      window.__TAURI_INTERNALS__ = {
+      Reflect.set(window, '__TAURI_INTERNALS__', {
         invoke: async (cmd: string, args?: any) => {
           console.log(`Mock invoke: ${cmd}`, args);
 
@@ -50,7 +49,7 @@ test.describe('History View E2E', () => {
 
           return null;
         },
-      };
+      });
     });
 
     await page.goto('/');
@@ -60,7 +59,7 @@ test.describe('History View E2E', () => {
     await page.fill('#task-name', 'Task With Output');
     await page.fill('#prompt', 'echo hello');
     await page.click('input[value="cron"]');
-    await page.fill('#cron-expression', '0 9 * * *');
+    await page.getByLabel('Cron Expression *').fill('0 9 * * *');
     await page.click('button:has-text("Create Task")');
 
     await expect(page.locator('h2:has-text("Create New Task")')).not.toBeVisible();
@@ -81,8 +80,7 @@ test.describe('History View E2E', () => {
 
   test('should not allow clicking execution items without output', async ({ page }) => {
     await page.addInitScript(() => {
-      // @ts-ignore
-      window.__TAURI_INTERNALS__ = {
+      Reflect.set(window, '__TAURI_INTERNALS__', {
         invoke: async (cmd: string, args?: any) => {
           console.log(`Mock invoke: ${cmd}`, args);
 
@@ -128,7 +126,7 @@ test.describe('History View E2E', () => {
 
           return null;
         },
-      };
+      });
     });
 
     await page.goto('/');
@@ -138,7 +136,7 @@ test.describe('History View E2E', () => {
     await page.fill('#task-name', 'Task Without Output');
     await page.fill('#prompt', 'exit 1');
     await page.click('input[value="cron"]');
-    await page.fill('#cron-expression', '0 10 * * *');
+    await page.getByLabel('Cron Expression *').fill('0 10 * * *');
     await page.click('button:has-text("Create Task")');
 
     await expect(page.locator('h2:has-text("Create New Task")')).not.toBeVisible();
@@ -158,8 +156,7 @@ test.describe('History View E2E', () => {
 
   test('should display execution history with multiple executions', async ({ page }) => {
     await page.addInitScript(() => {
-      // @ts-ignore
-      window.__TAURI_INTERNALS__ = {
+      Reflect.set(window, '__TAURI_INTERNALS__', {
         invoke: async (cmd: string, args?: any) => {
           console.log(`Mock invoke: ${cmd}`, args);
 
@@ -223,7 +220,7 @@ test.describe('History View E2E', () => {
 
           return null;
         },
-      };
+      });
     });
 
     await page.goto('/');
@@ -233,7 +230,7 @@ test.describe('History View E2E', () => {
     await page.fill('#task-name', 'Task With Multiple Runs');
     await page.fill('#prompt', 'multiple executions');
     await page.click('input[value="cron"]');
-    await page.fill('#cron-expression', '0 * * * *');
+    await page.getByLabel('Cron Expression *').fill('0 * * * *');
     await page.click('button:has-text("Create Task")');
 
     await expect(page.locator('h2:has-text("Create New Task")')).not.toBeVisible();
@@ -255,8 +252,7 @@ test.describe('History View E2E', () => {
 
   test('should handle keyboard navigation for output viewing', async ({ page }) => {
     await page.addInitScript(() => {
-      // @ts-ignore
-      window.__TAURI_INTERNALS__ = {
+      Reflect.set(window, '__TAURI_INTERNALS__', {
         invoke: async (cmd: string, args?: any) => {
           console.log(`Mock invoke: ${cmd}`, args);
 
@@ -302,7 +298,7 @@ test.describe('History View E2E', () => {
 
           return null;
         },
-      };
+      });
     });
 
     await page.goto('/');
@@ -312,7 +308,7 @@ test.describe('History View E2E', () => {
     await page.fill('#task-name', 'Keyboard Navigation Task');
     await page.fill('#prompt', 'echo test');
     await page.click('input[value="cron"]');
-    await page.fill('#cron-expression', '0 9 * * *');
+    await page.getByLabel('Cron Expression *').fill('0 9 * * *');
     await page.click('button:has-text("Create Task")');
 
     await expect(page.locator('h2:has-text("Create New Task")')).not.toBeVisible();
@@ -334,8 +330,7 @@ test.describe('History View E2E', () => {
 
   test('should verify execution history displays correct information', async ({ page }) => {
     await page.addInitScript(() => {
-      // @ts-ignore
-      window.__TAURI_INTERNALS__ = {
+      Reflect.set(window, '__TAURI_INTERNALS__', {
         invoke: async (cmd: string, args?: any) => {
           console.log(`Mock invoke: ${cmd}`, args);
 
@@ -381,7 +376,7 @@ test.describe('History View E2E', () => {
 
           return null;
         },
-      };
+      });
     });
 
     await page.goto('/');
@@ -391,7 +386,7 @@ test.describe('History View E2E', () => {
     await page.fill('#task-name', 'Info Display Task');
     await page.fill('#prompt', 'info test');
     await page.click('input[value="cron"]');
-    await page.fill('#cron-expression', '0 9 * * *');
+    await page.getByLabel('Cron Expression *').fill('0 9 * * *');
     await page.click('button:has-text("Create Task")');
 
     await expect(page.locator('h2:has-text("Create New Task")')).not.toBeVisible();
@@ -406,7 +401,7 @@ test.describe('History View E2E', () => {
     await expect(page.locator('.execution-time')).toBeVisible();
 
     await expect(page.locator('.execution-duration')).toContainText('Duration:');
-    await expect(page.locator('.execution-duration')).toContainText('5m');
+    await expect(page.locator('.execution-duration')).toContainText('5 minutes');
 
     await page.screenshot({ path: '.sisyphus/evidence/task-28-info-display.png' });
   });

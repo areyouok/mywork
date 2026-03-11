@@ -24,7 +24,12 @@ pub async fn run_task(
         Ok(Err(SkipResult::Skipped { task_id })) => {
             return Err(format!("Task '{}' is already running", task_id));
         }
-        Ok(Err(SkipResult::Execute)) => unreachable!(),
+        Ok(Err(SkipResult::Execute)) => {
+            return Err(format!(
+                "Unexpected queue state while acquiring slot for task '{}'",
+                task_id
+            ));
+        }
         Err(e) => {
             return Err(format!("Failed to acquire slot: {}", e));
         }

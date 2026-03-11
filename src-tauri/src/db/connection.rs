@@ -28,12 +28,17 @@ pub async fn init_database(db_path: &Path) -> Result<SqlitePool, sqlx::Error> {
 }
 
 async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    let has_legacy_column: bool = sqlx::query_scalar(
+    let has_legacy_column: bool = match sqlx::query_scalar(
         "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name='skip_if_running'",
     )
     .fetch_one(pool)
-    .await
-    .unwrap_or(false);
+    .await {
+        Ok(value) => value,
+        Err(e) => {
+            eprintln!("Failed to check legacy schema: {}", e);
+            false
+        }
+    };
 
     if has_legacy_column {
         sqlx::query("ALTER TABLE tasks DROP COLUMN skip_if_running")

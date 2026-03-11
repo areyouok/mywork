@@ -28,8 +28,12 @@ export function useScheduler() {
   }, []);
 
   useEffect(() => {
-    void loadRunningTasks();
-    void initScheduler();
+    const timer = setTimeout(() => {
+      void loadRunningTasks();
+      void initScheduler();
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [loadRunningTasks, initScheduler]);
 
   const addRunningTask = useCallback((taskId: string) => {

@@ -115,9 +115,15 @@ pub async fn run_with_timeout(
         })?;
     
     // Get PID before moving child
-    let pid = child.id().ok_or_else(|| TimeoutError::ExecutionFailed {
-        message: "Failed to get process PID".to_string(),
-    })?;
+    let pid = match child.id() {
+        Some(pid) => pid,
+        None => {
+            let _ = child.wait().await;
+            return Err(TimeoutError::ExecutionFailed {
+                message: "Failed to get process PID".to_string(),
+            });
+        }
+    };
     
     process_tracker::register_pid(pid);
     

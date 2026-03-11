@@ -3,8 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Task Creation E2E', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-      // @ts-ignore
-      window.__TAURI_INTERNALS__ = {
+      Reflect.set(window, '__TAURI_INTERNALS__', {
         invoke: async (cmd: string, args?: any) => {
           console.log(`Mock invoke: ${cmd}`, args);
 
@@ -30,7 +29,7 @@ test.describe('Task Creation E2E', () => {
 
           return null;
         },
-      };
+      });
     });
   });
 
@@ -61,14 +60,12 @@ test.describe('Task Creation E2E', () => {
     await page.click('input[value="cron"]');
 
     // Fill cron expression
-    await page.fill('#cron-expression', '0 9 * * *');
+    await page.getByLabel('Cron Expression *').fill('0 9 * * *');
 
     // Set timeout
     await page.fill('#timeout', '600');
 
     // Check "Skip if running"
-    await page.check('input[type="checkbox"]');
-
     // Take screenshot before submission
     await page.screenshot({ path: '.sisyphus/evidence/task-26-form-filled.png' });
 
@@ -119,7 +116,8 @@ test.describe('Task Creation E2E', () => {
     await page.click('input[value="simple"]');
 
     // Fill simple schedule
-    await page.fill('#simple-schedule', '{"type":"daily","time":"09:30"}');
+    await page.getByLabel('Simple Schedule *').selectOption('daily');
+    await page.getByLabel('Time (24h)').fill('09:30');
 
     // Submit
     await page.click('button:has-text("Create Task")');

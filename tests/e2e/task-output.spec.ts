@@ -53,8 +53,7 @@ test.describe('Task Output E2E', () => {
 
       const nowIso = () => new Date().toISOString();
 
-      // @ts-ignore
-      window.__TAURI_INTERNALS__ = {
+      Reflect.set(window, '__TAURI_INTERNALS__', {
         invoke: async (cmd: string, args?: any) => {
           if (cmd === 'get_tasks') return state.tasks;
           if (cmd === 'reload_scheduler') return 'scheduler reloaded';
@@ -130,7 +129,7 @@ test.describe('Task Output E2E', () => {
 
           return null;
         },
-      };
+      });
     });
 
     await page.goto('/');

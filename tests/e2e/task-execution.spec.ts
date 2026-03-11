@@ -3,8 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Task Execution E2E', () => {
   test('should display empty execution history for new task', async ({ page }) => {
     await page.addInitScript(() => {
-      // @ts-ignore
-      window.__TAURI_INTERNALS__ = {
+      Reflect.set(window, '__TAURI_INTERNALS__', {
         invoke: async (cmd: string, args?: any) => {
           console.log(`Mock invoke: ${cmd}`, args);
 
@@ -34,7 +33,7 @@ test.describe('Task Execution E2E', () => {
 
           return null;
         },
-      };
+      });
     });
 
     await page.goto('/');
@@ -50,7 +49,7 @@ test.describe('Task Execution E2E', () => {
     await page.fill('#prompt', 'echo test');
 
     await page.click('input[value="cron"]');
-    await page.fill('#cron-expression', '0 9 * * *');
+    await page.getByLabel('Cron Expression *').fill('0 9 * * *');
 
     await page.click('button:has-text("Create Task")');
 
@@ -77,8 +76,7 @@ test.describe('Task Execution E2E', () => {
 
   test('should display execution history with success status', async ({ page }) => {
     await page.addInitScript(() => {
-      // @ts-ignore
-      window.__TAURI_INTERNALS__ = {
+      Reflect.set(window, '__TAURI_INTERNALS__', {
         invoke: async (cmd: string, args?: any) => {
           console.log(`Mock invoke: ${cmd}`, args);
 
@@ -124,7 +122,7 @@ test.describe('Task Execution E2E', () => {
 
           return null;
         },
-      };
+      });
     });
 
     await page.goto('/');
@@ -134,7 +132,7 @@ test.describe('Task Execution E2E', () => {
     await page.fill('#task-name', 'Task With Multiple Executions');
     await page.fill('#prompt', 'multiple runs');
     await page.click('input[value="cron"]');
-    await page.fill('#cron-expression', '0 12 * * *');
+    await page.getByLabel('Cron Expression *').fill('0 12 * * *');
     await page.click('button:has-text("Create Task")');
 
     await expect(page.locator('h2:has-text("Create New Task")')).not.toBeVisible();
@@ -164,8 +162,7 @@ test.describe('Task Execution E2E', () => {
 
   test('should display execution history with timeout status', async ({ page }) => {
     await page.addInitScript(() => {
-      // @ts-ignore
-      window.__TAURI_INTERNALS__ = {
+      Reflect.set(window, '__TAURI_INTERNALS__', {
         invoke: async (cmd: string, args?: any) => {
           console.log(`Mock invoke: ${cmd}`, args);
 
@@ -211,7 +208,7 @@ test.describe('Task Execution E2E', () => {
 
           return null;
         },
-      };
+      });
     });
 
     await page.goto('/');
@@ -221,7 +218,7 @@ test.describe('Task Execution E2E', () => {
     await page.fill('#task-name', 'Task With Success Execution');
     await page.fill('#prompt', 'echo success');
     await page.click('input[value="cron"]');
-    await page.fill('#cron-expression', '0 9 * * *');
+    await page.getByLabel('Cron Expression *').fill('0 9 * * *');
     await page.click('button:has-text("Create Task")');
 
     await expect(page.locator('h2:has-text("Create New Task")')).not.toBeVisible();
@@ -240,8 +237,7 @@ test.describe('Task Execution E2E', () => {
 
   test('should display execution history with failed status', async ({ page }) => {
     await page.addInitScript(() => {
-      // @ts-ignore
-      window.__TAURI_INTERNALS__ = {
+      Reflect.set(window, '__TAURI_INTERNALS__', {
         invoke: async (cmd: string, args?: any) => {
           console.log(`Mock invoke: ${cmd}`, args);
 
@@ -287,7 +283,7 @@ test.describe('Task Execution E2E', () => {
 
           return null;
         },
-      };
+      });
     });
 
     await page.goto('/');
@@ -297,7 +293,7 @@ test.describe('Task Execution E2E', () => {
     await page.fill('#task-name', 'Task With Timeout');
     await page.fill('#prompt', 'sleep 600');
     await page.click('input[value="cron"]');
-    await page.fill('#cron-expression', '0 10 * * *');
+    await page.getByLabel('Cron Expression *').fill('0 10 * * *');
     await page.fill('#timeout', '5');
     await page.click('button:has-text("Create Task")');
 
@@ -322,8 +318,7 @@ test.describe('Task Execution E2E', () => {
 
   test('should display multiple executions in history', async ({ page }) => {
     await page.addInitScript(() => {
-      // @ts-ignore
-      window.__TAURI_INTERNALS__ = {
+      Reflect.set(window, '__TAURI_INTERNALS__', {
         invoke: async (cmd: string, args?: any) => {
           console.log(`Mock invoke: ${cmd}`, args);
 
@@ -387,7 +382,7 @@ test.describe('Task Execution E2E', () => {
 
           return null;
         },
-      };
+      });
     });
 
     await page.goto('/');
@@ -397,7 +392,7 @@ test.describe('Task Execution E2E', () => {
     await page.fill('#task-name', 'Task With Failed Execution');
     await page.fill('#prompt', 'exit 1');
     await page.click('input[value="cron"]');
-    await page.fill('#cron-expression', '0 11 * * *');
+    await page.getByLabel('Cron Expression *').fill('0 11 * * *');
     await page.click('button:has-text("Create Task")');
 
     await expect(page.locator('h2:has-text("Create New Task")')).not.toBeVisible();

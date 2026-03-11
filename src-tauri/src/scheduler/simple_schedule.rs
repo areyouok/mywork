@@ -137,15 +137,22 @@ fn parse_weekly(value: &serde_json::Value) -> Result<String, ScheduleError> {
 
 /// Parse time string "HH:MM" into (hour, minute)
 fn parse_time(time: &str) -> Result<(u32, u32), ScheduleError> {
-    let parts: Vec<&str> = time.split(':').collect();
-    if parts.len() != 2 {
+    let mut parts = time.split(':');
+    let Some(hour_part) = parts.next() else {
+        return Err(ScheduleError::InvalidTimeFormat(time.to_string()));
+    };
+    let Some(minute_part) = parts.next() else {
+        return Err(ScheduleError::InvalidTimeFormat(time.to_string()));
+    };
+
+    if parts.next().is_some() {
         return Err(ScheduleError::InvalidTimeFormat(time.to_string()));
     }
 
-    let hour: u32 = parts[0]
+    let hour: u32 = hour_part
         .parse()
         .map_err(|_| ScheduleError::InvalidTimeFormat(time.to_string()))?;
-    let minute: u32 = parts[1]
+    let minute: u32 = minute_part
         .parse()
         .map_err(|_| ScheduleError::InvalidTimeFormat(time.to_string()))?;
 
