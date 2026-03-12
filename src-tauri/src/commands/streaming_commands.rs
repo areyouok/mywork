@@ -6,8 +6,8 @@ use crate::models::task;
 use crate::opencode::executor::resolve_opencode_binary_path;
 use serde::Serialize;
 use sqlx::SqlitePool;
-use tauri::{AppHandle, State};
 use tauri::ipc::Channel;
+use tauri::{AppHandle, State};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

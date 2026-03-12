@@ -50,12 +50,11 @@ impl std::fmt::Display for SchedulerError {
             SchedulerError::JobNotFound { task_id } => {
                 write!(f, "Job not found for task {}", task_id)
             }
-            SchedulerError::InvalidCronExpression { expression, message } => {
-                write!(
-                    f,
-                    "Invalid cron expression '{}': {}",
-                    expression, message
-                )
+            SchedulerError::InvalidCronExpression {
+                expression,
+                message,
+            } => {
+                write!(f, "Invalid cron expression '{}': {}", expression, message)
             }
             SchedulerError::AlreadyRunning => {
                 write!(f, "Scheduler is already running")
@@ -70,7 +69,8 @@ impl std::fmt::Display for SchedulerError {
 impl std::error::Error for SchedulerError {}
 
 /// Job callback type - async function that executes when job triggers
-pub type JobCallback = Arc<dyn Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>;
+pub type JobCallback =
+    Arc<dyn Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>;
 
 /// Job information stored in the scheduler
 #[derive(Debug, Clone)]
@@ -145,9 +145,11 @@ impl Scheduler {
         cron_expression: &str,
         callback: JobCallback,
     ) -> Result<Uuid, SchedulerError> {
-        super::validate_cron(cron_expression).map_err(|e| SchedulerError::InvalidCronExpression {
-            expression: cron_expression.to_string(),
-            message: e.to_string(),
+        super::validate_cron(cron_expression).map_err(|e| {
+            SchedulerError::InvalidCronExpression {
+                expression: cron_expression.to_string(),
+                message: e.to_string(),
+            }
         })?;
 
         let six_field_cron = format!("0 {}", cron_expression);
@@ -173,11 +175,12 @@ impl Scheduler {
         let mut scheduler_guard = self.scheduler.lock().await;
         let mut created_scheduler = false;
         if scheduler_guard.is_none() {
-            let new_scheduler = JobScheduler::new()
-                .await
-                .map_err(|e| SchedulerError::SchedulerCreationFailed {
-                    message: e.to_string(),
-                })?;
+            let new_scheduler =
+                JobScheduler::new()
+                    .await
+                    .map_err(|e| SchedulerError::SchedulerCreationFailed {
+                        message: e.to_string(),
+                    })?;
             *scheduler_guard = Some(new_scheduler);
             created_scheduler = true;
         }
@@ -255,11 +258,12 @@ impl Scheduler {
         let mut scheduler_guard = self.scheduler.lock().await;
         let mut created_scheduler = false;
         if scheduler_guard.is_none() {
-            let new_scheduler = JobScheduler::new()
-                .await
-                .map_err(|e| SchedulerError::SchedulerCreationFailed {
-                    message: e.to_string(),
-                })?;
+            let new_scheduler =
+                JobScheduler::new()
+                    .await
+                    .map_err(|e| SchedulerError::SchedulerCreationFailed {
+                        message: e.to_string(),
+                    })?;
             *scheduler_guard = Some(new_scheduler);
             created_scheduler = true;
         }
@@ -345,11 +349,12 @@ impl Scheduler {
 
         let mut scheduler_guard = self.scheduler.lock().await;
         if scheduler_guard.is_none() {
-            let new_scheduler = JobScheduler::new()
-                .await
-                .map_err(|e| SchedulerError::SchedulerCreationFailed {
-                    message: e.to_string(),
-                })?;
+            let new_scheduler =
+                JobScheduler::new()
+                    .await
+                    .map_err(|e| SchedulerError::SchedulerCreationFailed {
+                        message: e.to_string(),
+                    })?;
             *scheduler_guard = Some(new_scheduler);
         }
 
@@ -457,7 +462,9 @@ mod tests {
     #[tokio::test]
     async fn test_add_job_invalid_cron() {
         let scheduler = Scheduler::new();
-        let callback: JobCallback = Arc::new(|| Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>);
+        let callback: JobCallback = Arc::new(|| {
+            Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+        });
 
         let result = scheduler.add_job("task-1", "invalid", callback).await;
 
@@ -471,7 +478,9 @@ mod tests {
     #[tokio::test]
     async fn test_remove_job_success() {
         let scheduler = Scheduler::new();
-        let callback: JobCallback = Arc::new(|| Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>);
+        let callback: JobCallback = Arc::new(|| {
+            Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+        });
 
         scheduler
             .add_job("task-1", "*/5 * * * *", callback.clone())
@@ -505,7 +514,9 @@ mod tests {
     #[tokio::test]
     async fn test_start_scheduler() {
         let scheduler = Scheduler::new();
-        let callback: JobCallback = Arc::new(|| Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>);
+        let callback: JobCallback = Arc::new(|| {
+            Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+        });
 
         scheduler
             .add_job("task-1", "*/5 * * * *", callback)
@@ -520,7 +531,9 @@ mod tests {
     #[tokio::test]
     async fn test_start_already_running() {
         let scheduler = Scheduler::new();
-        let callback: JobCallback = Arc::new(|| Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>);
+        let callback: JobCallback = Arc::new(|| {
+            Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+        });
 
         scheduler
             .add_job("task-1", "*/5 * * * *", callback)
@@ -531,13 +544,18 @@ mod tests {
 
         let result = scheduler.start().await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), SchedulerError::AlreadyRunning));
+        assert!(matches!(
+            result.unwrap_err(),
+            SchedulerError::AlreadyRunning
+        ));
     }
 
     #[tokio::test]
     async fn test_stop_scheduler() {
         let scheduler = Scheduler::new();
-        let callback: JobCallback = Arc::new(|| Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>);
+        let callback: JobCallback = Arc::new(|| {
+            Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+        });
 
         scheduler
             .add_job("task-1", "*/5 * * * *", callback)
@@ -589,7 +607,9 @@ mod tests {
     #[tokio::test]
     async fn test_multiple_jobs() {
         let scheduler = Scheduler::new();
-        let callback: JobCallback = Arc::new(|| Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>);
+        let callback: JobCallback = Arc::new(|| {
+            Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+        });
 
         scheduler
             .add_job("task-1", "*/5 * * * *", callback.clone())
@@ -615,7 +635,9 @@ mod tests {
     #[tokio::test]
     async fn test_get_job_info() {
         let scheduler = Scheduler::new();
-        let callback: JobCallback = Arc::new(|| Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>);
+        let callback: JobCallback = Arc::new(|| {
+            Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+        });
 
         let job_id = scheduler
             .add_job("task-1", "*/5 * * * *", callback)
@@ -649,7 +671,9 @@ mod tests {
     #[tokio::test]
     async fn test_add_job_after_start() {
         let scheduler = Scheduler::new();
-        let callback: JobCallback = Arc::new(|| Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>);
+        let callback: JobCallback = Arc::new(|| {
+            Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+        });
 
         scheduler
             .add_job("task-1", "*/5 * * * *", callback.clone())
@@ -674,7 +698,10 @@ mod tests {
 
         assert_eq!(scheduler.get_state().await, SchedulerState::Running);
         let scheduler_guard = scheduler.scheduler.lock().await;
-        assert!(scheduler_guard.is_some(), "scheduler instance should be initialized on start");
+        assert!(
+            scheduler_guard.is_some(),
+            "scheduler instance should be initialized on start"
+        );
     }
 
     #[tokio::test]
@@ -683,10 +710,7 @@ mod tests {
         let counter = Arc::new(AtomicUsize::new(0));
         let counter_clone = counter.clone();
 
-        scheduler
-            .start()
-            .await
-            .expect("Failed to start scheduler");
+        scheduler.start().await.expect("Failed to start scheduler");
 
         let callback: JobCallback = Arc::new(move || {
             let c = counter_clone.clone();
@@ -708,7 +732,9 @@ mod tests {
     #[tokio::test]
     async fn test_replace_one_shot_with_cron_reuses_task_id_safely() {
         let scheduler = Scheduler::new();
-        let callback: JobCallback = Arc::new(|| Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>);
+        let callback: JobCallback = Arc::new(|| {
+            Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+        });
 
         scheduler
             .add_one_shot_job("task-switch", Duration::from_secs(30), callback.clone())
@@ -745,10 +771,7 @@ mod tests {
         let gate = Arc::new(tokio::sync::Notify::new());
         let callback_started = Arc::new(AtomicUsize::new(0));
 
-        scheduler
-            .start()
-            .await
-            .expect("Failed to start scheduler");
+        scheduler.start().await.expect("Failed to start scheduler");
 
         let gate_clone = gate.clone();
         let started_clone = callback_started.clone();
@@ -792,7 +815,9 @@ mod tests {
     #[tokio::test]
     async fn test_remove_job_after_start() {
         let scheduler = Scheduler::new();
-        let callback: JobCallback = Arc::new(|| Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>);
+        let callback: JobCallback = Arc::new(|| {
+            Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+        });
 
         scheduler
             .add_job("task-1", "*/5 * * * *", callback.clone())

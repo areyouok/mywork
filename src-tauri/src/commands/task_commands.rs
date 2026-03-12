@@ -1,7 +1,7 @@
 use crate::models::task::{NewTask, Task, UpdateTask};
 use crate::scheduler::job_scheduler::Scheduler;
-use crate::scheduler::TaskSchedule;
 use crate::scheduler::task_queue::TaskQueue;
+use crate::scheduler::TaskSchedule;
 use crate::storage::output;
 use chrono::Utc;
 use sqlx::SqlitePool;
@@ -12,9 +12,7 @@ use tokio::sync::Mutex;
 
 /// Get all tasks
 #[tauri::command]
-pub async fn get_tasks(
-    pool: State<'_, Arc<SqlitePool>>,
-) -> Result<Vec<Task>, String> {
+pub async fn get_tasks(pool: State<'_, Arc<SqlitePool>>) -> Result<Vec<Task>, String> {
     let pool = pool.inner().clone();
     crate::models::task::get_all_tasks(&pool)
         .await
@@ -23,10 +21,7 @@ pub async fn get_tasks(
 
 /// Get a single task by ID
 #[tauri::command]
-pub async fn get_task(
-    id: String,
-    pool: State<'_, Arc<SqlitePool>>,
-) -> Result<Task, String> {
+pub async fn get_task(id: String, pool: State<'_, Arc<SqlitePool>>) -> Result<Task, String> {
     let pool = pool.inner().clone();
     crate::models::task::get_task(&pool, &id)
         .await
@@ -46,11 +41,11 @@ pub async fn create_task(
     let task = crate::models::task::create_task(&pool, new_task)
         .await
         .map_err(|e| format!("Failed to create task: {}", e))?;
-    
+
     if task.enabled == 1 {
         add_task_to_scheduler(&scheduler, &task_queue, &task, &pool, &app).await?;
     }
-    
+
     Ok(task)
 }
 
@@ -87,14 +82,9 @@ pub async fn update_task(
         Ok(task) => task,
         Err(e) => {
             if had_scheduler_job && previous_task.enabled == 1 {
-                let restore_result = add_task_to_scheduler(
-                    &scheduler,
-                    &task_queue,
-                    &previous_task,
-                    &pool,
-                    &app,
-                )
-                .await;
+                let restore_result =
+                    add_task_to_scheduler(&scheduler, &task_queue, &previous_task, &pool, &app)
+                        .await;
 
                 if let Err(restore_error) = restore_result {
                     return Err(format!(
@@ -109,16 +99,13 @@ pub async fn update_task(
     };
 
     if task.enabled == 1 {
-        if let Err(add_error) = add_task_to_scheduler(&scheduler, &task_queue, &task, &pool, &app).await {
+        if let Err(add_error) =
+            add_task_to_scheduler(&scheduler, &task_queue, &task, &pool, &app).await
+        {
             if previous_task.enabled == 1 {
-                let restore_result = add_task_to_scheduler(
-                    &scheduler,
-                    &task_queue,
-                    &previous_task,
-                    &pool,
-                    &app,
-                )
-                .await;
+                let restore_result =
+                    add_task_to_scheduler(&scheduler, &task_queue, &previous_task, &pool, &app)
+                        .await;
 
                 if let Err(restore_error) = restore_result {
                     return Err(format!(
@@ -152,10 +139,7 @@ pub async fn delete_task(
 
     let queue_guard = task_queue.inner().lock().await;
     if queue_guard.is_running(&id).await {
-        return Err(format!(
-            "Cannot delete task '{}' while it is running",
-            id
-        ));
+        return Err(format!("Cannot delete task '{}' while it is running", id));
     }
 
     let executions = crate::models::execution::get_executions_by_task(&pool, &id)
@@ -204,14 +188,9 @@ pub async fn delete_task(
         Ok(deleted) => deleted,
         Err(e) => {
             if had_scheduler_job && existing_task.enabled == 1 {
-                let restore_result = add_task_to_scheduler(
-                    &scheduler,
-                    &task_queue,
-                    &existing_task,
-                    &pool,
-                    &app,
-                )
-                .await;
+                let restore_result =
+                    add_task_to_scheduler(&scheduler, &task_queue, &existing_task, &pool, &app)
+                        .await;
 
                 if let Err(restore_error) = restore_result {
                     return Err(format!(
@@ -264,7 +243,14 @@ async fn add_task_to_scheduler(
         let task_queue = task_queue_clone.clone();
 
         Box::pin(async move {
-            let _ = crate::commands::execute_task_internal(task_id, pool, app, timeout_secs, task_queue).await;
+            let _ = crate::commands::execute_task_internal(
+                task_id,
+                pool,
+                app,
+                timeout_secs,
+                task_queue,
+            )
+            .await;
         }) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
     });
 

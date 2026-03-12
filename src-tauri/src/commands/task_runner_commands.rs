@@ -36,7 +36,8 @@ async fn mark_execution_failed(
     error_message: &str,
 ) {
     if let (Some(dir), Some(file_name)) = (output_dir, output_file) {
-        let _ = output::append_output_file(dir, file_name, &format!("Error: {}\n", error_message)).await;
+        let _ = output::append_output_file(dir, file_name, &format!("Error: {}\n", error_message))
+            .await;
     }
 
     let _ = update_execution(
@@ -108,8 +109,8 @@ pub async fn run_task(
     let execution_id = execution.id.clone();
 
     // Get database directory for working directory
-    let db_path_result =
-        connection::get_database_directory(&app).map_err(|e| format!("Failed to get database directory: {}", e));
+    let db_path_result = connection::get_database_directory(&app)
+        .map_err(|e| format!("Failed to get database directory: {}", e));
     let db_path = match db_path_result {
         Ok(path) => path,
         Err(message) => {
@@ -119,8 +120,8 @@ pub async fn run_task(
     };
     let cwd = db_path.parent();
 
-    let output_dir_result =
-        output::get_output_directory(&app).map_err(|e| format!("Failed to get output directory: {}", e));
+    let output_dir_result = output::get_output_directory(&app)
+        .map_err(|e| format!("Failed to get output directory: {}", e));
     let output_dir = match output_dir_result {
         Ok(dir) => dir,
         Err(message) => {

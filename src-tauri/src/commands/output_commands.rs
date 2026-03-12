@@ -33,7 +33,7 @@ pub async fn get_output(
     let content = output::read_output_file(&output_dir, &output_file)
         .await
         .map_err(|e| format!("Failed to read output file: {}", e))?;
-    
+
     Ok(content)
 }
 
@@ -66,6 +66,6 @@ pub async fn delete_output(
     output::delete_output_file(&output_dir, &output_file)
         .await
         .map_err(|e| format!("Failed to delete output file: {}", e))?;
-    
+
     Ok(true)
 }

@@ -116,7 +116,7 @@ pub async fn create_task(pool: &SqlitePool, new_task: NewTask) -> Result<Task, s
         enabled,
         timeout_seconds,
         created_at,
-        updated_at
+        updated_at,
     })
 }
 
@@ -172,7 +172,11 @@ pub async fn get_all_tasks(pool: &SqlitePool) -> Result<Vec<Task>, sqlx::Error> 
 /// # Returns
 /// * `Ok(Task)` - Updated task
 /// * `Err(sqlx::Error)` - Database error or not found
-pub async fn update_task(pool: &SqlitePool, id: &str, update: UpdateTask) -> Result<Task, sqlx::Error> {
+pub async fn update_task(
+    pool: &SqlitePool,
+    id: &str,
+    update: UpdateTask,
+) -> Result<Task, sqlx::Error> {
     let existing = get_task(pool, id).await?;
 
     let name = update.name.unwrap_or(existing.name);
@@ -351,7 +355,9 @@ pub async fn touch_task(pool: &SqlitePool, id: &str) -> Result<(), sqlx::Error> 
 mod tests {
     use super::*;
     use crate::db::connection::init_database;
-    use crate::models::execution::{create_execution, get_executions_by_task, ExecutionStatus, NewExecution};
+    use crate::models::execution::{
+        create_execution, get_executions_by_task, ExecutionStatus, NewExecution,
+    };
     use tempfile::TempDir;
 
     async fn setup_test_db() -> (SqlitePool, TempDir) {
@@ -428,7 +434,9 @@ mod tests {
             timeout_seconds: Some(600),
         };
 
-        let created = create_task(&pool, new_task).await.expect("Failed to create task");
+        let created = create_task(&pool, new_task)
+            .await
+            .expect("Failed to create task");
 
         let result = get_task(&pool, &created.id).await;
 
@@ -437,7 +445,10 @@ mod tests {
         assert_eq!(task.id, created.id);
         assert_eq!(task.name, "Get Test");
         assert_eq!(task.prompt, "Get this task");
-        assert_eq!(task.simple_schedule, Some(r#"{"type":"interval","value":5,"unit":"minutes"}"#.to_string()));
+        assert_eq!(
+            task.simple_schedule,
+            Some(r#"{"type":"interval","value":5,"unit":"minutes"}"#.to_string())
+        );
         assert_eq!(task.timeout_seconds, 600);
 
         pool.close().await;
@@ -471,7 +482,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_all_tasks_with_data() {
         let (pool, _temp_dir) = setup_test_db().await;
-        
+
         let task1 = NewTask {
             name: "Task 1".to_string(),
             prompt: "Prompt 1".to_string(),
@@ -491,8 +502,12 @@ mod tests {
             timeout_seconds: None,
         };
 
-        create_task(&pool, task1).await.expect("Failed to create task1");
-        create_task(&pool, task2).await.expect("Failed to create task2");
+        create_task(&pool, task1)
+            .await
+            .expect("Failed to create task1");
+        create_task(&pool, task2)
+            .await
+            .expect("Failed to create task2");
 
         let result = get_all_tasks(&pool).await;
 
@@ -516,8 +531,10 @@ mod tests {
             timeout_seconds: Some(300),
         };
 
-        let created = create_task(&pool, new_task).await.expect("Failed to create task");
-        
+        let created = create_task(&pool, new_task)
+            .await
+            .expect("Failed to create task");
+
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
         let update = UpdateTask {
@@ -542,7 +559,10 @@ mod tests {
         assert_eq!(updated.enabled, 0);
         assert_eq!(updated.timeout_seconds, 600);
         assert_eq!(updated.created_at, created.created_at);
-        assert_ne!(updated.updated_at, created.updated_at, "updated_at should change");
+        assert_ne!(
+            updated.updated_at, created.updated_at,
+            "updated_at should change"
+        );
 
         pool.close().await;
     }
@@ -560,7 +580,9 @@ mod tests {
             timeout_seconds: Some(300),
         };
 
-        let created = create_task(&pool, new_task).await.expect("Failed to create task");
+        let created = create_task(&pool, new_task)
+            .await
+            .expect("Failed to create task");
 
         let update = UpdateTask {
             name: Some("Updated Name Only".to_string()),
@@ -619,7 +641,9 @@ mod tests {
             timeout_seconds: None,
         };
 
-        let created = create_task(&pool, new_task).await.expect("Failed to create task");
+        let created = create_task(&pool, new_task)
+            .await
+            .expect("Failed to create task");
 
         let result = delete_task(&pool, &created.id).await;
 
@@ -639,7 +663,10 @@ mod tests {
 
         let result = delete_task(&pool, "non-existent-id").await;
 
-        assert!(result.is_ok(), "Delete should succeed even if task not found");
+        assert!(
+            result.is_ok(),
+            "Delete should succeed even if task not found"
+        );
         let deleted = result.unwrap();
         assert!(!deleted, "Should return false for non-existent task");
 
@@ -659,7 +686,9 @@ mod tests {
             timeout_seconds: None,
         };
 
-        let created = create_task(&pool, new_task).await.expect("Failed to create task");
+        let created = create_task(&pool, new_task)
+            .await
+            .expect("Failed to create task");
 
         let execution = NewExecution {
             task_id: created.id.clone(),
@@ -675,9 +704,15 @@ mod tests {
         let before_delete = get_executions_by_task(&pool, &created.id)
             .await
             .expect("Failed to query executions before deletion");
-        assert_eq!(before_delete.len(), 1, "Execution should exist before deletion");
+        assert_eq!(
+            before_delete.len(),
+            1,
+            "Execution should exist before deletion"
+        );
 
-        let deleted = delete_task(&pool, &created.id).await.expect("Delete should succeed");
+        let deleted = delete_task(&pool, &created.id)
+            .await
+            .expect("Delete should succeed");
         assert!(deleted, "Task should be deleted");
 
         let executions_after_delete = get_executions_by_task(&pool, &created.id)
@@ -721,10 +756,14 @@ mod tests {
             enabled: None,
             timeout_seconds: None,
         };
-        let updated = update_task(&pool, &created.id, update).await.expect("Update failed");
+        let updated = update_task(&pool, &created.id, update)
+            .await
+            .expect("Update failed");
         assert_eq!(updated.name, "Updated Lifecycle");
 
-        let deleted = delete_task(&pool, &created.id).await.expect("Delete failed");
+        let deleted = delete_task(&pool, &created.id)
+            .await
+            .expect("Delete failed");
         assert!(deleted);
 
         let get_result = get_task(&pool, &created.id).await;
@@ -746,7 +785,9 @@ mod tests {
             timeout_seconds: Some(300),
         };
 
-        let created = create_task(&pool, new_task).await.expect("Failed to create task");
+        let created = create_task(&pool, new_task)
+            .await
+            .expect("Failed to create task");
 
         let switch_to_once = UpdateTask {
             name: None,
@@ -771,9 +812,7 @@ mod tests {
             name: None,
             prompt: None,
             cron_expression: Some(None),
-            simple_schedule: Some(Some(
-                r#"{"type":"daily","time":"09:30"}"#.to_string(),
-            )),
+            simple_schedule: Some(Some(r#"{"type":"daily","time":"09:30"}"#.to_string())),
             once_at: Some(None),
             schedule_type: Some("simple".to_string()),
             enabled: None,
@@ -834,7 +873,10 @@ mod tests {
         };
 
         let result = create_task(&pool, new_task).await;
-        assert!(result.is_err(), "create should fail when multiple schedules are set");
+        assert!(
+            result.is_err(),
+            "create should fail when multiple schedules are set"
+        );
 
         pool.close().await;
     }
@@ -854,7 +896,10 @@ mod tests {
         };
 
         let result = create_task(&pool, new_task).await;
-        assert!(result.is_err(), "create should fail when once_at is in the past");
+        assert!(
+            result.is_err(),
+            "create should fail when once_at is in the past"
+        );
 
         pool.close().await;
     }
@@ -894,7 +939,10 @@ mod tests {
         )
         .await;
 
-        assert!(result.is_err(), "update should fail for invalid schedule_type");
+        assert!(
+            result.is_err(),
+            "update should fail for invalid schedule_type"
+        );
 
         pool.close().await;
     }
@@ -925,9 +973,7 @@ mod tests {
                 name: None,
                 prompt: None,
                 cron_expression: Some(Some("0 4 * * *".to_string())),
-                simple_schedule: Some(Some(
-                    r#"{"type":"daily","time":"10:30"}"#.to_string(),
-                )),
+                simple_schedule: Some(Some(r#"{"type":"daily","time":"10:30"}"#.to_string())),
                 once_at: None,
                 schedule_type: None,
                 enabled: None,
@@ -979,7 +1025,10 @@ mod tests {
         )
         .await;
 
-        assert!(result.is_err(), "update should fail when once_at is in the past");
+        assert!(
+            result.is_err(),
+            "update should fail when once_at is in the past"
+        );
 
         pool.close().await;
     }

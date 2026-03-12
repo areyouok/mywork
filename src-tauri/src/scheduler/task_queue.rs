@@ -115,13 +115,13 @@ impl TaskQueue {
             .running_tasks
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        
+
         if running.contains_key(task_id) {
             return Err(TaskQueueError::TaskAlreadyRunning {
                 task_id: task_id.to_string(),
             });
         }
-        
+
         running.insert(task_id.to_string(), ());
 
         Ok(SlotGuard {
@@ -182,7 +182,10 @@ mod tests {
     async fn test_acquire_slot_success() {
         let queue = TaskQueue::new();
 
-        let guard = queue.acquire_slot("task-1").await.expect("Failed to acquire slot");
+        let guard = queue
+            .acquire_slot("task-1")
+            .await
+            .expect("Failed to acquire slot");
 
         assert_eq!(queue.running_count().await, 1);
         assert!(queue.is_running("task-1").await);
@@ -193,9 +196,18 @@ mod tests {
     async fn test_acquire_slot_multiple_tasks() {
         let queue = TaskQueue::new();
 
-        let _guard1 = queue.acquire_slot("task-1").await.expect("Failed to acquire slot 1");
-        let _guard2 = queue.acquire_slot("task-2").await.expect("Failed to acquire slot 2");
-        let _guard3 = queue.acquire_slot("task-3").await.expect("Failed to acquire slot 3");
+        let _guard1 = queue
+            .acquire_slot("task-1")
+            .await
+            .expect("Failed to acquire slot 1");
+        let _guard2 = queue
+            .acquire_slot("task-2")
+            .await
+            .expect("Failed to acquire slot 2");
+        let _guard3 = queue
+            .acquire_slot("task-3")
+            .await
+            .expect("Failed to acquire slot 3");
 
         assert_eq!(queue.running_count().await, 3);
         assert!(queue.is_running("task-1").await);
@@ -207,7 +219,10 @@ mod tests {
     async fn test_acquire_slot_already_running() {
         let queue = TaskQueue::new();
 
-        let _guard = queue.acquire_slot("task-1").await.expect("Failed to acquire slot");
+        let _guard = queue
+            .acquire_slot("task-1")
+            .await
+            .expect("Failed to acquire slot");
         let result = queue.acquire_slot("task-1").await;
 
         assert!(result.is_err());
@@ -220,10 +235,16 @@ mod tests {
     async fn test_release_slot_success() {
         let queue = TaskQueue::new();
 
-        let _guard = queue.acquire_slot("task-1").await.expect("Failed to acquire slot");
+        let _guard = queue
+            .acquire_slot("task-1")
+            .await
+            .expect("Failed to acquire slot");
         assert_eq!(queue.running_count().await, 1);
 
-        queue.release_slot("task-1").await.expect("Failed to release slot");
+        queue
+            .release_slot("task-1")
+            .await
+            .expect("Failed to release slot");
 
         assert_eq!(queue.running_count().await, 0);
         assert!(!queue.is_running("task-1").await);
@@ -236,7 +257,10 @@ mod tests {
         let result = queue.release_slot("nonexistent").await;
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TaskQueueError::TaskNotFound { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            TaskQueueError::TaskNotFound { .. }
+        ));
     }
 
     #[tokio::test]
@@ -244,7 +268,10 @@ mod tests {
         let queue = TaskQueue::new();
 
         {
-            let _guard = queue.acquire_slot("task-1").await.expect("Failed to acquire slot");
+            let _guard = queue
+                .acquire_slot("task-1")
+                .await
+                .expect("Failed to acquire slot");
             assert_eq!(queue.running_count().await, 1);
         }
 
@@ -256,17 +283,26 @@ mod tests {
         let queue = std::sync::Arc::new(TaskQueue::new());
 
         // Multiple different tasks can run concurrently
-        let _guard1 = queue.acquire_slot("task-1").await.expect("Failed to acquire slot 1");
-        let _guard2 = queue.acquire_slot("task-2").await.expect("Failed to acquire slot 2");
-        let _guard3 = queue.acquire_slot("task-3").await.expect("Failed to acquire slot 3");
+        let _guard1 = queue
+            .acquire_slot("task-1")
+            .await
+            .expect("Failed to acquire slot 1");
+        let _guard2 = queue
+            .acquire_slot("task-2")
+            .await
+            .expect("Failed to acquire slot 2");
+        let _guard3 = queue
+            .acquire_slot("task-3")
+            .await
+            .expect("Failed to acquire slot 3");
 
         assert_eq!(queue.running_count().await, 3);
-        
+
         drop(_guard1);
         drop(_guard2);
         drop(_guard3);
         sleep(Duration::from_millis(10)).await;
-        
+
         assert_eq!(queue.running_count().await, 0);
     }
 
@@ -274,8 +310,14 @@ mod tests {
     async fn test_release_and_reacquire() {
         let queue = TaskQueue::new();
 
-        let guard1 = queue.acquire_slot("task-1").await.expect("Failed to acquire slot 1");
-        let _guard2 = queue.acquire_slot("task-2").await.expect("Failed to acquire slot 2");
+        let guard1 = queue
+            .acquire_slot("task-1")
+            .await
+            .expect("Failed to acquire slot 1");
+        let _guard2 = queue
+            .acquire_slot("task-2")
+            .await
+            .expect("Failed to acquire slot 2");
 
         assert_eq!(queue.running_count().await, 2);
 
@@ -283,7 +325,10 @@ mod tests {
 
         assert!(!queue.is_running("task-1").await);
 
-        let _guard3 = queue.acquire_slot("task-3").await.expect("Failed to acquire slot 3");
+        let _guard3 = queue
+            .acquire_slot("task-3")
+            .await
+            .expect("Failed to acquire slot 3");
         assert!(queue.is_running("task-3").await);
     }
 
@@ -304,20 +349,35 @@ mod tests {
     async fn test_full_lifecycle() {
         let queue = TaskQueue::new();
 
-        let guard1 = queue.acquire_slot("task-1").await.expect("Failed to acquire slot 1");
-        let guard2 = queue.acquire_slot("task-2").await.expect("Failed to acquire slot 2");
-        let guard3 = queue.acquire_slot("task-3").await.expect("Failed to acquire slot 3");
+        let guard1 = queue
+            .acquire_slot("task-1")
+            .await
+            .expect("Failed to acquire slot 1");
+        let guard2 = queue
+            .acquire_slot("task-2")
+            .await
+            .expect("Failed to acquire slot 2");
+        let guard3 = queue
+            .acquire_slot("task-3")
+            .await
+            .expect("Failed to acquire slot 3");
 
         assert_eq!(queue.running_count().await, 3);
 
         let result = queue.acquire_slot("task-1").await;
-        assert!(matches!(result.unwrap_err(), TaskQueueError::TaskAlreadyRunning { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            TaskQueueError::TaskAlreadyRunning { .. }
+        ));
 
         drop(guard1);
 
         assert_eq!(queue.running_count().await, 2);
 
-        let guard4 = queue.acquire_slot("task-4").await.expect("Failed to acquire slot 4");
+        let guard4 = queue
+            .acquire_slot("task-4")
+            .await
+            .expect("Failed to acquire slot 4");
         assert!(queue.is_running("task-4").await);
 
         drop(guard2);

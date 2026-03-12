@@ -1,6 +1,6 @@
 use crate::models::execution::{Execution, ExecutionStatus, NewExecution, UpdateExecution};
-use std::sync::Arc;
 use sqlx::SqlitePool;
+use std::sync::Arc;
 use tauri::State;
 
 /// Get all executions for a task
@@ -33,11 +33,15 @@ pub async fn get_running_executions(
     pool: State<'_, Arc<SqlitePool>>,
 ) -> Result<Vec<String>, String> {
     let pool = pool.inner().clone();
-    let running = crate::models::execution::get_executions_by_status(&pool, ExecutionStatus::Running)
-        .await
-        .map_err(|e| format!("Failed to get running executions: {}", e))?;
+    let running =
+        crate::models::execution::get_executions_by_status(&pool, ExecutionStatus::Running)
+            .await
+            .map_err(|e| format!("Failed to get running executions: {}", e))?;
 
-    Ok(running.into_iter().map(|execution| execution.task_id).collect())
+    Ok(running
+        .into_iter()
+        .map(|execution| execution.task_id)
+        .collect())
 }
 
 /// Create a new execution (for testing/debugging)

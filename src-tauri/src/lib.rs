@@ -222,7 +222,9 @@ pub fn run() {
                             let duration = (run_at - now)
                                 .to_std()
                                 .unwrap_or_else(|_| std::time::Duration::from_secs(0));
-                            scheduler.add_one_shot_job(&task.id, duration, callback).await
+                            scheduler
+                                .add_one_shot_job(&task.id, duration, callback)
+                                .await
                         }
                     };
 

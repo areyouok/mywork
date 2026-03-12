@@ -50,7 +50,8 @@ impl BufferState {
 
     fn clear_through(&mut self, id: usize) {
         loop {
-            let should_remove = matches!(self.lines.front(), Some((front_id, _)) if *front_id <= id);
+            let should_remove =
+                matches!(self.lines.front(), Some((front_id, _)) if *front_id <= id);
             if !should_remove {
                 break;
             }
@@ -79,11 +80,7 @@ pub struct StreamingExecutor {
 }
 
 impl StreamingExecutor {
-    pub async fn spawn(
-        program: &str,
-        args: &[&str],
-        cwd: Option<&Path>,
-    ) -> std::io::Result<Self> {
+    pub async fn spawn(program: &str, args: &[&str], cwd: Option<&Path>) -> std::io::Result<Self> {
         let mut cmd = Command::new(program);
         cmd.args(args)
             .stdout(Stdio::piped())
@@ -153,7 +150,10 @@ impl StreamingExecutor {
         let exit_code_finished = Arc::clone(&exit_code);
         tokio::spawn(async move {
             let wait_result = child_wait.lock().await.wait().await;
-            let status_code = wait_result.ok().and_then(|status| status.code()).unwrap_or(-1);
+            let status_code = wait_result
+                .ok()
+                .and_then(|status| status.code())
+                .unwrap_or(-1);
             *exit_code_finished.lock().await = Some(status_code);
             if let Some(handle) = stdout_handle {
                 let _ = handle.await;
@@ -222,13 +222,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_read_line() {
-        let mut executor = StreamingExecutor::spawn(
-            "bash",
-            &["-c", "echo line-1; echo line-2"],
-            None,
-        )
-        .await
-        .expect("failed to spawn executor");
+        let mut executor =
+            StreamingExecutor::spawn("bash", &["-c", "echo line-1; echo line-2"], None)
+                .await
+                .expect("failed to spawn executor");
 
         let mut outputs = Vec::new();
         while let Some(line) = timeout(Duration::from_secs(2), executor.read_line())
@@ -253,18 +250,17 @@ mod tests {
 
         assert!(stdout_lines.iter().any(|s| s.contains("line-1")));
         assert!(stdout_lines.iter().any(|s| s.contains("line-2")));
-        assert!(outputs.iter().any(|line| matches!(line, StreamLine::Finished)));
+        assert!(outputs
+            .iter()
+            .any(|line| matches!(line, StreamLine::Finished)));
     }
 
     #[tokio::test]
     async fn test_stdout_stderr_separated() {
-        let mut executor = StreamingExecutor::spawn(
-            "bash",
-            &["-c", "echo out-line; echo err-line >&2"],
-            None,
-        )
-        .await
-        .expect("failed to spawn executor");
+        let mut executor =
+            StreamingExecutor::spawn("bash", &["-c", "echo out-line; echo err-line >&2"], None)
+                .await
+                .expect("failed to spawn executor");
 
         let mut saw_stdout = false;
         let mut saw_stderr = false;
@@ -321,7 +317,10 @@ mod tests {
 
         assert!(saw_output);
         let size = executor.buffer_size().await;
-        assert!(size <= MAX_BUFFER_BYTES, "buffer size exceeded limit: {size}");
+        assert!(
+            size <= MAX_BUFFER_BYTES,
+            "buffer size exceeded limit: {size}"
+        );
     }
 
     #[tokio::test]

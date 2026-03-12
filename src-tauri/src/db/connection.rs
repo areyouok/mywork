@@ -16,9 +16,7 @@ pub async fn init_database(db_path: &Path) -> Result<SqlitePool, sqlx::Error> {
     for statement in schema.split(';') {
         let trimmed = statement.trim();
         if !trimmed.is_empty() {
-            sqlx::query(trimmed)
-                .execute(&pool)
-                .await?;
+            sqlx::query(trimmed).execute(&pool).await?;
         }
     }
 
@@ -32,7 +30,8 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
         "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name='skip_if_running'",
     )
     .fetch_one(pool)
-    .await {
+    .await
+    {
         Ok(value) => value,
         Err(e) => {
             eprintln!("Failed to check legacy schema: {}", e);
@@ -81,16 +80,20 @@ mod tests {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let db_path = temp_dir.path().join("test.db");
 
-        let pool = init_database(&db_path).await.expect("Failed to init database");
+        let pool = init_database(&db_path)
+            .await
+            .expect("Failed to init database");
 
-        let result = sqlx::query("SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'")
-            .fetch_one(&pool)
-            .await;
+        let result =
+            sqlx::query("SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'")
+                .fetch_one(&pool)
+                .await;
         assert!(result.is_ok(), "tasks table should exist");
 
-        let result = sqlx::query("SELECT name FROM sqlite_master WHERE type='table' AND name='executions'")
-            .fetch_one(&pool)
-            .await;
+        let result =
+            sqlx::query("SELECT name FROM sqlite_master WHERE type='table' AND name='executions'")
+                .fetch_one(&pool)
+                .await;
         assert!(result.is_ok(), "executions table should exist");
         pool.close().await;
     }
@@ -100,11 +103,15 @@ mod tests {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let db_path = temp_dir.path().join("test.db");
 
-        let pool = init_database(&db_path).await.expect("Failed to init database");
+        let pool = init_database(&db_path)
+            .await
+            .expect("Failed to init database");
 
-        let result = sqlx::query("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_executions_task_id'")
-            .fetch_one(&pool)
-            .await;
+        let result = sqlx::query(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_executions_task_id'",
+        )
+        .fetch_one(&pool)
+        .await;
         assert!(result.is_ok(), "idx_executions_task_id should exist");
 
         let result = sqlx::query("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_executions_started_at'")
@@ -166,5 +173,4 @@ mod tests {
         assert!(!column_exists, "skip_if_running column should be removed");
         pool2.close().await;
     }
-
 }
