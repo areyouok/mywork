@@ -65,22 +65,73 @@ pub async fn update_task(
     app: AppHandle,
 ) -> Result<Task, String> {
     let pool = pool.inner().clone();
-    
-    {
-            let scheduler_guard = scheduler.inner().lock().await;
-            if scheduler_guard.has_job(&id).await {
-                let _ = scheduler_guard.remove_job(&id).await;
-            }
-        }
-    
-    let task = crate::models::task::update_task(&pool, &id, update)
+
+    let previous_task = crate::models::task::get_task(&pool, &id)
         .await
-        .map_err(|e| format!("Failed to update task: {}", e))?;
-    
-    if task.enabled == 1 {
-        add_task_to_scheduler(&scheduler, &task_queue, &task, &pool, &app).await?;
+        .map_err(|e| format!("Failed to load existing task before update: {}", e))?;
+
+    let had_scheduler_job = {
+        let scheduler_guard = scheduler.inner().lock().await;
+        scheduler_guard.has_job(&id).await
+    };
+
+    if had_scheduler_job {
+        let scheduler_guard = scheduler.inner().lock().await;
+        scheduler_guard
+            .remove_job(&id)
+            .await
+            .map_err(|e| format!("Failed to remove old scheduler job before update: {}", e))?;
     }
-    
+
+    let task = match crate::models::task::update_task(&pool, &id, update).await {
+        Ok(task) => task,
+        Err(e) => {
+            if had_scheduler_job && previous_task.enabled == 1 {
+                let restore_result = add_task_to_scheduler(
+                    &scheduler,
+                    &task_queue,
+                    &previous_task,
+                    &pool,
+                    &app,
+                )
+                .await;
+
+                if let Err(restore_error) = restore_result {
+                    return Err(format!(
+                        "Failed to update task: {}. Also failed to restore previous schedule: {}",
+                        e, restore_error
+                    ));
+                }
+            }
+
+            return Err(format!("Failed to update task: {}", e));
+        }
+    };
+
+    if task.enabled == 1 {
+        if let Err(add_error) = add_task_to_scheduler(&scheduler, &task_queue, &task, &pool, &app).await {
+            if previous_task.enabled == 1 {
+                let restore_result = add_task_to_scheduler(
+                    &scheduler,
+                    &task_queue,
+                    &previous_task,
+                    &pool,
+                    &app,
+                )
+                .await;
+
+                if let Err(restore_error) = restore_result {
+                    return Err(format!(
+                        "Failed to schedule updated task: {}. Also failed to restore previous schedule: {}",
+                        add_error, restore_error
+                    ));
+                }
+            }
+
+            return Err(format!("Failed to schedule updated task: {}", add_error));
+        }
+    }
+
     Ok(task)
 }
 
@@ -94,6 +145,10 @@ pub async fn delete_task(
     app: AppHandle,
 ) -> Result<bool, String> {
     let pool = pool.inner().clone();
+
+    let existing_task = crate::models::task::get_task(&pool, &id)
+        .await
+        .map_err(|e| format!("Failed to load task before deletion: {}", e))?;
 
     let queue_guard = task_queue.inner().lock().await;
     if queue_guard.is_running(&id).await {
@@ -132,13 +187,48 @@ pub async fn delete_task(
         }
     }
 
-    let deleted = crate::models::task::delete_task(&pool, &id)
-        .await
-        .map_err(|e| format!("Failed to delete task with related data: {}", e))?;
+    let had_scheduler_job = {
+        let scheduler_guard = scheduler.inner().lock().await;
+        scheduler_guard.has_job(&id).await
+    };
 
-    let scheduler_guard = scheduler.inner().lock().await;
-    if scheduler_guard.has_job(&id).await {
-        let _ = scheduler_guard.remove_job(&id).await;
+    if had_scheduler_job {
+        let scheduler_guard = scheduler.inner().lock().await;
+        scheduler_guard
+            .remove_job(&id)
+            .await
+            .map_err(|e| format!("Failed to remove scheduler job before deleting task: {}", e))?;
+    }
+
+    let deleted = match crate::models::task::delete_task(&pool, &id).await {
+        Ok(deleted) => deleted,
+        Err(e) => {
+            if had_scheduler_job && existing_task.enabled == 1 {
+                let restore_result = add_task_to_scheduler(
+                    &scheduler,
+                    &task_queue,
+                    &existing_task,
+                    &pool,
+                    &app,
+                )
+                .await;
+
+                if let Err(restore_error) = restore_result {
+                    return Err(format!(
+                        "Failed to delete task with related data: {}. Also failed to restore scheduler entry: {}",
+                        e, restore_error
+                    ));
+                }
+            }
+
+            return Err(format!("Failed to delete task with related data: {}", e));
+        }
+    };
+
+    if !deleted && had_scheduler_job && existing_task.enabled == 1 {
+        add_task_to_scheduler(&scheduler, &task_queue, &existing_task, &pool, &app)
+            .await
+            .map_err(|e| format!("Task was not deleted and scheduler restore failed: {}", e))?;
     }
 
     drop(queue_guard);

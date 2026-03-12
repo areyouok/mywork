@@ -165,7 +165,13 @@ impl Scheduler {
 
         let job_id = job.guid();
 
+        let should_start_scheduler = {
+            let state = self.state.lock().await;
+            *state == SchedulerState::Running
+        };
+
         let mut scheduler_guard = self.scheduler.lock().await;
+        let mut created_scheduler = false;
         if scheduler_guard.is_none() {
             let new_scheduler = JobScheduler::new()
                 .await
@@ -173,6 +179,18 @@ impl Scheduler {
                     message: e.to_string(),
                 })?;
             *scheduler_guard = Some(new_scheduler);
+            created_scheduler = true;
+        }
+
+        if created_scheduler && should_start_scheduler {
+            if let Some(sched) = scheduler_guard.as_ref() {
+                sched
+                    .start()
+                    .await
+                    .map_err(|e| SchedulerError::StartFailed {
+                        message: e.to_string(),
+                    })?;
+            }
         }
 
         if let Some(sched) = scheduler_guard.as_ref() {
@@ -205,13 +223,21 @@ impl Scheduler {
     ) -> Result<Uuid, SchedulerError> {
         let jobs_map = self.jobs.clone();
         let task_id_for_cleanup = task_id.to_string();
-        let job = Job::new_one_shot_async(duration, move |_uuid, _l| {
+        let job = Job::new_one_shot_async(duration, move |executed_job_id, _l| {
             let cb = callback.clone();
             let jobs = jobs_map.clone();
             let cleanup_task_id = task_id_for_cleanup.clone();
             Box::pin(async move {
                 cb().await;
-                jobs.lock().await.remove(&cleanup_task_id);
+                let mut jobs_guard = jobs.lock().await;
+                let should_cleanup = jobs_guard
+                    .get(&cleanup_task_id)
+                    .map(|job_info| job_info.job_id == executed_job_id)
+                    .unwrap_or(false);
+
+                if should_cleanup {
+                    jobs_guard.remove(&cleanup_task_id);
+                }
             })
         })
         .map_err(|e| SchedulerError::JobAddFailed {
@@ -221,7 +247,13 @@ impl Scheduler {
 
         let job_id = job.guid();
 
+        let should_start_scheduler = {
+            let state = self.state.lock().await;
+            *state == SchedulerState::Running
+        };
+
         let mut scheduler_guard = self.scheduler.lock().await;
+        let mut created_scheduler = false;
         if scheduler_guard.is_none() {
             let new_scheduler = JobScheduler::new()
                 .await
@@ -229,6 +261,18 @@ impl Scheduler {
                     message: e.to_string(),
                 })?;
             *scheduler_guard = Some(new_scheduler);
+            created_scheduler = true;
+        }
+
+        if created_scheduler && should_start_scheduler {
+            if let Some(sched) = scheduler_guard.as_ref() {
+                sched
+                    .start()
+                    .await
+                    .map_err(|e| SchedulerError::StartFailed {
+                        message: e.to_string(),
+                    })?;
+            }
         }
 
         if let Some(sched) = scheduler_guard.as_ref() {
@@ -299,7 +343,16 @@ impl Scheduler {
             return Err(SchedulerError::AlreadyRunning);
         }
 
-        let scheduler_guard = self.scheduler.lock().await;
+        let mut scheduler_guard = self.scheduler.lock().await;
+        if scheduler_guard.is_none() {
+            let new_scheduler = JobScheduler::new()
+                .await
+                .map_err(|e| SchedulerError::SchedulerCreationFailed {
+                    message: e.to_string(),
+                })?;
+            *scheduler_guard = Some(new_scheduler);
+        }
+
         if let Some(sched) = scheduler_guard.as_ref() {
             sched
                 .start()
@@ -611,6 +664,129 @@ mod tests {
             .expect("Failed to add job 2");
 
         assert_eq!(scheduler.job_count().await, 2);
+    }
+
+    #[tokio::test]
+    async fn test_start_initializes_scheduler_without_jobs() {
+        let scheduler = Scheduler::new();
+
+        scheduler.start().await.expect("Failed to start scheduler");
+
+        assert_eq!(scheduler.get_state().await, SchedulerState::Running);
+        let scheduler_guard = scheduler.scheduler.lock().await;
+        assert!(scheduler_guard.is_some(), "scheduler instance should be initialized on start");
+    }
+
+    #[tokio::test]
+    async fn test_add_one_shot_job_after_start_without_existing_scheduler_executes() {
+        let scheduler = Scheduler::new();
+        let counter = Arc::new(AtomicUsize::new(0));
+        let counter_clone = counter.clone();
+
+        scheduler
+            .start()
+            .await
+            .expect("Failed to start scheduler");
+
+        let callback: JobCallback = Arc::new(move || {
+            let c = counter_clone.clone();
+            Box::pin(async move {
+                c.fetch_add(1, Ordering::SeqCst);
+            }) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+        });
+
+        scheduler
+            .add_one_shot_job("task-oneshot", Duration::from_secs(1), callback)
+            .await
+            .expect("Failed to add one-shot job");
+
+        sleep(Duration::from_secs(2)).await;
+
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_replace_one_shot_with_cron_reuses_task_id_safely() {
+        let scheduler = Scheduler::new();
+        let callback: JobCallback = Arc::new(|| Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>);
+
+        scheduler
+            .add_one_shot_job("task-switch", Duration::from_secs(30), callback.clone())
+            .await
+            .expect("Failed to add one-shot job");
+
+        let one_shot_info = scheduler
+            .get_job_info("task-switch")
+            .await
+            .expect("Expected one-shot job info");
+        assert!(one_shot_info.cron_expression.starts_with("@once+"));
+
+        scheduler
+            .remove_job("task-switch")
+            .await
+            .expect("Failed to remove one-shot job");
+        assert!(!scheduler.has_job("task-switch").await);
+
+        scheduler
+            .add_job("task-switch", "0 * * * *", callback)
+            .await
+            .expect("Failed to add cron job");
+
+        let cron_info = scheduler
+            .get_job_info("task-switch")
+            .await
+            .expect("Expected cron job info");
+        assert_eq!(cron_info.cron_expression, "0 * * * *");
+    }
+
+    #[tokio::test]
+    async fn test_one_shot_cleanup_does_not_remove_replaced_job_entry() {
+        let scheduler = Scheduler::new();
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let callback_started = Arc::new(AtomicUsize::new(0));
+
+        scheduler
+            .start()
+            .await
+            .expect("Failed to start scheduler");
+
+        let gate_clone = gate.clone();
+        let started_clone = callback_started.clone();
+        let waiting_callback: JobCallback = Arc::new(move || {
+            let gate = gate_clone.clone();
+            let started = started_clone.clone();
+            Box::pin(async move {
+                started.fetch_add(1, Ordering::SeqCst);
+                gate.notified().await;
+            }) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+        });
+
+        scheduler
+            .add_one_shot_job("task-race", Duration::from_secs(1), waiting_callback)
+            .await
+            .expect("Failed to add one-shot job");
+
+        sleep(Duration::from_secs(2)).await;
+        assert_eq!(callback_started.load(Ordering::SeqCst), 1);
+
+        let replacement_callback: JobCallback = Arc::new(|| {
+            Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+        });
+
+        scheduler
+            .add_job("task-race", "0 * * * *", replacement_callback)
+            .await
+            .expect("Failed to add replacement cron job");
+
+        gate.notify_waiters();
+        sleep(Duration::from_millis(200)).await;
+
+        assert!(scheduler.has_job("task-race").await);
+        let info = scheduler
+            .get_job_info("task-race")
+            .await
+            .expect("Expected replacement job info");
+        assert_eq!(info.cron_expression, "0 * * * *");
     }
 
     #[tokio::test]
