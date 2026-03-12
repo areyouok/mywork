@@ -44,7 +44,12 @@ export function useTasks() {
   const updateTask = useCallback(async (id: string, data: Parameters<typeof api.updateTask>[1]) => {
     try {
       const updated = await api.updateTask(id, data);
-      setTasks((prev) => prev.map((task) => (task.id === id ? updated : task)));
+      setTasks((prev) => {
+        const newTasks = prev.map((task) => (task.id === id ? updated : task));
+        return newTasks.sort(
+          (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        );
+      });
       return updated;
     } catch (error) {
       console.error('Failed to update task:', error);
