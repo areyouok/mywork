@@ -16,6 +16,42 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 use tokio::time::{timeout, Duration};
 
+struct ExecutionFinishedEventGuard {
+    app: AppHandle,
+    task_id: String,
+}
+
+impl Drop for ExecutionFinishedEventGuard {
+    fn drop(&mut self) {
+        let _ = self.app.emit("execution-finished", &self.task_id);
+    }
+}
+
+async fn mark_execution_failed(
+    pool: &SqlitePool,
+    execution_id: &str,
+    output_dir: Option<&std::path::Path>,
+    output_file: Option<&str>,
+    error_message: &str,
+) {
+    if let (Some(dir), Some(file_name)) = (output_dir, output_file) {
+        let _ = output::append_output_file(dir, file_name, &format!("Error: {}\n", error_message)).await;
+    }
+
+    let _ = update_execution(
+        pool,
+        execution_id,
+        UpdateExecution {
+            session_id: None,
+            status: Some(ExecutionStatus::Failed),
+            finished_at: Some(Utc::now().to_rfc3339()),
+            output_file: output_file.map(std::string::ToString::to_string),
+            error_message: Some(error_message.to_string()),
+        },
+    )
+    .await;
+}
+
 #[tauri::command]
 pub async fn run_task(
     task_id: String,
@@ -61,28 +97,52 @@ pub async fn run_task(
         .map_err(|e| format!("Failed to create execution: {}", e))?;
 
     let _ = app.emit("execution-started", &task_id);
+    let _finished_guard = ExecutionFinishedEventGuard {
+        app: app.clone(),
+        task_id: task_id.clone(),
+    };
 
     let timeout_secs = task.timeout_seconds as u64;
 
+    let execution_id = execution.id.clone();
+
     // Get database directory for working directory
-    let db_path = connection::get_database_directory(&app)
-        .map_err(|e| format!("Failed to get database directory: {}", e))?;
+    let db_path_result =
+        connection::get_database_directory(&app).map_err(|e| format!("Failed to get database directory: {}", e));
+    let db_path = match db_path_result {
+        Ok(path) => path,
+        Err(message) => {
+            mark_execution_failed(&pool, &execution_id, None, None, &message).await;
+            return Err(message);
+        }
+    };
     let cwd = db_path.parent();
 
-    let output_dir = output::get_output_directory(&app)
-        .map_err(|e| format!("Failed to get output directory: {}", e))?;
+    let output_dir_result =
+        output::get_output_directory(&app).map_err(|e| format!("Failed to get output directory: {}", e));
+    let output_dir = match output_dir_result {
+        Ok(dir) => dir,
+        Err(message) => {
+            mark_execution_failed(&pool, &execution_id, None, None, &message).await;
+            return Err(message);
+        }
+    };
 
-    output::create_output_directory(&output_dir)
-        .await
-        .map_err(|e| format!("Failed to create output directory: {}", e))?;
+    if let Err(e) = output::create_output_directory(&output_dir).await {
+        let message = format!("Failed to create output directory: {}", e);
+        mark_execution_failed(&pool, &execution_id, None, None, &message).await;
+        return Err(message);
+    }
 
     let output_file_name = generate_output_file_name(&execution.id, &Utc::now());
 
-    output::write_output_file(&output_dir, &output_file_name, "")
-        .await
-        .map_err(|e| format!("Failed to initialize output file: {}", e))?;
+    if let Err(e) = output::write_output_file(&output_dir, &output_file_name, "").await {
+        let message = format!("Failed to initialize output file: {}", e);
+        mark_execution_failed(&pool, &execution_id, Some(&output_dir), None, &message).await;
+        return Err(message);
+    }
 
-    update_execution(
+    if let Err(e) = update_execution(
         &pool,
         &execution.id,
         UpdateExecution {
@@ -94,12 +154,35 @@ pub async fn run_task(
         },
     )
     .await
-    .map_err(|e| format!("Failed to set output file on execution: {}", e))?;
+    {
+        let message = format!("Failed to set output file on execution: {}", e);
+        mark_execution_failed(
+            &pool,
+            &execution_id,
+            Some(&output_dir),
+            Some(&output_file_name),
+            &message,
+        )
+        .await;
+        return Err(message);
+    }
 
     let args: Vec<&str> = vec!["run", &task.prompt];
-    let mut executor = StreamingExecutor::spawn("opencode", &args, cwd)
-        .await
-        .map_err(|e| format!("Failed to start opencode streaming: {}", e))?;
+    let mut executor = match StreamingExecutor::spawn("opencode", &args, cwd).await {
+        Ok(executor) => executor,
+        Err(e) => {
+            let message = format!("Failed to start opencode streaming: {}", e);
+            mark_execution_failed(
+                &pool,
+                &execution_id,
+                Some(&output_dir),
+                Some(&output_file_name),
+                &message,
+            )
+            .await;
+            return Err(message);
+        }
+    };
 
     let mut parsed_session_id: Option<String> = None;
     let stream_future = async {
@@ -195,8 +278,6 @@ pub async fn run_task(
         .map_err(|e| format!("Failed to update execution: {}", e))?;
 
     enforce_execution_history_limit(&pool, &output_dir).await;
-
-    let _ = app.emit("execution-finished", &task_id);
 
     if status == ExecutionStatus::Success {
         Ok(execution.id)

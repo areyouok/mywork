@@ -133,6 +133,48 @@ pub async fn delete_output_files_for_execution(
     Ok(deleted_count)
 }
 
+pub async fn find_output_file_for_execution(
+    output_dir: &Path,
+    execution_id: &str,
+) -> Result<Option<String>, io::Error> {
+    let mut latest_timestamped: Option<String> = None;
+    let legacy_name = format!("{}.txt", execution_id);
+    let prefix = format!("{}_", execution_id);
+
+    let mut entries = match tokio::fs::read_dir(output_dir).await {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e),
+    };
+
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+
+        if file_name == legacy_name {
+            latest_timestamped.get_or_insert_with(|| file_name.to_string());
+            continue;
+        }
+
+        if file_name.starts_with(&prefix) && file_name.ends_with(".txt") {
+            match &latest_timestamped {
+                Some(current) if current.as_str() >= file_name => {}
+                _ => {
+                    latest_timestamped = Some(file_name.to_string());
+                }
+            }
+        }
+    }
+
+    Ok(latest_timestamped)
+}
+
 /// Clean up output files older than a specified number of days
 ///
 /// # Arguments
@@ -415,6 +457,43 @@ mod tests {
             .expect("Delete should be idempotent for missing directory");
 
         assert_eq!(deleted, 0);
+    }
+
+    #[tokio::test]
+    async fn test_find_output_file_for_execution_prefers_latest_timestamped() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let output_dir = temp_dir.path().join("outputs");
+        create_output_directory(&output_dir)
+            .await
+            .expect("Failed to create dir");
+
+        write_output_file(&output_dir, "exec-1.txt", "legacy")
+            .await
+            .expect("Failed to write legacy file");
+        write_output_file(&output_dir, "exec-1_20260312_100000_001.txt", "old")
+            .await
+            .expect("Failed to write old timestamped file");
+        write_output_file(&output_dir, "exec-1_20260312_100001_002.txt", "new")
+            .await
+            .expect("Failed to write new timestamped file");
+
+        let found = find_output_file_for_execution(&output_dir, "exec-1")
+            .await
+            .expect("Find should succeed");
+
+        assert_eq!(found.as_deref(), Some("exec-1_20260312_100001_002.txt"));
+    }
+
+    #[tokio::test]
+    async fn test_find_output_file_for_execution_returns_none_when_missing() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let output_dir = temp_dir.path().join("outputs");
+
+        let found = find_output_file_for_execution(&output_dir, "missing-exec")
+            .await
+            .expect("Find should be idempotent");
+
+        assert!(found.is_none());
     }
 
     #[tokio::test]

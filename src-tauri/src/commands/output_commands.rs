@@ -18,9 +18,17 @@ pub async fn get_output(
         .await
         .map_err(|e| format!("Failed to get execution: {}", e))?;
 
-    let output_file = execution
-        .output_file
-        .unwrap_or_else(|| format!("{}.txt", execution_id));
+    let output_file = if let Some(file_name) = execution.output_file.clone() {
+        file_name
+    } else {
+        match output::find_output_file_for_execution(&output_dir, &execution_id)
+            .await
+            .map_err(|e| format!("Failed to find output file: {}", e))?
+        {
+            Some(file_name) => file_name,
+            None => return Ok(String::new()),
+        }
+    };
 
     let content = output::read_output_file(&output_dir, &output_file)
         .await
@@ -43,9 +51,17 @@ pub async fn delete_output(
         .await
         .map_err(|e| format!("Failed to get execution: {}", e))?;
 
-    let output_file = execution
-        .output_file
-        .unwrap_or_else(|| format!("{}.txt", execution_id));
+    let output_file = if let Some(file_name) = execution.output_file {
+        file_name
+    } else {
+        match output::find_output_file_for_execution(&output_dir, &execution_id)
+            .await
+            .map_err(|e| format!("Failed to find output file: {}", e))?
+        {
+            Some(file_name) => file_name,
+            None => return Ok(true),
+        }
+    };
 
     output::delete_output_file(&output_dir, &output_file)
         .await
