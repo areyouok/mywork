@@ -56,7 +56,7 @@ export function TaskList({
       {tasks.map((task) => (
         <div key={task.id} className="task-item" role="listitem">
           <div className="task-header">
-            <h3 className="task-name">{task.name}</h3>
+            <div className="task-schedule-header">{formatSchedule(task)}</div>
             <button
               role="switch"
               aria-checked={task.enabled}
@@ -69,7 +69,6 @@ export function TaskList({
           </div>
 
           <div className="task-body">
-            <div className="task-schedule-header">{formatSchedule(task)}</div>
             <p className="task-prompt">{task.prompt}</p>
             {task.timeout_seconds !== 300 && (
               <div className="task-meta">

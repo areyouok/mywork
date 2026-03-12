@@ -47,8 +47,11 @@ describe('TaskList', () => {
 
     it('renders task list with tasks', () => {
       render(<TaskList tasks={mockTasks} />);
-      expect(screen.getByText('Daily Report')).toBeInTheDocument();
-      expect(screen.getByText('Weekly Summary')).toBeInTheDocument();
+      // Task name is shown in page header, not in TaskList card
+      // Check for schedule information instead
+      expect(screen.getByText('0 9 * * *')).toBeInTheDocument();
+      expect(screen.getByText('Generate daily report')).toBeInTheDocument();
+      expect(screen.getByText('Create weekly summary')).toBeInTheDocument();
     });
 
     it('displays task prompt', () => {
