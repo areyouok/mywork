@@ -10,6 +10,7 @@ import { useTaskActions } from './hooks/useTaskActions';
 import { useOutput } from './hooks/useOutput';
 import type { Task } from './types/task';
 import type { Execution } from './types/execution';
+import { formatRelativeTime } from './utils/format';
 import './App.css';
 
 type ViewMode = 'list' | 'form' | 'history' | 'output';
@@ -88,7 +89,7 @@ function App() {
     selectedTaskIdRef,
     loadTasks
   );
-  const { outputContent, selectedExecutionId, loadOutput } = useOutput();
+  const { outputContent, loadOutput } = useOutput();
 
   const selectedTask = selectedTaskId ? tasks.find((t) => t.id === selectedTaskId) || null : null;
 
@@ -314,7 +315,12 @@ function App() {
                       {outputExecutionStatus}
                     </span>
                   )}
-                  <h2>Output - Execution {selectedExecutionId}</h2>
+                  <h2>
+                    Output -{' '}
+                    {selectedExecutionLive?.started_at
+                      ? formatRelativeTime(selectedExecutionLive.started_at)
+                      : 'Unknown time'}
+                  </h2>
                 </div>
                 <div className="panel-actions">
                   <button className="btn-secondary" onClick={() => setViewMode('history')}>

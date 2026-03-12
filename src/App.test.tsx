@@ -210,9 +210,7 @@ describe('App', () => {
     await user.click(screen.getByText('running'));
 
     await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: /output - execution exec-running/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /output -/i })).toBeInTheDocument();
       expect(screen.getByText('running')).toBeInTheDocument();
     });
   });
@@ -266,9 +264,7 @@ describe('App', () => {
     await user.click(screen.getByText('running'));
 
     await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: /output - execution exec-live/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /output -/i })).toBeInTheDocument();
       expect(screen.getByText('running')).toBeInTheDocument();
     });
 
