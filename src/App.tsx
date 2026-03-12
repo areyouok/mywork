@@ -233,18 +233,26 @@ function App() {
             <span className="task-count">{tasks.length}</span>
           </div>
           <div className="task-list-container">
-            {tasks.map((task) => (
-              <div
-                key={task.id}
-                className={`sidebar-task-item ${selectedTaskId === task.id ? 'selected' : ''}`}
-                onClick={() => handleTaskSelect(task)}
-              >
-                <span
-                  className={`task-status-indicator ${task.enabled ? 'enabled' : 'disabled'}`}
-                />
-                <span className="task-item-name">{task.name}</span>
-              </div>
-            ))}
+            {tasks.map((task) => {
+              const isRunning = runningTaskIds.has(task.id);
+              return (
+                <div
+                  key={task.id}
+                  className={`sidebar-task-item ${selectedTaskId === task.id ? 'selected' : ''} ${isRunning ? 'running' : ''}`}
+                  onClick={() => handleTaskSelect(task)}
+                >
+                  <span
+                    className={`task-status-indicator ${task.enabled ? 'enabled' : 'disabled'} ${isRunning ? 'running' : ''}`}
+                  />
+                  <span className="task-item-name">{task.name}</span>
+                  {isRunning && (
+                    <span className="task-running-badge">
+                      <span className="running-spinner" />
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </aside>
 
