@@ -1,5 +1,5 @@
-use crate::scheduler::timeout::{run_with_timeout, TimeoutError};
 use crate::opencode::session_parser::parse_session_id;
+use crate::scheduler::timeout::{run_with_timeout, run_with_timeout_merged_output, TimeoutError};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -26,7 +26,11 @@ impl std::fmt::Display for OpenCodeError {
                 write!(f, "OpenCode execution failed: {}", message)
             }
             OpenCodeError::Timeout { timeout_secs } => {
-                write!(f, "OpenCode execution timed out after {} seconds", timeout_secs)
+                write!(
+                    f,
+                    "OpenCode execution timed out after {} seconds",
+                    timeout_secs
+                )
             }
             OpenCodeError::SpawnFailed { message } => {
                 write!(f, "Failed to spawn OpenCode process: {}", message)
@@ -63,8 +67,6 @@ pub struct OpenCodeOutput {
     pub session_id: String,
     /// Standard output from OpenCode
     pub stdout: String,
-    /// Standard error from OpenCode
-    pub stderr: String,
     /// Whether the execution was successful
     pub success: bool,
     /// Whether the execution timed out
@@ -142,7 +144,10 @@ impl Default for SessionManager {
     }
 }
 
-fn find_binary_in_paths(binary_name: &str, paths: impl Iterator<Item = PathBuf>) -> Option<PathBuf> {
+fn find_binary_in_paths(
+    binary_name: &str,
+    paths: impl Iterator<Item = PathBuf>,
+) -> Option<PathBuf> {
     for dir in paths {
         let candidate = dir.join(binary_name);
         if candidate.is_file() {
@@ -235,7 +240,7 @@ pub async fn run_opencode_task(
     args.push(prompt.to_string());
 
     // Execute the command with timeout
-    let process_output = run_with_timeout(
+    let process_output = run_with_timeout_merged_output(
         &binary_path,
         &args.iter().map(String::as_str).collect::<Vec<_>>(),
         timeout,
@@ -245,12 +250,10 @@ pub async fn run_opencode_task(
     .map_err(OpenCodeError::from)?;
 
     // Determine session ID from output or use provided one
-    let result_session_id = session_id
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| {
-            parse_session_id(&process_output.stdout)
-                .unwrap_or_else(|| format!("sess_{}", Uuid::new_v4()))
-        });
+    let result_session_id = session_id.map(|s| s.to_string()).unwrap_or_else(|| {
+        parse_session_id(&process_output.stdout)
+            .unwrap_or_else(|| format!("sess_{}", Uuid::new_v4()))
+    });
 
     let success = process_output.success();
     let timed_out = process_output.timed_out;
@@ -258,7 +261,6 @@ pub async fn run_opencode_task(
     Ok(OpenCodeOutput {
         session_id: result_session_id,
         stdout: process_output.stdout,
-        stderr: process_output.stderr,
         success,
         timed_out,
     })
@@ -271,9 +273,7 @@ pub async fn run_opencode_task(
 ///
 /// # Returns
 /// `Ok(session_id)` if session created successfully, `Err` otherwise
-pub async fn create_session(
-    config: Option<&OpenCodeConfig>,
-) -> Result<String, OpenCodeError> {
+pub async fn create_session(config: Option<&OpenCodeConfig>) -> Result<String, OpenCodeError> {
     let config = config.cloned().unwrap_or_default();
     let binary_path = if config.binary_path == "opencode" {
         resolve_opencode_binary_path()?
@@ -294,10 +294,8 @@ pub async fn create_session(
     }
 
     // Parse session ID from output
-    parse_session_id(&output.stdout).ok_or_else(|| {
-        OpenCodeError::OutputParseFailed {
-            message: "Failed to parse session ID from output".to_string(),
-        }
+    parse_session_id(&output.stdout).ok_or_else(|| OpenCodeError::OutputParseFailed {
+        message: "Failed to parse session ID from output".to_string(),
     })
 }
 
@@ -324,7 +322,6 @@ pub async fn run_mock_opencode_task(
     Ok(OpenCodeOutput {
         session_id: result_session_id,
         stdout,
-        stderr: String::new(),
         success: true,
         timed_out: false,
     })
@@ -420,10 +417,7 @@ mod tests {
         let timeout_error = TimeoutError::Timeout { timeout_secs: 30 };
         let open_code_error: OpenCodeError = timeout_error.into();
 
-        assert_eq!(
-            open_code_error,
-            OpenCodeError::Timeout { timeout_secs: 30 }
-        );
+        assert_eq!(open_code_error, OpenCodeError::Timeout { timeout_secs: 30 });
     }
 
     #[tokio::test]
@@ -440,13 +434,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_mock_opencode_task_existing_session() {
-        let output = run_mock_opencode_task(
-            "test prompt",
-            Some("sess_existing123"),
-            Some(60),
-        )
-        .await
-        .unwrap();
+        let output = run_mock_opencode_task("test prompt", Some("sess_existing123"), Some(60))
+            .await
+            .unwrap();
 
         assert!(output.success);
         assert_eq!(output.session_id, "sess_existing123");
@@ -464,7 +454,6 @@ mod tests {
         let output = OpenCodeOutput {
             session_id: "sess_test".to_string(),
             stdout: "output".to_string(),
-            stderr: "error".to_string(),
             success: true,
             timed_out: false,
         };
@@ -503,14 +492,7 @@ mod tests {
     #[ignore = "requires opencode binary to be installed"]
     async fn test_run_opencode_task_integration() {
         // This test requires opencode to be installed
-        let result = run_opencode_task(
-            "echo hello",
-            None,
-            Some(30),
-            None,
-            None,
-        )
-        .await;
+        let result = run_opencode_task("echo hello", None, Some(30), None, None).await;
 
         // Should either succeed or fail with SpawnFailed (if opencode not installed)
         match result {
@@ -529,7 +511,6 @@ mod tests {
         let output = OpenCodeOutput {
             session_id: "sess_test".to_string(),
             stdout: "output".to_string(),
-            stderr: String::new(),
             success: true,
             timed_out: false,
         };
@@ -543,7 +524,6 @@ mod tests {
         let output = OpenCodeOutput {
             session_id: "sess_test".to_string(),
             stdout: String::new(),
-            stderr: String::new(),
             success: false,
             timed_out: true,
         };

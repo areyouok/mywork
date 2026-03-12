@@ -6,6 +6,7 @@ use std::process::ExitStatus;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::Command;
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
@@ -28,7 +29,11 @@ impl std::fmt::Display for TimeoutError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TimeoutError::Timeout { timeout_secs } => {
-                write!(f, "Process execution timed out after {} seconds", timeout_secs)
+                write!(
+                    f,
+                    "Process execution timed out after {} seconds",
+                    timeout_secs
+                )
             }
             TimeoutError::SpawnFailed { message } => {
                 write!(f, "Failed to spawn process: {}", message)
@@ -56,6 +61,72 @@ pub struct ProcessOutput {
     pub stderr: String,
     /// Whether the process timed out
     pub timed_out: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OutputCaptureMode {
+    Separate,
+    Merged,
+}
+
+enum OutputReaders {
+    Separate {
+        stdout: Option<JoinHandle<Result<String, TimeoutError>>>,
+        stderr: Option<JoinHandle<Result<String, TimeoutError>>>,
+    },
+    Merged {
+        stdout: Option<JoinHandle<Result<(), TimeoutError>>>,
+        stderr: Option<JoinHandle<Result<(), TimeoutError>>>,
+        rx: mpsc::UnboundedReceiver<String>,
+    },
+}
+
+impl OutputReaders {
+    fn abort(&self) {
+        match self {
+            Self::Separate { stdout, stderr } => {
+                if let Some(handle) = stdout {
+                    handle.abort();
+                }
+                if let Some(handle) = stderr {
+                    handle.abort();
+                }
+            }
+            Self::Merged { stdout, stderr, .. } => {
+                if let Some(handle) = stdout {
+                    handle.abort();
+                }
+                if let Some(handle) = stderr {
+                    handle.abort();
+                }
+            }
+        }
+    }
+
+    async fn collect(self) -> Result<(String, String), TimeoutError> {
+        match self {
+            Self::Separate { stdout, stderr } => {
+                let stdout_text = join_output_reader(stdout, "stdout").await?;
+                let stderr_text = join_output_reader(stderr, "stderr").await?;
+                Ok((stdout_text, stderr_text))
+            }
+            Self::Merged {
+                stdout,
+                stderr,
+                mut rx,
+            } => {
+                join_output_forwarder(stdout, "stdout").await?;
+                join_output_forwarder(stderr, "stderr").await?;
+
+                let mut merged_lines = Vec::new();
+                while let Some(line) = rx.recv().await {
+                    merged_lines.push(line);
+                }
+
+                Ok((merged_lines.join("\n"), String::new()))
+            }
+        }
+    }
 }
 
 impl ProcessOutput {
@@ -90,6 +161,16 @@ where
     stream.map(|s| tokio::spawn(async move { read_stream_to_string(s).await }))
 }
 
+fn spawn_output_forwarder<R>(
+    stream: Option<R>,
+    tx: mpsc::UnboundedSender<String>,
+) -> Option<JoinHandle<Result<(), TimeoutError>>>
+where
+    R: AsyncRead + Unpin + Send + 'static,
+{
+    stream.map(|s| tokio::spawn(async move { forward_stream_lines(s, tx).await }))
+}
+
 async fn read_stream_to_string<R>(stream: R) -> Result<String, TimeoutError>
 where
     R: AsyncRead + Unpin,
@@ -97,13 +178,41 @@ where
     let mut reader = BufReader::new(stream).lines();
     let mut lines = Vec::new();
 
-    while let Some(line) = reader.next_line().await.map_err(|e| TimeoutError::ExecutionFailed {
-        message: e.to_string(),
-    })? {
+    while let Some(line) = reader
+        .next_line()
+        .await
+        .map_err(|e| TimeoutError::ExecutionFailed {
+            message: e.to_string(),
+        })?
+    {
         lines.push(line);
     }
 
     Ok(lines.join("\n"))
+}
+
+async fn forward_stream_lines<R>(
+    stream: R,
+    tx: mpsc::UnboundedSender<String>,
+) -> Result<(), TimeoutError>
+where
+    R: AsyncRead + Unpin,
+{
+    let mut reader = BufReader::new(stream).lines();
+
+    while let Some(line) = reader
+        .next_line()
+        .await
+        .map_err(|e| TimeoutError::ExecutionFailed {
+            message: e.to_string(),
+        })?
+    {
+        if tx.send(line).is_err() {
+            break;
+        }
+    }
+
+    Ok(())
 }
 
 async fn join_output_reader(
@@ -111,12 +220,22 @@ async fn join_output_reader(
     stream_name: &str,
 ) -> Result<String, TimeoutError> {
     match handle {
-        Some(h) => h
-            .await
-            .map_err(|e| TimeoutError::ExecutionFailed {
-                message: format!("Failed to join {} reader: {}", stream_name, e),
-            })?,
+        Some(h) => h.await.map_err(|e| TimeoutError::ExecutionFailed {
+            message: format!("Failed to join {} reader: {}", stream_name, e),
+        })?,
         None => Ok(String::new()),
+    }
+}
+
+async fn join_output_forwarder(
+    handle: Option<JoinHandle<Result<(), TimeoutError>>>,
+    stream_name: &str,
+) -> Result<(), TimeoutError> {
+    match handle {
+        Some(h) => h.await.map_err(|e| TimeoutError::ExecutionFailed {
+            message: format!("Failed to join {} reader: {}", stream_name, e),
+        })?,
+        None => Ok(()),
     }
 }
 
@@ -130,28 +249,27 @@ async fn join_output_reader(
 ///
 /// # Returns
 /// `Ok(ProcessOutput)` if the command completes (or times out), `Err` if spawn fails
-pub async fn run_with_timeout(
+async fn run_with_timeout_impl(
     program: &str,
     args: &[&str],
     timeout_secs: u64,
     cwd: Option<&std::path::Path>,
+    output_mode: OutputCaptureMode,
 ) -> Result<ProcessOutput, TimeoutError> {
     let mut cmd = Command::new(program);
     cmd.args(args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .process_group(0);
-    
+
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     }
-    
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| TimeoutError::SpawnFailed {
-            message: e.to_string(),
-        })?;
-    
+
+    let mut child = cmd.spawn().map_err(|e| TimeoutError::SpawnFailed {
+        message: e.to_string(),
+    })?;
+
     // Get PID before moving child
     let pid = match child.id() {
         Some(pid) => pid,
@@ -162,11 +280,23 @@ pub async fn run_with_timeout(
             });
         }
     };
-    
+
     process_tracker::register_pid(pid);
-    
-    let stdout_handle = spawn_output_reader(child.stdout.take());
-    let stderr_handle = spawn_output_reader(child.stderr.take());
+
+    let readers = match output_mode {
+        OutputCaptureMode::Separate => OutputReaders::Separate {
+            stdout: spawn_output_reader(child.stdout.take()),
+            stderr: spawn_output_reader(child.stderr.take()),
+        },
+        OutputCaptureMode::Merged => {
+            let (tx, rx) = mpsc::unbounded_channel();
+            OutputReaders::Merged {
+                stdout: spawn_output_forwarder(child.stdout.take(), tx.clone()),
+                stderr: spawn_output_forwarder(child.stderr.take(), tx),
+                rx,
+            }
+        }
+    };
 
     let timeout_duration = Duration::from_secs(timeout_secs);
     let wait_result = timeout(timeout_duration, child.wait()).await;
@@ -174,12 +304,7 @@ pub async fn run_with_timeout(
     let (status, timed_out) = match wait_result {
         Ok(Ok(status)) => (status, false),
         Ok(Err(e)) => {
-            if let Some(handle) = &stdout_handle {
-                handle.abort();
-            }
-            if let Some(handle) = &stderr_handle {
-                handle.abort();
-            }
+            readers.abort();
             process_tracker::unregister_pid(pid);
             return Err(TimeoutError::ExecutionFailed {
                 message: e.to_string(),
@@ -187,12 +312,7 @@ pub async fn run_with_timeout(
         }
         Err(_) => {
             if let Err(e) = kill_process(pid, true) {
-                if let Some(handle) = &stdout_handle {
-                    handle.abort();
-                }
-                if let Some(handle) = &stderr_handle {
-                    handle.abort();
-                }
+                readers.abort();
                 process_tracker::unregister_pid(pid);
                 return Err(e);
             }
@@ -204,8 +324,7 @@ pub async fn run_with_timeout(
 
     process_tracker::unregister_pid(pid);
 
-    let stdout = join_output_reader(stdout_handle, "stdout").await?;
-    let stderr = join_output_reader(stderr_handle, "stderr").await?;
+    let (stdout, stderr) = readers.collect().await?;
 
     Ok(ProcessOutput {
         status,
@@ -213,6 +332,31 @@ pub async fn run_with_timeout(
         stderr,
         timed_out,
     })
+}
+
+pub async fn run_with_timeout(
+    program: &str,
+    args: &[&str],
+    timeout_secs: u64,
+    cwd: Option<&std::path::Path>,
+) -> Result<ProcessOutput, TimeoutError> {
+    run_with_timeout_impl(
+        program,
+        args,
+        timeout_secs,
+        cwd,
+        OutputCaptureMode::Separate,
+    )
+    .await
+}
+
+pub async fn run_with_timeout_merged_output(
+    program: &str,
+    args: &[&str],
+    timeout_secs: u64,
+    cwd: Option<&std::path::Path>,
+) -> Result<ProcessOutput, TimeoutError> {
+    run_with_timeout_impl(program, args, timeout_secs, cwd, OutputCaptureMode::Merged).await
 }
 
 #[cfg(test)]
@@ -224,8 +368,10 @@ mod tests {
     #[tokio::test]
     async fn test_run_with_timeout_success() {
         // Execute echo command successfully
-        let output = run_with_timeout("echo", &["hello", "world"], 5, None).await.unwrap();
-        
+        let output = run_with_timeout("echo", &["hello", "world"], 5, None)
+            .await
+            .unwrap();
+
         assert!(output.success());
         assert!(!output.timed_out);
         assert!(output.stdout.contains("hello"));
@@ -236,8 +382,10 @@ mod tests {
     #[tokio::test]
     async fn test_run_with_timeout_command_failure() {
         // Execute a command that will fail (exit with non-zero)
-        let output = run_with_timeout("ls", &["/nonexistent_directory_12345"], 5, None).await.unwrap();
-        
+        let output = run_with_timeout("ls", &["/nonexistent_directory_12345"], 5, None)
+            .await
+            .unwrap();
+
         assert!(!output.success());
         assert!(!output.timed_out);
         assert!(!output.stderr.is_empty() || !output.stdout.is_empty());
@@ -247,7 +395,7 @@ mod tests {
     async fn test_run_with_timeout_short_running() {
         // A short-running command should complete before timeout
         let output = run_with_timeout("sleep", &["0.1"], 5, None).await.unwrap();
-        
+
         assert!(output.success());
         assert!(!output.timed_out);
     }
@@ -258,17 +406,23 @@ mod tests {
         let start = std::time::Instant::now();
         let output = run_with_timeout("sleep", &["30"], 2, None).await.unwrap();
         let elapsed = start.elapsed();
-        
+
         assert!(!output.success());
         assert!(output.timed_out);
-        assert!(elapsed < StdDuration::from_secs(5), "Should timeout within 5 seconds, took {:?}", elapsed);
+        assert!(
+            elapsed < StdDuration::from_secs(5),
+            "Should timeout within 5 seconds, took {:?}",
+            elapsed
+        );
     }
 
     #[tokio::test]
     async fn test_run_with_timeout_captures_stdout() {
         // Test that stdout is captured correctly
-        let output = run_with_timeout("printf", &["line1\\nline2\\nline3"], 5, None).await.unwrap();
-        
+        let output = run_with_timeout("printf", &["line1\\nline2\\nline3"], 5, None)
+            .await
+            .unwrap();
+
         assert!(output.success());
         assert!(output.stdout.contains("line1"));
         assert!(output.stdout.contains("line2"));
@@ -279,8 +433,10 @@ mod tests {
     async fn test_run_with_timeout_captures_stderr() {
         // Test that stderr is captured correctly
         // Using bash to write to stderr
-        let output = run_with_timeout("bash", &["-c", "echo 'error message' >&2"], 5, None).await.unwrap();
-        
+        let output = run_with_timeout("bash", &["-c", "echo 'error message' >&2"], 5, None)
+            .await
+            .unwrap();
+
         assert!(output.success());
         assert!(output.stderr.contains("error message"));
     }
@@ -289,11 +445,13 @@ mod tests {
     async fn test_run_with_timeout_invalid_command() {
         // Invalid command should return error
         let result = run_with_timeout("nonexistent_command_12345", &[], 5, None).await;
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             TimeoutError::SpawnFailed { message } => {
-                assert!(message.contains("nonexistent_command") || message.contains("No such file"));
+                assert!(
+                    message.contains("nonexistent_command") || message.contains("No such file")
+                );
             }
             _ => panic!("Expected SpawnFailed error"),
         }
@@ -306,17 +464,17 @@ mod tests {
             .arg("30")
             .spawn()
             .expect("Failed to spawn sleep");
-        
+
         let pid = child.id().expect("Failed to get PID");
-        
+
         // Wait a bit for process to start
         thread::sleep(StdDuration::from_millis(100));
-        
+
         let result = kill_process(pid, false);
         assert!(result.is_ok());
-        
+
         let _ = child.wait().await;
-        
+
         thread::sleep(StdDuration::from_millis(100));
         let _result2 = kill_process(pid, false);
         // This may or may not fail depending on whether PID has been recycled
@@ -340,7 +498,7 @@ mod tests {
             stderr: String::new(),
             timed_out: false,
         };
-        
+
         assert!(output.success());
         assert_eq!(output.code(), Some(0));
         assert!(!output.timed_out);
@@ -354,7 +512,7 @@ mod tests {
             stderr: "error".to_string(),
             timed_out: false,
         };
-        
+
         assert!(!output.success());
         assert!(!output.timed_out);
     }
@@ -367,7 +525,7 @@ mod tests {
             stderr: String::new(),
             timed_out: true,
         };
-        
+
         assert!(!output.success());
         assert!(output.timed_out);
     }
@@ -379,7 +537,7 @@ mod tests {
             error.to_string(),
             "Process execution timed out after 30 seconds"
         );
-        
+
         let error = TimeoutError::SpawnFailed {
             message: "command not found".to_string(),
         };
@@ -387,7 +545,7 @@ mod tests {
             error.to_string(),
             "Failed to spawn process: command not found"
         );
-        
+
         let error = TimeoutError::KillFailed {
             pid: 1234,
             message: "no such process".to_string(),
@@ -402,7 +560,7 @@ mod tests {
     async fn test_timeout_zero_seconds() {
         // Even with 0 second timeout, process should timeout immediately
         let output = run_with_timeout("sleep", &["1"], 0, None).await.unwrap();
-        
+
         assert!(output.timed_out);
         assert!(!output.success());
     }
@@ -412,19 +570,19 @@ mod tests {
         let task0 = run_with_timeout("echo", &["task-0"], 5, None);
         let task1 = run_with_timeout("echo", &["task-1"], 5, None);
         let task2 = run_with_timeout("echo", &["task-2"], 5, None);
-        
+
         let (result0, result1, result2) = tokio::join!(task0, task1, task2);
-        
+
         let output0 = result0.unwrap();
         let output1 = result1.unwrap();
         let output2 = result2.unwrap();
-        
+
         assert!(output0.success());
         assert!(output0.stdout.contains("task-0"));
-        
+
         assert!(output1.success());
         assert!(output1.stdout.contains("task-1"));
-        
+
         assert!(output2.success());
         assert!(output2.stdout.contains("task-2"));
     }
@@ -449,5 +607,82 @@ mod tests {
         assert!(output.stdout.contains("out-5000"));
         assert!(output.stderr.contains("err-1"));
         assert!(output.stderr.contains("err-5000"));
+    }
+
+    #[tokio::test]
+    async fn test_run_with_timeout_merged_output_captures_both_streams() {
+        let output = run_with_timeout_merged_output(
+            "bash",
+            &[
+                "-c",
+                "echo out-1; echo err-1 >&2; echo out-2; echo err-2 >&2",
+            ],
+            5,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert!(output.success());
+        assert!(!output.timed_out);
+        assert!(output.stderr.is_empty());
+        assert!(output.stdout.contains("out-1"));
+        assert!(output.stdout.contains("err-1"));
+        assert!(output.stdout.contains("out-2"));
+        assert!(output.stdout.contains("err-2"));
+    }
+
+    #[tokio::test]
+    async fn test_run_with_timeout_merged_output_times_out() {
+        let output = run_with_timeout_merged_output("sleep", &["30"], 1, None)
+            .await
+            .unwrap();
+
+        assert!(output.timed_out);
+        assert!(!output.success());
+    }
+
+    #[tokio::test]
+    async fn test_run_with_timeout_merged_output_large_output_no_deadlock() {
+        let output = run_with_timeout_merged_output(
+            "bash",
+            &[
+                "-c",
+                "for i in $(seq 1 5000); do echo out-$i; echo err-$i >&2; done",
+            ],
+            10,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert!(output.success());
+        assert!(!output.timed_out);
+        assert!(output.stderr.is_empty());
+        assert!(output.stdout.contains("out-1"));
+        assert!(output.stdout.contains("out-5000"));
+        assert!(output.stdout.contains("err-1"));
+        assert!(output.stdout.contains("err-5000"));
+    }
+
+    #[tokio::test]
+    async fn test_run_with_timeout_merged_output_timeout_under_high_output() {
+        let start = std::time::Instant::now();
+        let output = run_with_timeout_merged_output(
+            "bash",
+            &[
+                "-c",
+                "for i in $(seq 1 3000); do echo out-$i; echo err-$i >&2; done; sleep 5",
+            ],
+            1,
+            None,
+        )
+        .await
+        .unwrap();
+        let elapsed = start.elapsed();
+
+        assert!(output.timed_out);
+        assert!(!output.success());
+        assert!(elapsed < StdDuration::from_secs(8));
     }
 }

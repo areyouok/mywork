@@ -1,15 +1,15 @@
 use crate::db::connection;
 use crate::execution_retention::enforce_execution_history_limit;
-use crate::scheduler::TaskSchedule;
+use crate::models::task::touch_task;
 use crate::scheduler::job_scheduler::{JobCallback, Scheduler, SchedulerState};
 use crate::scheduler::task_queue::{TaskQueue, TaskQueueError};
+use crate::scheduler::TaskSchedule;
 use chrono::Utc;
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
-use crate::models::task::touch_task;
 
 /// Start the scheduler
 #[tauri::command]
@@ -131,7 +131,9 @@ pub async fn reload_scheduler(
         let scheduler_guard = scheduler.lock().await;
         let add_result = match schedule {
             TaskSchedule::Cron(cron_expr) => {
-                scheduler_guard.add_job(&task.id, &cron_expr, callback).await
+                scheduler_guard
+                    .add_job(&task.id, &cron_expr, callback)
+                    .await
             }
             TaskSchedule::Once(run_at) => {
                 let now = Utc::now();
@@ -276,21 +278,15 @@ pub async fn execute_task_internal(
             } else if !opencode_output.success {
                 (
                     ExecutionStatus::Failed,
-                    Some(opencode_output.stderr.clone()),
+                    Some(opencode_output.stdout.clone()),
                 )
             } else {
                 (ExecutionStatus::Success, None)
             };
 
             let content = format!(
-                "Session ID: {}\n{}{}",
-                opencode_output.session_id,
-                opencode_output.stdout,
-                if opencode_output.stderr.is_empty() {
-                    String::new()
-                } else {
-                    format!("\n{}", opencode_output.stderr)
-                }
+                "Session ID: {}\n{}",
+                opencode_output.session_id, opencode_output.stdout
             );
 
             let _file_path = output::write_output_file(&output_dir, &output_file_name, &content)

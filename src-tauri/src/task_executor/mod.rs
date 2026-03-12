@@ -77,20 +77,15 @@ pub async fn execute_task(
             let (final_status, err_msg) = if opencode_output.timed_out {
                 (ExecutionStatus::Timeout, Some("Execution timed out".to_string()))
             } else if !opencode_output.success {
-                (ExecutionStatus::Failed, Some(opencode_output.stderr.clone()))
+                (ExecutionStatus::Failed, Some(opencode_output.stdout.clone()))
             } else {
                 (ExecutionStatus::Success, None)
             };
 
             let content = format!(
-                "Session ID: {}\n{}{}",
+                "Session ID: {}\n{}",
                 opencode_output.session_id,
-                opencode_output.stdout,
-                if opencode_output.stderr.is_empty() {
-                    String::new()
-                } else {
-                    format!("\n{}", opencode_output.stderr)
-                }
+                opencode_output.stdout
             );
 
             let _file_path = output::write_output_file(&output_dir, &output_file_name, &content)
