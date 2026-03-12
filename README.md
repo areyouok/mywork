@@ -99,60 +99,21 @@ Note: Tasks automatically skip execution if a previous run is still in progress.
 mywork/
 ├── src/                    # React frontend
 │   ├── components/         # UI components
-│   │   ├── TaskList.tsx            # Task list display
-│   │   ├── TaskForm.tsx            # Task creation/editing
-│   │   ├── CronInput.tsx           # Cron expression input
-│   │   ├── SimpleScheduleInput.tsx # Simple schedule selector
-│   │   ├── ExecutionHistory.tsx    # Execution history list
-│   │   ├── OutputViewer.tsx        # Output viewer with Markdown
-│   │   └── AnsiRenderer.tsx        # ANSI escape → HTML converter
 │   ├── hooks/              # Custom React hooks
-│   │   ├── useTasks.ts             # Task CRUD + scheduler
-│   │   ├── useScheduler.ts         # Scheduler status
-│   │   ├── useExecutions.ts        # Execution loading
-│   │   ├── useOutput.ts            # Output content loading
-│   │   └── useStreamingOutput.ts   # Streaming output
-│   ├── api/               # Tauri API wrappers
-│   │   └── tasks.ts                 # All IPC wrappers
-│   ├── types/             # TypeScript types
+│   ├── api/                # Tauri IPC wrappers
+│   ├── types/              # TypeScript types
 │   ├── utils/              # Utility functions
-│   │   └── format.ts                # Time formatting
-│   ├── styles/             # Global styles
-│   │   └── design-system.css        # CSS variables + theming
-│   └── App.tsx             # Main application component
-├── src-tauri/             # Rust backend
-│   └── src/
-│       ├── commands/      # Tauri command handlers
-│       │   ├── task_commands.rs      # Task CRUD operations
-│       │   ├── execution_commands.rs # Execution queries
-│       │   ├── scheduler_commands.rs # Scheduler control
-│       │   ├── task_runner_commands.rs # Manual task execution
-│       │   ├── streaming_commands.rs # Real-time output streaming
-│       │   └── output_commands.rs    # Output file operations
-│       ├── db/            # Database layer
-│       │   ├── connection.rs  # SQLite connection pool
-│       │   └── schema.sql      # Database schema
-│       ├── models/        # Data models
-│       │   ├── task.rs    # Task model
-│       │   └── execution.rs # Execution model
-│       ├── scheduler/     # Scheduling logic
-│       │   ├── cron_parser.rs     # Cron expression parsing
-│       │   ├── simple_schedule.rs # Simple schedule parsing
-│       │   ├── job_scheduler.rs   # Job scheduler core
-│       │   ├── task_queue.rs      # Concurrency control
-│       │   ├── timeout.rs         # Timeout handling
-│       │   └── process_tracker.rs # PID tracking + cleanup
-│       ├── executor/       # Streaming process executor
-│       │   └── streaming_executor.rs # Async stdout/stderr streaming
-│       ├── task_executor/   # Task execution logic
-│       │   └── execute_task.rs     # execute_task() implementation
-│       ├── opencode/      # OpenCode integration
-│       │   ├── executor.rs        # CLI executor
-│       │   └── session_parser.rs   # Session ID extraction
-│       └── storage/       # File storage
-│           └── output.rs  # Output file management
-└── tests/                 # E2E tests
-    └── *.spec.ts
+│   └── styles/             # Global styles
+├── src-tauri/src/          # Rust backend
+│   ├── commands/           # Tauri command handlers
+│   ├── models/             # Data models
+│   ├── scheduler/          # Job scheduling logic
+│   ├── executor/           # Streaming process executor
+│   ├── task_executor/      # Task execution logic
+│   ├── opencode/           # OpenCode CLI integration
+│   ├── db/                 # Database layer
+│   └── storage/            # File storage
+└── tests/e2e/              # Playwright E2E tests
 ```
 
 ### Data Flow

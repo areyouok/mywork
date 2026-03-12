@@ -12,7 +12,7 @@ UI components for task management, scheduling, and execution history viewing wit
 src/
 ├── components/    # UI components (*.tsx + *.test.tsx + *.css)
 ├── hooks/         # Custom React hooks for state management
-├── types/         # TypeScript interfaces (Task, Execution, Schedule)
+├── types/         # TypeScript interfaces (Task, Execution)
 ├── api/           # Tauri IPC wrappers
 ├── utils/         # Utility functions (formatting, etc.)
 ├── styles/        # Global CSS (design system, theming)
@@ -32,7 +32,7 @@ src/
 | Output viewer    | `components/OutputViewer.tsx`         | Markdown + syntax highlighting |
 | ANSI rendering   | `components/AnsiRenderer.tsx`         | ANSI escape → HTML converter   |
 | API calls        | `api/tasks.ts`                        | All Tauri IPC wrappers         |
-| Type definitions | `types/task.ts`, `types/execution.ts` | Shared interfaces              |
+| Type definitions | `types/task.ts`, `types/execution.ts` | Task, Execution interfaces     |
 | Task state       | `hooks/useTasks.ts`                   | Task CRUD + scheduler reload   |
 | Scheduler state  | `hooks/useScheduler.ts`               | Scheduler status + running IDs |
 | Execution state  | `hooks/useExecutions.ts`              | Execution list loading         |
@@ -41,6 +41,7 @@ src/
 | Action handlers  | `hooks/useTaskActions.ts`             | Toggle/delete/run handlers     |
 | Time formatting  | `utils/format.ts`                     | Relative time, duration        |
 | Design system    | `styles/design-system.css`            | CSS variables, dark mode       |
+| Channel test     | `components/ChannelTest.tsx`          | IPC channel testing (dev only) |
 
 ## CONVENTIONS
 

@@ -10,7 +10,7 @@ Core backend: task scheduling, execution, persistence, OpenCode integration, and
 
 ```
 src-tauri/src/
-├── commands/      # Tauri IPC handlers (7 files)
+├── commands/      # Tauri IPC handlers (7 modules + poc_commands)
 ├── models/        # Data structs (Task, Execution)
 ├── scheduler/     # Job scheduling (cron + intervals + concurrency)
 ├── executor/      # Streaming process executor
@@ -18,6 +18,7 @@ src-tauri/src/
 ├── opencode/      # OpenCode CLI executor + session parsing
 ├── db/            # SQLite connection pool + schema
 ├── storage/       # File I/O (output files)
+├── execution_retention.rs # Execution history cleanup
 ├── lib.rs         # Tauri app setup + command registration
 └── main.rs        # Entry point (calls lib.rs)
 ```
@@ -32,6 +33,7 @@ src-tauri/src/
 | Manual execution  | `commands/task_runner_commands.rs` | run_task with streaming output      |
 | Streaming exec    | `commands/streaming_commands.rs`   | Real-time output via IPC channels   |
 | Output files      | `commands/output_commands.rs`      | Read/delete execution outputs       |
+| IPC test          | `commands/poc_commands.rs`         | Channel streaming PoC (dev only)    |
 | Cron parsing      | `scheduler/cron_parser.rs`         | Parse cron expressions              |
 | Simple schedules  | `scheduler/simple_schedule.rs`     | Interval parsing                    |
 | Job scheduling    | `scheduler/job_scheduler.rs`       | tokio-cron-scheduler wrapper        |
@@ -43,6 +45,7 @@ src-tauri/src/
 | CLI execution     | `opencode/executor.rs`             | Run OpenCode commands               |
 | Session parsing   | `opencode/session_parser.rs`       | Extract session ID from output      |
 | DB connection     | `db/connection.rs`                 | SQLite pool setup                   |
+| History cleanup   | `execution_retention.rs`           | Enforce execution history limit     |
 
 ## CONVENTIONS
 

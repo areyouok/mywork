@@ -1,6 +1,6 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-03-09
+**Generated:** 2026-03-12
 **Type:** Tauri 2 Desktop App
 
 ## OVERVIEW
@@ -24,6 +24,7 @@ mywork/
 | Add Tauri command     | `src-tauri/src/commands/`  | Register in lib.rs            |
 | Modify task scheduler | `src-tauri/src/scheduler/` | tokio-cron-scheduler          |
 | Database operations   | `src-tauri/src/db/`        | SQLite via sqlx               |
+| Execution cleanup     | `src-tauri/src/`           | execution_retention.rs        |
 | Frontend types        | `src/types/`               | Shared TS interfaces          |
 | E2E tests             | `tests/e2e/*.spec.ts`      | Playwright                    |
 
