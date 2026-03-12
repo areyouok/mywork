@@ -5,7 +5,9 @@
 
 ## OVERVIEW
 
-macOS system tray app for scheduling and managing OpenCode task executions. React 19 + TypeScript frontend, Rust + Tauri 2 backend, SQLite persistence.
+macOS 26 (Tahoe)+ system tray app for scheduling and managing OpenCode task executions. React 19 + TypeScript frontend, Rust + Tauri 2 backend, SQLite persistence.
+
+**Requirements**: macOS 26 (Tahoe) or later. Uses `NSApplicationActivationPolicyAccessory` for dock icon hiding.
 
 ## STRUCTURE
 
@@ -128,7 +130,7 @@ npm run format        # Prettier
 
 ## NOTES
 
-- macOS only (system tray app)
+- macOS 26 (Tahoe) or later only (system tray app)
 - No CI/CD configured (manual builds)
 - Tauri IPC: frontend calls Rust commands via `@tauri-apps/api`
 - Scheduler uses tokio-cron-scheduler with cron expressions or simple intervals

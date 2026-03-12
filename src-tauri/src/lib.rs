@@ -104,7 +104,7 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app = tauri::Builder::default()
+    let mut app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_tasks,
@@ -245,6 +245,9 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
+
+    #[cfg(target_os = "macos")]
+    app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
     app.run(|app_handle, event| match event {
         RunEvent::Exit => {

@@ -18,7 +18,7 @@ A Tauri-based desktop application for scheduling and managing AI task executions
 
 ### Prerequisites
 
-- macOS only
+- macOS 26 (Tahoe) or later
 - Node.js 18+
 - Rust 1.70+
 - npm or yarn
