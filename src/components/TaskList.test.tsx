@@ -59,7 +59,7 @@ describe('TaskList', () => {
 
     it('displays schedule information', () => {
       render(<TaskList tasks={mockTasks} />);
-      expect(screen.getByText(/0 9 \* \* \*/i)).toBeInTheDocument();
+      expect(screen.getByText('0 9 * * *')).toBeInTheDocument();
       expect(screen.getByText(/one-time at/i)).toBeInTheDocument();
     });
 

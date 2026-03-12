@@ -103,6 +103,18 @@
   margin-bottom: var(--space-md);
 }
 
+.task-schedule-header {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  display: inline-block;
+}
+
 .task-prompt {
   margin: 0 0 var(--space-sm);
   font-size: var(--font-size-sm);

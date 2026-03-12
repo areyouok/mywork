@@ -69,13 +69,13 @@ export function TaskList({
           </div>
 
           <div className="task-body">
+            <div className="task-schedule-header">{formatSchedule(task)}</div>
             <p className="task-prompt">{task.prompt}</p>
-            <div className="task-meta">
-              <span className="task-schedule">{formatSchedule(task)}</span>
-              {task.timeout_seconds !== 300 && (
+            {task.timeout_seconds !== 300 && (
+              <div className="task-meta">
                 <span className="task-timeout">Timeout: {task.timeout_seconds}s</span>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           <div className="task-actions">
