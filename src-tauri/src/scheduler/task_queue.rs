@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// Task queue error types
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -50,14 +49,11 @@ impl SlotGuard {
 
 impl Drop for SlotGuard {
     fn drop(&mut self) {
-        let running_tasks = self.running_tasks.clone();
-        let task_id = self.task_id.clone();
-        
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            std::mem::drop(handle.spawn(async move {
-                running_tasks.lock().await.remove(&task_id);
-            }));
-        }
+        let mut running = self
+            .running_tasks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        running.remove(&self.task_id);
     }
 }
 
@@ -85,7 +81,10 @@ impl TaskQueue {
 
     /// Get the current number of running tasks
     pub async fn running_count(&self) -> usize {
-        self.running_tasks.lock().await.len()
+        self.running_tasks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .len()
     }
 
     /// Check if a task is currently running
@@ -96,7 +95,10 @@ impl TaskQueue {
     /// # Returns
     /// `true` if the task is currently running, `false` otherwise
     pub async fn is_running(&self, task_id: &str) -> bool {
-        self.running_tasks.lock().await.contains_key(task_id)
+        self.running_tasks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .contains_key(task_id)
     }
 
     /// Try to acquire a slot for task execution
@@ -109,7 +111,10 @@ impl TaskQueue {
     /// * `Ok(SlotGuard)` - Successfully acquired slot, guard will release on drop
     /// * `Err(TaskQueueError::TaskAlreadyRunning)` - Task is already running
     pub async fn acquire_slot(&self, task_id: &str) -> Result<SlotGuard, TaskQueueError> {
-        let mut running = self.running_tasks.lock().await;
+        let mut running = self
+            .running_tasks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         
         if running.contains_key(task_id) {
             return Err(TaskQueueError::TaskAlreadyRunning {
@@ -118,7 +123,6 @@ impl TaskQueue {
         }
         
         running.insert(task_id.to_string(), ());
-        drop(running);
 
         Ok(SlotGuard {
             task_id: task_id.to_string(),
@@ -136,7 +140,10 @@ impl TaskQueue {
     /// * `Ok(())` - Successfully released
     /// * `Err(TaskQueueError::TaskNotFound)` - Task was not running
     pub async fn release_slot(&self, task_id: &str) -> Result<(), TaskQueueError> {
-        let mut running = self.running_tasks.lock().await;
+        let mut running = self
+            .running_tasks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if running.remove(task_id).is_some() {
             Ok(())
         } else {
@@ -241,7 +248,6 @@ mod tests {
             assert_eq!(queue.running_count().await, 1);
         }
 
-        sleep(Duration::from_millis(10)).await;
         assert_eq!(queue.running_count().await, 0);
     }
 
@@ -274,7 +280,6 @@ mod tests {
         assert_eq!(queue.running_count().await, 2);
 
         drop(guard1);
-        sleep(Duration::from_millis(10)).await;
 
         assert!(!queue.is_running("task-1").await);
 
@@ -309,7 +314,6 @@ mod tests {
         assert!(matches!(result.unwrap_err(), TaskQueueError::TaskAlreadyRunning { .. }));
 
         drop(guard1);
-        sleep(Duration::from_millis(10)).await;
 
         assert_eq!(queue.running_count().await, 2);
 
@@ -319,7 +323,6 @@ mod tests {
         drop(guard2);
         drop(guard3);
         drop(guard4);
-        sleep(Duration::from_millis(10)).await;
 
         assert_eq!(queue.running_count().await, 0);
     }

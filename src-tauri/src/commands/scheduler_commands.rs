@@ -179,6 +179,17 @@ pub async fn reload_scheduler(
     }
 }
 
+struct ExecutionFinishedEventGuard {
+    app: AppHandle,
+    task_id: String,
+}
+
+impl Drop for ExecutionFinishedEventGuard {
+    fn drop(&mut self) {
+        let _ = self.app.emit("execution-finished", &self.task_id);
+    }
+}
+
 /// Internal function to execute a task (used by scheduler callbacks)
 pub async fn execute_task_internal(
     task_id: String,
@@ -191,9 +202,6 @@ pub async fn execute_task_internal(
     use crate::opencode::executor::run_opencode_task;
     use crate::storage::output;
     use chrono::Utc;
-
-    // Emit event to notify frontend to refresh executions
-    let _ = app.emit("execution-started", &task_id);
 
     // Atomically check if running and acquire slot (prevents race condition)
     let queue = task_queue.lock().await;
@@ -215,6 +223,25 @@ pub async fn execute_task_internal(
         .await
         .map_err(|e| format!("Task not found: {}", e))?;
 
+    // Get database directory for working directory
+    let db_path = connection::get_database_directory(&app)
+        .map_err(|e| format!("Failed to get database directory: {}", e))?;
+    let cwd = db_path.parent();
+
+    let output_dir = output::get_output_directory(&app)
+        .map_err(|e| format!("Failed to get output directory: {}", e))?;
+
+    output::create_output_directory(&output_dir)
+        .await
+        .map_err(|e| format!("Failed to create output directory: {}", e))?;
+
+    if let Err(e) = touch_task(&pool, &task_id).await {
+        eprintln!(
+            "Failed to update task timestamp for task '{}': {}",
+            task_id, e
+        );
+    }
+
     // Create execution record
     let new_execution = crate::models::execution::NewExecution {
         task_id: task_id.clone(),
@@ -228,25 +255,14 @@ pub async fn execute_task_internal(
         .await
         .map_err(|e| format!("Failed to create execution: {}", e))?;
 
-    touch_task(&pool, &task_id)
-        .await
-        .map_err(|e| format!("Failed to update task timestamp: {}", e))?;
-
-    // Get database directory for working directory
-    let db_path = connection::get_database_directory(&app)
-        .map_err(|e| format!("Failed to get database directory: {}", e))?;
-    let cwd = db_path.parent();
+    let _ = app.emit("execution-started", &task_id);
+    let _finished_guard = ExecutionFinishedEventGuard {
+        app: app.clone(),
+        task_id: task_id.clone(),
+    };
 
     // Run opencode task
     let result = run_opencode_task(&task.prompt, None, Some(timeout_seconds), None, cwd).await;
-
-    // Save output
-    let output_dir = output::get_output_directory(&app)
-        .map_err(|e| format!("Failed to get output directory: {}", e))?;
-
-    output::create_output_directory(&output_dir)
-        .await
-        .map_err(|e| format!("Failed to create output directory: {}", e))?;
 
     let output_file_name = generate_output_file_name(&execution.id, &Utc::now());
 
@@ -327,8 +343,6 @@ pub async fn execute_task_internal(
         .map_err(|e| format!("Failed to update execution: {}", e))?;
 
     enforce_execution_history_limit(&pool, &output_dir).await;
-
-    let _ = app.emit("execution-finished", &task_id);
 
     Ok(())
 }
