@@ -5,7 +5,7 @@ use crate::models::execution::{
     create_execution, generate_output_file_name, update_execution, ExecutionStatus, NewExecution,
     UpdateExecution,
 };
-use crate::models::task::get_task;
+use crate::models::task::{get_task, touch_task};
 use crate::opencode::session_parser::parse_session_id;
 use crate::scheduler::task_queue::{TaskQueue, TaskQueueError};
 use crate::storage::output;
@@ -40,6 +40,13 @@ pub async fn run_task(
     let task = get_task(&pool, &task_id)
         .await
         .map_err(|e| format!("Task not found: {}", e))?;
+
+    if let Err(e) = touch_task(&pool, &task_id).await {
+        eprintln!(
+            "Failed to update task timestamp for task '{}': {}",
+            task_id, e
+        );
+    }
 
     let new_execution = NewExecution {
         task_id: task_id.clone(),

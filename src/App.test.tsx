@@ -439,4 +439,82 @@ describe('App', () => {
     await user.click(screen.getByText('Daily Code Review'));
     expect(dailyReviewItem).toHaveClass('selected');
   });
+
+  it('should move running task to top when tasks reload with newer updated_at', async () => {
+    const user = userEvent.setup();
+    const listeners: Record<string, (event: { payload: string }) => void> = {};
+    Reflect.set(window, '__TAURI_INTERNALS__', {});
+
+    const initialTasks = [
+      {
+        id: '2',
+        name: 'Weekly Report',
+        prompt: 'Generate report',
+        enabled: true,
+        timeout_seconds: 300,
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-02T00:00:00Z',
+      },
+      {
+        id: '1',
+        name: 'Daily Code Review',
+        prompt: 'Review code',
+        enabled: true,
+        timeout_seconds: 300,
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      },
+    ];
+
+    const reorderedTasks = [
+      {
+        ...initialTasks[1],
+        updated_at: '2024-01-03T00:00:00Z',
+      },
+      initialTasks[0],
+    ];
+
+    let shouldReturnReordered = false;
+    vi.mocked(api.getTasks).mockImplementation(async () =>
+      shouldReturnReordered ? reorderedTasks : initialTasks
+    );
+
+    vi.mocked(listen).mockImplementation(async (eventName, handler) => {
+      listeners[eventName] = handler as (event: { payload: string }) => void;
+      return () => {
+        delete listeners[eventName];
+      };
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Daily Code Review')).toBeInTheDocument();
+      expect(screen.getByText('Weekly Report')).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      const names = Array.from(document.querySelectorAll('.sidebar-task-item .task-item-name')).map(
+        (element) => element.textContent?.trim()
+      );
+      expect(names).toEqual(['Weekly Report', 'Daily Code Review']);
+    });
+
+    await user.click(screen.getByText('Daily Code Review'));
+    await waitFor(() => {
+      expect(listeners['execution-started']).toBeDefined();
+    });
+
+    shouldReturnReordered = true;
+    listeners['execution-started']?.({ payload: '1' });
+
+    await waitFor(() => {
+      const names = Array.from(document.querySelectorAll('.sidebar-task-item .task-item-name')).map(
+        (element) => element.textContent?.trim()
+      );
+      expect(names).toEqual(['Daily Code Review', 'Weekly Report']);
+    });
+
+    Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
+  });
 });
