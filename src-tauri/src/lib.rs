@@ -152,8 +152,7 @@ pub fn run() {
             let scheduler = Arc::new(Mutex::new(Scheduler::new()));
             app.manage(scheduler.clone());
 
-            // Create task queue for concurrency control (always skip if running)
-            let task_queue = Arc::new(Mutex::new(TaskQueue::new(1)));
+            let task_queue = Arc::new(Mutex::new(TaskQueue::new()));
             app.manage(task_queue.clone());
 
             setup_tray(app)?;
