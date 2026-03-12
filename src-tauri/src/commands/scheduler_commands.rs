@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
+use crate::models::task::touch_task;
 
 /// Start the scheduler
 #[tauri::command]
@@ -226,6 +227,10 @@ pub async fn execute_task_internal(
     let execution = crate::models::execution::create_execution(&pool, new_execution)
         .await
         .map_err(|e| format!("Failed to create execution: {}", e))?;
+
+    touch_task(&pool, &task_id)
+        .await
+        .map_err(|e| format!("Failed to update task timestamp: {}", e))?;
 
     // Get database directory for working directory
     let db_path = connection::get_database_directory(&app)

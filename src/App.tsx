@@ -53,6 +53,7 @@ function App() {
       void listen<string>('execution-started', (event) => {
         const taskId = event.payload;
         addRunningTask(taskId);
+        void loadTasks();
 
         if (selectedTaskIdRef.current === taskId) {
           void loadExecutions(taskId);
@@ -64,6 +65,7 @@ function App() {
       void listen<string>('execution-finished', (event) => {
         const taskId = event.payload;
         removeRunningTask(taskId);
+        void loadTasks();
 
         if (selectedTaskIdRef.current === taskId) {
           void loadExecutions(taskId);
@@ -78,7 +80,7 @@ function App() {
       unlistenStarted?.();
       unlistenFinished?.();
     };
-  }, [addRunningTask, loadExecutions, removeRunningTask]);
+  }, [addRunningTask, loadExecutions, loadTasks, removeRunningTask]);
 
   const { handleToggle, handleDelete, handleRun } = useTaskActions(
     updateTask,
