@@ -6,6 +6,7 @@ use crate::models::execution::{
     UpdateExecution,
 };
 use crate::models::task::{get_task, touch_task};
+use crate::opencode::executor::resolve_opencode_binary_path;
 use crate::opencode::session_parser::parse_session_id;
 use crate::scheduler::task_queue::{TaskQueue, TaskQueueError};
 use crate::storage::output;
@@ -168,7 +169,23 @@ pub async fn run_task(
     }
 
     let args: Vec<&str> = vec!["run", &task.prompt];
-    let mut executor = match StreamingExecutor::spawn("opencode", &args, cwd).await {
+    let opencode_binary = match resolve_opencode_binary_path() {
+        Ok(path) => path,
+        Err(e) => {
+            let message = format!("Failed to locate opencode binary: {}", e);
+            mark_execution_failed(
+                &pool,
+                &execution_id,
+                Some(&output_dir),
+                Some(&output_file_name),
+                &message,
+            )
+            .await;
+            return Err(message);
+        }
+    };
+
+    let mut executor = match StreamingExecutor::spawn(&opencode_binary, &args, cwd).await {
         Ok(executor) => executor,
         Err(e) => {
             let message = format!("Failed to start opencode streaming: {}", e);
