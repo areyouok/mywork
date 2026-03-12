@@ -218,7 +218,6 @@ describe('App', () => {
   it('should update output status badge when execution finishes while staying on output page', async () => {
     const user = userEvent.setup();
     const listeners: Record<string, (event: { payload: string }) => void> = {};
-    Reflect.set(window, '__TAURI_INTERNALS__', {});
 
     const runningExecution = {
       id: 'exec-live',
@@ -274,14 +273,11 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('success')).toBeInTheDocument();
     });
-
-    Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
   });
 
   it('should show run button as running when scheduler emits execution-started and reset on execution-finished', async () => {
     const user = userEvent.setup();
     const listeners: Record<string, (event: { payload: string }) => void> = {};
-    Reflect.set(window, '__TAURI_INTERNALS__', {});
 
     vi.mocked(listen).mockImplementation(async (eventName, handler) => {
       listeners[eventName] = handler as (event: { payload: string }) => void;
@@ -320,8 +316,6 @@ describe('App', () => {
       expect(runButton).toHaveTextContent('Run');
       expect(runButton).not.toBeDisabled();
     });
-
-    Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
   });
 
   it('should toggle task enabled status', async () => {
@@ -443,7 +437,6 @@ describe('App', () => {
   it('should move running task to top when tasks reload with newer updated_at', async () => {
     const user = userEvent.setup();
     const listeners: Record<string, (event: { payload: string }) => void> = {};
-    Reflect.set(window, '__TAURI_INTERNALS__', {});
 
     const initialTasks = [
       {
@@ -514,7 +507,42 @@ describe('App', () => {
       );
       expect(names).toEqual(['Daily Code Review', 'Weekly Report']);
     });
+  });
 
-    Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
+  it('should register execution event listeners without __TAURI_INTERNALS__ guard', async () => {
+    const user = userEvent.setup();
+    const listeners: Record<string, (event: { payload: string }) => void> = {};
+
+    vi.mocked(listen).mockImplementation(async (eventName, handler) => {
+      listeners[eventName] = handler as (event: { payload: string }) => void;
+      return () => {
+        delete listeners[eventName];
+      };
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Daily Code Review')).toBeInTheDocument();
+      expect(listeners['execution-started']).toBeDefined();
+      expect(listeners['execution-finished']).toBeDefined();
+    });
+
+    await user.click(screen.getByText('Daily Code Review'));
+
+    const runButton = screen.getByRole('button', { name: /run daily code review/i });
+    expect(runButton).toHaveTextContent('Run');
+
+    listeners['execution-started']?.({ payload: '1' });
+    await waitFor(() => {
+      expect(runButton).toHaveTextContent('Running...');
+      expect(runButton).toBeDisabled();
+    });
+
+    listeners['execution-finished']?.({ payload: '1' });
+    await waitFor(() => {
+      expect(runButton).toHaveTextContent('Run');
+      expect(runButton).not.toBeDisabled();
+    });
   });
 });

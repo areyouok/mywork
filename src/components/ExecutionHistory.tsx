@@ -12,6 +12,10 @@ export function ExecutionHistory({
 }: ExecutionHistoryProps) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const canOpenExecutionDetail = (execution: Execution): boolean => {
+    return execution.status !== 'pending';
+  };
+
   useEffect(() => {
     const hasRunning = executions.some((e) => e.status === 'running');
 
@@ -53,17 +57,13 @@ export function ExecutionHistory({
   }
 
   const handleClick = (execution: Execution) => {
-    if (onViewOutput && (execution.output_file || execution.status === 'running')) {
+    if (onViewOutput && canOpenExecutionDetail(execution)) {
       onViewOutput(execution);
     }
   };
 
   const handleKeyPress = (event: React.KeyboardEvent, execution: Execution) => {
-    if (
-      event.key === 'Enter' &&
-      onViewOutput &&
-      (execution.output_file || execution.status === 'running')
-    ) {
+    if (event.key === 'Enter' && onViewOutput && canOpenExecutionDetail(execution)) {
       onViewOutput(execution);
     }
   };
@@ -75,8 +75,7 @@ export function ExecutionHistory({
   return (
     <div className="execution-history" role="list">
       {filteredExecutions.map((execution) => {
-        const isClickable =
-          onViewOutput && (execution.output_file || execution.status === 'running');
+        const isClickable = onViewOutput && canOpenExecutionDetail(execution);
         const isRunning = execution.status === 'running' && !execution.finished_at;
 
         return (

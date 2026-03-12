@@ -177,9 +177,23 @@ describe('ExecutionHistory', () => {
       expect(onViewOutput).toHaveBeenCalledWith(executions[0]);
     });
 
-    it('should not call onViewOutput when execution has no output file', async () => {
+    it('should call onViewOutput for terminal execution even without output file', async () => {
       const user = userEvent.setup();
-      const executions = [createMockExecution({ output_file: undefined })];
+      const executions = [createMockExecution({ status: 'failed', output_file: undefined })];
+      const onViewOutput = vi.fn();
+
+      render(<ExecutionHistory executions={executions} onViewOutput={onViewOutput} />);
+
+      const item = screen.getByRole('listitem');
+      await user.click(item);
+
+      expect(onViewOutput).toHaveBeenCalledTimes(1);
+      expect(onViewOutput).toHaveBeenCalledWith(executions[0]);
+    });
+
+    it('should not call onViewOutput when execution is pending', async () => {
+      const user = userEvent.setup();
+      const executions = [createMockExecution({ status: 'pending', output_file: undefined })];
       const onViewOutput = vi.fn();
 
       render(<ExecutionHistory executions={executions} onViewOutput={onViewOutput} />);
@@ -211,10 +225,21 @@ describe('ExecutionHistory', () => {
       expect(item).toHaveClass('clickable');
     });
 
-    it('should not have clickable cursor when execution has no output file', () => {
-      const executions = [createMockExecution({ output_file: undefined })];
+    it('should have clickable cursor for terminal execution without output file', () => {
+      const executions = [createMockExecution({ status: 'failed', output_file: undefined })];
+      const onViewOutput = vi.fn();
 
-      render(<ExecutionHistory executions={executions} />);
+      render(<ExecutionHistory executions={executions} onViewOutput={onViewOutput} />);
+
+      const item = screen.getByRole('listitem');
+      expect(item).toHaveClass('clickable');
+    });
+
+    it('should not have clickable cursor for pending execution', () => {
+      const executions = [createMockExecution({ status: 'pending', output_file: undefined })];
+      const onViewOutput = vi.fn();
+
+      render(<ExecutionHistory executions={executions} onViewOutput={onViewOutput} />);
 
       const item = screen.getByRole('listitem');
       expect(item).not.toHaveClass('clickable');

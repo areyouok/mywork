@@ -36,44 +36,51 @@ function App() {
   const { executions, loadExecutions } = useExecutions();
 
   useEffect(() => {
-    const tauriInternals = Reflect.get(window, '__TAURI_INTERNALS__');
-    if (!tauriInternals) {
-      return;
-    }
-
     let unlistenStarted: (() => void) | undefined;
     let unlistenFinished: (() => void) | undefined;
     let mounted = true;
 
-    import('@tauri-apps/api/event').then(({ listen }) => {
-      if (!mounted) {
-        return;
-      }
-
-      void listen<string>('execution-started', (event) => {
-        const taskId = event.payload;
-        addRunningTask(taskId);
-        void loadTasks();
-
-        if (selectedTaskIdRef.current === taskId) {
-          void loadExecutions(taskId);
+    import('@tauri-apps/api/event')
+      .then(({ listen }) => {
+        if (!mounted) {
+          return;
         }
-      }).then((unlisten) => {
-        unlistenStarted = unlisten;
-      });
 
-      void listen<string>('execution-finished', (event) => {
-        const taskId = event.payload;
-        removeRunningTask(taskId);
-        void loadTasks();
+        void listen<string>('execution-started', (event) => {
+          const taskId = event.payload;
+          addRunningTask(taskId);
+          void loadTasks();
 
-        if (selectedTaskIdRef.current === taskId) {
-          void loadExecutions(taskId);
-        }
-      }).then((unlisten) => {
-        unlistenFinished = unlisten;
+          if (selectedTaskIdRef.current === taskId) {
+            void loadExecutions(taskId);
+          }
+        })
+          .then((unlisten) => {
+            unlistenStarted = unlisten;
+          })
+          .catch((error) => {
+            console.error('Failed to listen execution-started event:', error);
+          });
+
+        void listen<string>('execution-finished', (event) => {
+          const taskId = event.payload;
+          removeRunningTask(taskId);
+          void loadTasks();
+
+          if (selectedTaskIdRef.current === taskId) {
+            void loadExecutions(taskId);
+          }
+        })
+          .then((unlisten) => {
+            unlistenFinished = unlisten;
+          })
+          .catch((error) => {
+            console.error('Failed to listen execution-finished event:', error);
+          });
+      })
+      .catch((error) => {
+        console.error('Failed to initialize execution event listeners:', error);
       });
-    });
 
     return () => {
       mounted = false;

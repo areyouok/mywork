@@ -59,6 +59,24 @@ describe('OutputViewer', () => {
 
       expect(screen.queryByText(/no output/i)).not.toBeInTheDocument();
     });
+
+    it('should render execution error message when output is empty for terminal status', () => {
+      render(
+        <OutputViewer
+          content=""
+          execution={{
+            id: 'exec-1',
+            task_id: 'task-1',
+            status: 'failed',
+            started_at: '2024-01-01T00:00:00Z',
+            error_message: 'Application was terminated unexpectedly',
+          }}
+        />
+      );
+
+      expect(screen.getByText('Application was terminated unexpectedly')).toBeInTheDocument();
+      expect(screen.queryByText(/no output/i)).not.toBeInTheDocument();
+    });
   });
 
   describe('Props', () => {

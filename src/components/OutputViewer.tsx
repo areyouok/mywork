@@ -42,7 +42,11 @@ export function OutputViewer({ content, isMarkdown: _isMarkdown, execution }: Ou
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
   }, [displayContent]);
-  const isEmpty = !displayContent || displayContent.trim() === '';
+
+  const fallbackExecutionMessage =
+    execution?.status !== 'running' && execution?.error_message ? execution.error_message : '';
+  const finalDisplayContent = displayContent || fallbackExecutionMessage;
+  const isEmpty = !finalDisplayContent || finalDisplayContent.trim() === '';
 
   if (isEmpty) {
     return (
@@ -55,7 +59,7 @@ export function OutputViewer({ content, isMarkdown: _isMarkdown, execution }: Ou
   return (
     <div className="output-viewer">
       <div className="output-viewer-content" ref={containerRef} onScroll={handleScroll}>
-        <AnsiRenderer text={displayContent} />
+        <AnsiRenderer text={finalDisplayContent} />
       </div>
     </div>
   );
