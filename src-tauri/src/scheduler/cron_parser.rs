@@ -81,6 +81,34 @@ impl CronSchedule {
     }
 }
 
+fn normalize_and_split_fields(expression: &str) -> Result<(&str, Vec<&str>), CronError> {
+    let trimmed = expression.trim();
+
+    if trimmed.is_empty() {
+        return Err(CronError::EmptyExpression);
+    }
+
+    let fields: Vec<&str> = trimmed.split_whitespace().collect();
+
+    if fields.len() != 5 {
+        return Err(CronError::InvalidFieldCount {
+            expected: 5,
+            actual: fields.len(),
+        });
+    }
+
+    Ok((trimmed, fields))
+}
+
+fn ensure_valid_cron_fields(trimmed_expression: &str) -> Result<(), CronError> {
+    let six_field_expr = format!("0 {}", trimmed_expression);
+    Schedule::from_str(&six_field_expr).map_err(|e| CronError::InvalidSyntax {
+        message: format!("Failed to parse cron expression: {}", e),
+    })?;
+
+    Ok(())
+}
+
 /// Validate a cron expression without returning parsed data
 ///
 /// # Arguments
@@ -98,25 +126,8 @@ impl CronSchedule {
 /// assert!(validate_cron("invalid").is_err());
 /// ```
 pub fn validate_cron(expression: &str) -> Result<(), CronError> {
-    let trimmed = expression.trim();
-
-    if trimmed.is_empty() {
-        return Err(CronError::EmptyExpression);
-    }
-
-    let fields: Vec<&str> = trimmed.split_whitespace().collect();
-
-    if fields.len() != 5 {
-        return Err(CronError::InvalidFieldCount {
-            expected: 5,
-            actual: fields.len(),
-        });
-    }
-
-    let six_field_expr = format!("0 {}", trimmed);
-    Schedule::from_str(&six_field_expr).map_err(|e| CronError::InvalidSyntax {
-        message: format!("Failed to parse cron expression: {}", e),
-    })?;
+    let (trimmed, _fields) = normalize_and_split_fields(expression)?;
+    ensure_valid_cron_fields(trimmed)?;
 
     Ok(())
 }
@@ -142,25 +153,8 @@ pub fn validate_cron(expression: &str) -> Result<(), CronError> {
 /// assert_eq!(schedule.day_of_week, "1-5");
 /// ```
 pub fn parse_cron(expression: &str) -> Result<CronSchedule, CronError> {
-    let trimmed = expression.trim();
-
-    if trimmed.is_empty() {
-        return Err(CronError::EmptyExpression);
-    }
-
-    let fields: Vec<&str> = trimmed.split_whitespace().collect();
-
-    if fields.len() != 5 {
-        return Err(CronError::InvalidFieldCount {
-            expected: 5,
-            actual: fields.len(),
-        });
-    }
-
-    let six_field_expr = format!("0 {}", trimmed);
-    Schedule::from_str(&six_field_expr).map_err(|e| CronError::InvalidSyntax {
-        message: format!("Failed to parse cron expression: {}", e),
-    })?;
+    let (trimmed, fields) = normalize_and_split_fields(expression)?;
+    ensure_valid_cron_fields(trimmed)?;
 
     Ok(CronSchedule {
         expression: trimmed.to_string(),
