@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 
 pub mod commands;
 pub mod db;
+pub mod environment;
 pub mod execution_retention;
 pub mod executor;
 pub mod models;

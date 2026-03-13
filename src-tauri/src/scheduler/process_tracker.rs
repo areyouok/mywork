@@ -1,3 +1,4 @@
+use crate::environment::hydrated_path;
 use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 use std::collections::HashSet;
@@ -49,7 +50,12 @@ pub fn running_count() -> usize {
 pub fn cleanup_orphan_processes(app_data_dir: &Path) {
     let workdir = app_data_dir.to_string_lossy().to_string();
 
-    let output = Command::new("ps").args(["-eo", "pid,comm"]).output();
+    let mut ps_cmd = Command::new("ps");
+    ps_cmd.args(["-eo", "pid,comm"]);
+    if let Some(path) = hydrated_path() {
+        ps_cmd.env("PATH", path);
+    }
+    let output = ps_cmd.output();
 
     let Ok(output) = output else {
         return;
@@ -71,7 +77,12 @@ pub fn cleanup_orphan_processes(app_data_dir: &Path) {
             None => continue,
         };
 
-        let cwd_output = Command::new("pwdx").arg(pid.to_string()).output();
+        let mut pwdx_cmd = Command::new("pwdx");
+        pwdx_cmd.arg(pid.to_string());
+        if let Some(path) = hydrated_path() {
+            pwdx_cmd.env("PATH", path);
+        }
+        let cwd_output = pwdx_cmd.output();
         let Ok(cwd_output) = cwd_output else {
             continue;
         };

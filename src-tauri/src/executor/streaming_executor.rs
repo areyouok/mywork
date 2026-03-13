@@ -3,6 +3,7 @@ use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
 
+use crate::environment::hydrated_path;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, Mutex};
@@ -86,6 +87,10 @@ impl StreamingExecutor {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .process_group(0);
+
+        if let Some(path) = hydrated_path() {
+            cmd.env("PATH", path);
+        }
 
         if let Some(dir) = cwd {
             cmd.current_dir(dir);

@@ -1,3 +1,4 @@
+use crate::environment::hydrated_path;
 use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 use serde::{Deserialize, Serialize};
@@ -261,6 +262,10 @@ async fn run_with_timeout_impl(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .process_group(0);
+
+    if let Some(path) = hydrated_path() {
+        cmd.env("PATH", path);
+    }
 
     if let Some(dir) = cwd {
         cmd.current_dir(dir);

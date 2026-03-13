@@ -1,7 +1,6 @@
 use crate::opencode::session_parser::parse_session_id;
 use crate::scheduler::timeout::{run_with_timeout, run_with_timeout_merged_output, TimeoutError};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use uuid::Uuid;
 
 /// OpenCode execution error types
@@ -144,73 +143,6 @@ impl Default for SessionManager {
     }
 }
 
-fn find_binary_in_paths(
-    binary_name: &str,
-    paths: impl Iterator<Item = PathBuf>,
-) -> Option<PathBuf> {
-    for dir in paths {
-        let candidate = dir.join(binary_name);
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-
-    None
-}
-
-fn common_opencode_locations() -> Vec<PathBuf> {
-    let mut locations = vec![
-        PathBuf::from("/opt/homebrew/bin/opencode"),
-        PathBuf::from("/usr/local/bin/opencode"),
-        PathBuf::from("/usr/bin/opencode"),
-    ];
-
-    if let Some(home) = std::env::var_os("HOME") {
-        let home_dir = PathBuf::from(home);
-        locations.push(home_dir.join(".opencode/bin/opencode"));
-        locations.push(home_dir.join(".local/bin/opencode"));
-        locations.push(home_dir.join(".npm-global/bin/opencode"));
-    }
-
-    locations
-}
-
-pub fn resolve_opencode_binary_path() -> Result<String, OpenCodeError> {
-    for env_key in ["MYWORK_OPENCODE_BIN", "OPENCODE_BIN"] {
-        if let Some(candidate) = std::env::var_os(env_key) {
-            let path = PathBuf::from(candidate);
-            if path.is_file() {
-                return Ok(path.to_string_lossy().to_string());
-            }
-
-            return Err(OpenCodeError::SpawnFailed {
-                message: format!(
-                    "{} points to missing file: {}",
-                    env_key,
-                    path.to_string_lossy()
-                ),
-            });
-        }
-    }
-
-    if let Some(path_var) = std::env::var_os("PATH") {
-        if let Some(found) = find_binary_in_paths("opencode", std::env::split_paths(&path_var)) {
-            return Ok(found.to_string_lossy().to_string());
-        }
-    }
-
-    for candidate in common_opencode_locations() {
-        if candidate.is_file() {
-            return Ok(candidate.to_string_lossy().to_string());
-        }
-    }
-
-    Err(OpenCodeError::SpawnFailed {
-        message: "Unable to locate 'opencode'. Set MYWORK_OPENCODE_BIN to the executable path."
-            .to_string(),
-    })
-}
-
 /// Run an OpenCode task with timeout control
 pub async fn run_opencode_task(
     prompt: &str,
@@ -220,11 +152,6 @@ pub async fn run_opencode_task(
     cwd: Option<&std::path::Path>,
 ) -> Result<OpenCodeOutput, OpenCodeError> {
     let config = config.cloned().unwrap_or_default();
-    let binary_path = if config.binary_path == "opencode" {
-        resolve_opencode_binary_path()?
-    } else {
-        config.binary_path.clone()
-    };
     let timeout = timeout_secs.unwrap_or(config.default_timeout_secs);
 
     // Build command arguments: opencode run "prompt"
@@ -241,7 +168,7 @@ pub async fn run_opencode_task(
 
     // Execute the command with timeout
     let process_output = run_with_timeout_merged_output(
-        &binary_path,
+        &config.binary_path,
         &args.iter().map(String::as_str).collect::<Vec<_>>(),
         timeout,
         cwd,
@@ -275,15 +202,10 @@ pub async fn run_opencode_task(
 /// `Ok(session_id)` if session created successfully, `Err` otherwise
 pub async fn create_session(config: Option<&OpenCodeConfig>) -> Result<String, OpenCodeError> {
     let config = config.cloned().unwrap_or_default();
-    let binary_path = if config.binary_path == "opencode" {
-        resolve_opencode_binary_path()?
-    } else {
-        config.binary_path
-    };
 
     // Execute opencode with --new-session flag
     let args = vec!["--new-session"];
-    let output = run_with_timeout(&binary_path, &args, 30, None)
+    let output = run_with_timeout(&config.binary_path, &args, 30, None)
         .await
         .map_err(OpenCodeError::from)?;
 
@@ -330,7 +252,6 @@ pub async fn run_mock_opencode_task(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
 
     #[test]
     fn test_session_manager_new() {
@@ -465,26 +386,6 @@ mod tests {
         let deserialized: OpenCodeOutput = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.session_id, "sess_test");
         assert_eq!(deserialized.stdout, "output");
-    }
-
-    #[test]
-    fn test_find_binary_in_paths_returns_match() {
-        let temp_dir = tempdir().expect("Failed to create temp dir");
-        let bin_path = temp_dir.path().join("opencode");
-        std::fs::write(&bin_path, "#!/bin/sh\nexit 0\n").expect("Failed to create binary file");
-
-        let found = find_binary_in_paths("opencode", [temp_dir.path().to_path_buf()].into_iter());
-
-        assert_eq!(found, Some(bin_path));
-    }
-
-    #[test]
-    fn test_find_binary_in_paths_returns_none_when_missing() {
-        let temp_dir = tempdir().expect("Failed to create temp dir");
-
-        let found = find_binary_in_paths("opencode", [temp_dir.path().to_path_buf()].into_iter());
-
-        assert!(found.is_none());
     }
 
     // Integration test - only runs when opencode binary is available

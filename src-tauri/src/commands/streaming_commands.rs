@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use crate::executor::streaming_executor::{StreamLine, StreamingExecutor};
 use crate::models::task;
-use crate::opencode::executor::resolve_opencode_binary_path;
 use serde::Serialize;
 use sqlx::SqlitePool;
 use tauri::ipc::Channel;
@@ -31,10 +30,8 @@ pub async fn execute_task_streaming(
 
     let args: Vec<&str> = vec!["run", &task.prompt];
     let cwd_path = cwd.as_deref().map(Path::new);
-    let opencode_binary = resolve_opencode_binary_path()
-        .map_err(|e| format!("Failed to locate opencode binary: {}", e))?;
 
-    let mut executor = StreamingExecutor::spawn(&opencode_binary, &args, cwd_path)
+    let mut executor = StreamingExecutor::spawn("opencode", &args, cwd_path)
         .await
         .map_err(|e| format!("Failed to start opencode streaming: {}", e))?;
 
