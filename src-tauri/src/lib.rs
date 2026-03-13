@@ -6,7 +6,7 @@ use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, RunEvent,
+    Manager, RunEvent,
 };
 use tokio::sync::Mutex;
 
@@ -74,6 +74,7 @@ fn mark_running_as_failed_blocking(pool: &SqlitePool) {
 async fn handle_system_sleep(
     scheduler: &Arc<Mutex<Scheduler>>,
     pool: &Arc<SqlitePool>,
+    notification_id: isize,
 ) {
     eprintln!("[PowerMonitor] System entering sleep, pausing scheduler...");
 
@@ -84,7 +85,8 @@ async fn handle_system_sleep(
     }
     drop(scheduler_guard);
 
-    // 2. Get running executions and mark them as failed
+    scheduler::kill_all_processes();
+
     match get_executions_by_status(pool, ExecutionStatus::Running).await {
         Ok(running_executions) => {
             let now = Utc::now().to_rfc3339();
@@ -107,8 +109,7 @@ async fn handle_system_sleep(
         }
     }
 
-    // 3. Kill all processes
-    scheduler::kill_all_processes();
+    power_monitor::acknowledge_sleep(notification_id);
 
     eprintln!("[PowerMonitor] System sleep handling completed");
 }
@@ -315,10 +316,13 @@ pub fn run() {
 
                     while let Some(event) = power_monitor.recv().await {
                         match event {
-                            power_monitor::PowerEvent::WillSleep => {
+                            power_monitor::PowerEvent::WillSleep {
+                                notification_id,
+                            } => {
                                 handle_system_sleep(
                                     &scheduler_for_power,
                                     &pool_for_power,
+                                    notification_id,
                                 )
                                 .await;
                             }

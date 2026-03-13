@@ -6,12 +6,23 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
 use tokio::sync::mpsc;
 
+const K_IO_MESSAGE_CAN_SYSTEM_SLEEP: u32 = 0x1;
+const K_IO_MESSAGE_SYSTEM_WILL_SLEEP: u32 = 0x2;
+const K_IO_MESSAGE_SYSTEM_WILL_NOT_SLEEP: u32 = 0x4;
+const K_IO_MESSAGE_SYSTEM_HAS_POWERED_ON: u32 = 0x8;
+
 /// 电源事件类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PowerEvent {
     /// 即将进入睡眠
-    WillSleep,
+    WillSleep { notification_id: isize },
     /// 系统已唤醒
+    DidWake,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CallbackEventKind {
+    WillSleep,
     DidWake,
 }
 
@@ -29,6 +40,51 @@ pub fn is_sleeping() -> bool {
 /// 设置电源状态
 pub fn set_sleeping(sleeping: bool) {
     CURRENT_POWER_STATE.store(if sleeping { 1 } else { 0 }, Ordering::SeqCst);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CallbackDecision {
+    emit_event: Option<CallbackEventKind>,
+    set_sleeping: Option<bool>,
+    allow_sleep: bool,
+}
+
+fn decide_power_callback_action(message_type: u32, sleeping: bool) -> CallbackDecision {
+    match message_type {
+        K_IO_MESSAGE_CAN_SYSTEM_SLEEP => CallbackDecision {
+            emit_event: None,
+            set_sleeping: None,
+            allow_sleep: true,
+        },
+        K_IO_MESSAGE_SYSTEM_WILL_SLEEP => CallbackDecision {
+            emit_event: if sleeping {
+                None
+            } else {
+                Some(CallbackEventKind::WillSleep)
+            },
+            set_sleeping: Some(true),
+            allow_sleep: false,
+        },
+        K_IO_MESSAGE_SYSTEM_HAS_POWERED_ON => CallbackDecision {
+            emit_event: if sleeping {
+                Some(CallbackEventKind::DidWake)
+            } else {
+                None
+            },
+            set_sleeping: Some(false),
+            allow_sleep: false,
+        },
+        K_IO_MESSAGE_SYSTEM_WILL_NOT_SLEEP => CallbackDecision {
+            emit_event: None,
+            set_sleeping: Some(false),
+            allow_sleep: false,
+        },
+        _ => CallbackDecision {
+            emit_event: None,
+            set_sleeping: None,
+            allow_sleep: false,
+        },
+    }
 }
 
 /// 电源监听器
@@ -74,49 +130,70 @@ impl PowerMonitor {
 }
 
 #[cfg(target_os = "macos")]
+pub fn acknowledge_sleep(notification_id: isize) {
+    unsafe {
+        acknowledge_sleep_impl(notification_id);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn acknowledge_sleep(_notification_id: isize) {}
+
+#[cfg(target_os = "macos")]
 mod macos_impl {
     use super::*;
-    use core_foundation::base::{CFTypeRef, TCFType};
-    use core_foundation::runloop::{CFRunLoopAddSource, CFRunLoopGetCurrent, CFRunLoopRun};
-    use core_foundation::string::CFString;
-    use core_foundation::string::CFStringRef;
-    use mach::kern_return::{kern_return_t, KERN_SUCCESS};
+    use core_foundation::base::CFTypeRef;
+    use core_foundation::runloop::{
+        kCFRunLoopDefaultMode, CFRunLoopAddSource, CFRunLoopGetCurrent, CFRunLoopRun,
+    };
     use mach::port::mach_port_t;
     use std::os::raw::c_void;
     use std::ptr;
+    use std::sync::atomic::AtomicU32;
     use std::thread;
 
     // IOKit 类型定义
+    #[allow(non_camel_case_types)]
     type io_object_t = mach_port_t;
+    #[allow(non_camel_case_types)]
     type io_service_t = io_object_t;
+    #[allow(non_camel_case_types)]
     type io_connect_t = io_object_t;
-    type io_iterator_t = io_object_t;
+    #[allow(non_camel_case_types)]
     type io_notification_port_t = *mut c_void;
+    #[allow(non_camel_case_types)]
     type IONotificationPortRef = io_notification_port_t;
 
-    // 电源消息类型
-    const kIOMessageCanSystemSleep: i32 = 0x1;
-    const kIOMessageSystemWillSleep: i32 = 0x2;
-    const kIOMessageSystemWillNotSleep: i32 = 0x4;
-    const kIOMessageSystemHasPoweredOn: i32 = 0x8;
-
+    #[link(name = "IOKit", kind = "framework")]
     extern "C" {
-        fn IONotificationPortCreate(allocator: CFTypeRef) -> IONotificationPortRef;
-        fn IONotificationPortDestroy(notify: IONotificationPortRef);
         fn IONotificationPortGetRunLoopSource(notify: IONotificationPortRef) -> CFTypeRef;
         fn IORegisterForSystemPower(
             refCon: *mut c_void,
             thePortRef: *mut IONotificationPortRef,
             callback: extern "C" fn(*mut c_void, io_service_t, u32, *mut c_void),
             notifier: *mut io_object_t,
-        ) -> kern_return_t;
-        fn IODeregisterForSystemPower(notifier: io_object_t) -> kern_return_t;
-        fn IOAllowPowerChange(connect: io_connect_t, notification_id: u32) -> kern_return_t;
-        fn IOCancelPowerChange(connect: io_connect_t, notification_id: u32) -> kern_return_t;
+        ) -> io_connect_t;
+        fn IOAllowPowerChange(connect: io_connect_t, notification_id: isize) -> i32;
     }
 
-    static mut POWER_PORT: IONotificationPortRef = ptr::null_mut();
-    static mut POWER_CONNECTION: io_object_t = 0;
+    static POWER_CONNECTION: AtomicU32 = AtomicU32::new(0);
+
+    fn extract_notification_id(message_argument: *mut c_void) -> isize {
+        if message_argument.is_null() {
+            0
+        } else {
+            message_argument as isize
+        }
+    }
+
+    pub unsafe fn acknowledge_sleep_impl(notification_id: isize) {
+        let connection = POWER_CONNECTION.load(Ordering::SeqCst);
+        if connection != 0 {
+            unsafe {
+                let _ = IOAllowPowerChange(connection, notification_id);
+            }
+        }
+    }
 
     extern "C" fn power_callback(
         _ref_con: *mut c_void,
@@ -124,42 +201,41 @@ mod macos_impl {
         message_type: u32,
         message_argument: *mut c_void,
     ) {
-        // 从 message_argument 提取 notification ID
-        // message_argument 指向一个 i32，解引用获取通知 ID
-        let notification_id = if message_argument.is_null() {
-            0u32
-        } else {
-            unsafe { *(message_argument as *const i32) as u32 }
-        };
+        let notification_id = extract_notification_id(message_argument);
+        let decision = decide_power_callback_action(message_type, is_sleeping());
 
-        match message_type as i32 {
-            kIOMessageCanSystemSleep | kIOMessageSystemWillSleep => {
-                // 系统即将睡眠
-                if !is_sleeping() {
-                    if let Some(tx) = EVENT_SENDER.get() {
-                        if tx.try_send(PowerEvent::WillSleep).is_ok() {
-                            // 只有成功发送事件后才设置状态
-                            set_sleeping(true);
+        if let Some(new_state) = decision.set_sleeping {
+            set_sleeping(new_state);
+        }
+
+        if let Some(event_kind) = decision.emit_event {
+            if let Some(tx) = EVENT_SENDER.get() {
+                match event_kind {
+                    CallbackEventKind::WillSleep => {
+                        if tx
+                            .try_send(PowerEvent::WillSleep { notification_id })
+                            .is_err()
+                        {
+                            unsafe {
+                                acknowledge_sleep_impl(notification_id);
+                            }
                         }
                     }
+                    CallbackEventKind::DidWake => {
+                        let _ = tx.try_send(PowerEvent::DidWake);
+                    }
                 }
-                // 允许系统睡眠 - 必须使用正确的 notification_id
+            } else if event_kind == CallbackEventKind::WillSleep {
                 unsafe {
-                    IOAllowPowerChange(POWER_CONNECTION, notification_id);
+                    acknowledge_sleep_impl(notification_id);
                 }
             }
-            kIOMessageSystemHasPoweredOn => {
-                // 系统已唤醒
-                if is_sleeping() {
-                    if let Some(tx) = EVENT_SENDER.get() {
-                        if tx.try_send(PowerEvent::DidWake).is_ok() {
-                            // 只有成功发送事件后才设置状态
-                            set_sleeping(false);
-                        }
-                    }
-                }
+        }
+
+        if decision.allow_sleep {
+            unsafe {
+                acknowledge_sleep_impl(notification_id);
             }
-            _ => {}
         }
     }
 
@@ -167,32 +243,34 @@ mod macos_impl {
         thread::spawn(|| {
             let mut port: IONotificationPortRef = ptr::null_mut();
             let mut notifier: io_object_t = 0;
-            
-            let result = IORegisterForSystemPower(
+
+            let root_port = unsafe {
+                IORegisterForSystemPower(
                 ptr::null_mut(),
                 &mut port,
                 power_callback,
                 &mut notifier,
-            );
-            
-            if result != KERN_SUCCESS {
-                eprintln!("[PowerMonitor] Failed to register for system power notifications: {}", result);
+                )
+            };
+
+            if root_port == 0 {
+                eprintln!(
+                    "[PowerMonitor] Failed to register for system power notifications"
+                );
                 return;
             }
-            
-            POWER_PORT = port;
-            POWER_CONNECTION = notifier;
-            
-            let run_loop_source = IONotificationPortGetRunLoopSource(port);
+
+            POWER_CONNECTION.store(root_port, Ordering::SeqCst);
+
+            let run_loop_source = unsafe { IONotificationPortGetRunLoopSource(port) };
             let run_loop = CFRunLoopGetCurrent();
-            
-            let mode = CFString::from_static_string("kCFRunLoopDefaultMode");
+
             CFRunLoopAddSource(
                 run_loop,
                 run_loop_source as _,
-                mode.as_concrete_TypeRef(),
+                kCFRunLoopDefaultMode,
             );
-            
+
             // 运行 RunLoop
             CFRunLoopRun();
         });
@@ -205,6 +283,58 @@ use macos_impl::*;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_decide_action_for_can_system_sleep() {
+        let decision = decide_power_callback_action(K_IO_MESSAGE_CAN_SYSTEM_SLEEP, false);
+        assert_eq!(
+            decision,
+            CallbackDecision {
+                emit_event: None,
+                set_sleeping: None,
+                allow_sleep: true,
+            }
+        );
+    }
+
+    #[test]
+    fn test_decide_action_for_will_sleep_when_awake() {
+        let decision = decide_power_callback_action(K_IO_MESSAGE_SYSTEM_WILL_SLEEP, false);
+        assert_eq!(
+            decision,
+            CallbackDecision {
+                emit_event: Some(CallbackEventKind::WillSleep),
+                set_sleeping: Some(true),
+                allow_sleep: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_decide_action_for_wake_when_sleeping() {
+        let decision = decide_power_callback_action(K_IO_MESSAGE_SYSTEM_HAS_POWERED_ON, true);
+        assert_eq!(
+            decision,
+            CallbackDecision {
+                emit_event: Some(CallbackEventKind::DidWake),
+                set_sleeping: Some(false),
+                allow_sleep: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_decide_action_for_will_not_sleep() {
+        let decision = decide_power_callback_action(K_IO_MESSAGE_SYSTEM_WILL_NOT_SLEEP, true);
+        assert_eq!(
+            decision,
+            CallbackDecision {
+                emit_event: None,
+                set_sleeping: Some(false),
+                allow_sleep: false,
+            }
+        );
+    }
 
     #[test]
     fn test_power_state_tracking() {
@@ -222,8 +352,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_power_event_equality() {
-        assert_eq!(PowerEvent::WillSleep, PowerEvent::WillSleep);
+        assert_eq!(
+            PowerEvent::WillSleep {
+                notification_id: 1,
+            },
+            PowerEvent::WillSleep {
+                notification_id: 1,
+            }
+        );
         assert_eq!(PowerEvent::DidWake, PowerEvent::DidWake);
-        assert_ne!(PowerEvent::WillSleep, PowerEvent::DidWake);
+        assert_ne!(
+            PowerEvent::WillSleep {
+                notification_id: 1,
+            },
+            PowerEvent::DidWake
+        );
     }
 }
