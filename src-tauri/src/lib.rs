@@ -2,10 +2,11 @@ use scheduler::job_scheduler::Scheduler;
 use scheduler::task_queue::TaskQueue;
 use sqlx::SqlitePool;
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, RunEvent,
+    AppHandle, Manager, RunEvent,
 };
 use tokio::sync::Mutex;
 
@@ -16,6 +17,8 @@ pub mod execution_retention;
 pub mod executor;
 pub mod models;
 pub mod opencode;
+#[cfg(target_os = "macos")]
+pub mod power_monitor;
 pub mod scheduler;
 pub mod storage;
 
@@ -65,6 +68,68 @@ fn mark_running_as_failed_blocking(pool: &SqlitePool) {
     if count > 0 {
         println!("Marked {} running executions as failed", count);
     }
+}
+
+#[cfg(target_os = "macos")]
+async fn handle_system_sleep(
+    scheduler: &Arc<Mutex<Scheduler>>,
+    pool: &Arc<SqlitePool>,
+) {
+    eprintln!("[PowerMonitor] System entering sleep, pausing scheduler...");
+
+    // 1. Stop scheduler
+    let scheduler_guard = scheduler.lock().await;
+    if let Err(e) = scheduler_guard.stop().await {
+        eprintln!("[PowerMonitor] Failed to stop scheduler: {}", e);
+    }
+    drop(scheduler_guard);
+
+    // 2. Get running executions and mark them as failed
+    match get_executions_by_status(pool, ExecutionStatus::Running).await {
+        Ok(running_executions) => {
+            let now = Utc::now().to_rfc3339();
+            for execution in running_executions {
+                let update = UpdateExecution {
+                    session_id: None,
+                    status: Some(ExecutionStatus::Failed),
+                    finished_at: Some(now.clone()),
+                    output_file: execution.output_file,
+                    error_message: Some("System entering sleep".to_string()),
+                };
+
+                if let Err(e) = models::execution::update_execution(pool, &execution.id, update).await {
+                    eprintln!("[PowerMonitor] Failed to mark execution {} as failed: {}", execution.id, e);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("[PowerMonitor] Failed to get running executions: {}", e);
+        }
+    }
+
+    // 3. Kill all processes
+    scheduler::kill_all_processes();
+
+    eprintln!("[PowerMonitor] System sleep handling completed");
+}
+
+#[cfg(target_os = "macos")]
+async fn handle_system_wake(
+    scheduler: &Arc<Mutex<Scheduler>>,
+) {
+    eprintln!("[PowerMonitor] System waking up, resuming scheduler in 3 seconds...");
+
+    // Wait 3 seconds for network to be ready
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    // Start scheduler
+    // Note: We don't need to reload tasks because stop() doesn't clear the jobs HashMap
+    let scheduler_guard = scheduler.lock().await;
+    if let Err(e) = scheduler_guard.start().await {
+        eprintln!("[PowerMonitor] Failed to start scheduler: {}", e);
+    }
+
+    eprintln!("[PowerMonitor] System wake handling completed");
 }
 
 fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
@@ -236,6 +301,34 @@ pub fn run() {
 
                 scheduler.start().await.expect("Failed to start scheduler");
             });
+
+            // Start power monitoring on macOS
+            #[cfg(target_os = "macos")]
+            {
+                use power_monitor::PowerMonitor;
+
+                let scheduler_for_power = scheduler.clone();
+                let pool_for_power = pool_arc.clone();
+
+                tauri::async_runtime::spawn(async move {
+                    let mut power_monitor = PowerMonitor::new();
+
+                    while let Some(event) = power_monitor.recv().await {
+                        match event {
+                            power_monitor::PowerEvent::WillSleep => {
+                                handle_system_sleep(
+                                    &scheduler_for_power,
+                                    &pool_for_power,
+                                )
+                                .await;
+                            }
+                            power_monitor::PowerEvent::DidWake => {
+                                handle_system_wake(&scheduler_for_power).await;
+                            }
+                        }
+                    }
+                });
+            }
 
             Ok(())
         })

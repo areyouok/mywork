@@ -60,38 +60,24 @@ pub async fn get_scheduler_status(
     Ok(format!("{} ({} jobs)", status, job_count))
 }
 
-/// Reload scheduler with all enabled tasks from database
-#[tauri::command]
-pub async fn reload_scheduler(
-    pool: State<'_, Arc<SqlitePool>>,
-    scheduler: State<'_, Arc<Mutex<Scheduler>>>,
-    task_queue: State<'_, Arc<Mutex<TaskQueue>>>,
-    app: AppHandle,
-) -> Result<String, String> {
-    let pool = pool.inner().clone();
-    let scheduler = scheduler.inner().clone();
-    let task_queue = task_queue.inner().clone();
-
-    // Get all tasks from database
-    let tasks = crate::models::task::get_all_tasks(&pool)
+/// Load enabled tasks from database into scheduler
+/// 
+/// This function is used internally by reload_scheduler and for wake-up handling.
+/// It assumes the scheduler is already stopped.
+pub async fn load_scheduler_tasks(
+    pool: &Arc<SqlitePool>,
+    scheduler: &Arc<Mutex<Scheduler>>,
+    task_queue: &Arc<Mutex<TaskQueue>>,
+    app: &AppHandle,
+) -> Result<(usize, Vec<String>), String> {
+    let tasks = crate::models::task::get_all_tasks(pool)
         .await
         .map_err(|e| format!("Failed to get tasks: {}", e))?;
 
-    // Stop scheduler if running
-    {
-        let scheduler_guard = scheduler.lock().await;
-        if scheduler_guard.get_state().await == SchedulerState::Running {
-            let _ = scheduler_guard.stop().await;
-        }
-    }
-
-    // Track loaded count
     let mut loaded_count = 0;
     let mut errors = Vec::new();
 
-    // Add each enabled task with schedule
     for task in tasks.iter() {
-        // Skip disabled tasks
         if task.enabled == 0 {
             continue;
         }
@@ -104,7 +90,6 @@ pub async fn reload_scheduler(
             }
         };
 
-        // Create callback for this task
         let task_id = task.id.clone();
         let pool_clone = pool.clone();
         let app_handle = app.clone();
@@ -119,7 +104,6 @@ pub async fn reload_scheduler(
             let task_queue = task_queue_clone.clone();
 
             Box::pin(async move {
-                // Execute the task
                 let result = execute_task_internal(task_id, pool, app, timeout, task_queue).await;
                 if let Err(e) = result {
                     eprintln!("Task execution failed: {}", e);
@@ -127,7 +111,6 @@ pub async fn reload_scheduler(
             }) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
         });
 
-        // Add job to scheduler
         let scheduler_guard = scheduler.lock().await;
         let add_result = match schedule {
             TaskSchedule::Cron(cron_expr) => {
@@ -158,6 +141,32 @@ pub async fn reload_scheduler(
             }
         }
     }
+
+    Ok((loaded_count, errors))
+}
+
+/// Reload scheduler with all enabled tasks from database
+#[tauri::command]
+pub async fn reload_scheduler(
+    pool: State<'_, Arc<SqlitePool>>,
+    scheduler: State<'_, Arc<Mutex<Scheduler>>>,
+    task_queue: State<'_, Arc<Mutex<TaskQueue>>>,
+    app: AppHandle,
+) -> Result<String, String> {
+    let pool = pool.inner().clone();
+    let scheduler = scheduler.inner().clone();
+    let task_queue = task_queue.inner().clone();
+
+    // Stop scheduler if running
+    {
+        let scheduler_guard = scheduler.lock().await;
+        if scheduler_guard.get_state().await == SchedulerState::Running {
+            let _ = scheduler_guard.stop().await;
+        }
+    }
+
+    // Load tasks
+    let (loaded_count, errors) = load_scheduler_tasks(&pool, &scheduler, &task_queue, &app).await?;
 
     // Start scheduler
     {
