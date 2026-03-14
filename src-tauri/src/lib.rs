@@ -28,7 +28,9 @@ use commands::test_channel_stream;
 use commands::{create_task, delete_task, get_task, get_tasks, run_task, update_task};
 use commands::{delete_output, get_output};
 use commands::{get_execution, get_executions, get_running_executions};
-use commands::{get_scheduler_status, reload_scheduler, start_scheduler, stop_scheduler};
+use commands::{
+    get_scheduler_status, load_scheduler_tasks, reload_scheduler, start_scheduler, stop_scheduler,
+};
 use models::execution::{get_executions_by_status, ExecutionStatus, UpdateExecution};
 
 fn mark_running_as_failed_blocking(pool: &SqlitePool) {
@@ -99,8 +101,13 @@ async fn handle_system_sleep(
                     error_message: Some("System entering sleep".to_string()),
                 };
 
-                if let Err(e) = models::execution::update_execution(pool, &execution.id, update).await {
-                    eprintln!("[PowerMonitor] Failed to mark execution {} as failed: {}", execution.id, e);
+                if let Err(e) =
+                    models::execution::update_execution(pool, &execution.id, update).await
+                {
+                    eprintln!(
+                        "[PowerMonitor] Failed to mark execution {} as failed: {}",
+                        execution.id, e
+                    );
                 }
             }
         }
@@ -117,14 +124,38 @@ async fn handle_system_sleep(
 #[cfg(target_os = "macos")]
 async fn handle_system_wake(
     scheduler: &Arc<Mutex<Scheduler>>,
+    pool: &Arc<SqlitePool>,
+    task_queue: &Arc<Mutex<TaskQueue>>,
+    app: &tauri::AppHandle,
 ) {
     eprintln!("[PowerMonitor] System waking up, resuming scheduler in 3 seconds...");
 
     // Wait 3 seconds for network to be ready
     tokio::time::sleep(Duration::from_secs(3)).await;
 
-    // Start scheduler
-    // Note: We don't need to reload tasks because stop() doesn't clear the jobs HashMap
+    let (loaded_count, load_errors) = {
+        let scheduler_guard = scheduler.lock().await;
+        scheduler_guard.clear_jobs().await;
+        drop(scheduler_guard);
+
+        match load_scheduler_tasks(pool, scheduler, task_queue, app).await {
+            Ok(result) => result,
+            Err(e) => {
+                eprintln!("[PowerMonitor] Failed to reload tasks after wake: {}", e);
+                return;
+            }
+        }
+    };
+
+    if !load_errors.is_empty() {
+        eprintln!(
+            "[PowerMonitor] Reloaded {} tasks after wake with {} errors: {}",
+            loaded_count,
+            load_errors.len(),
+            load_errors.join(", ")
+        );
+    }
+
     let scheduler_guard = scheduler.lock().await;
     if let Err(e) = scheduler_guard.start().await {
         eprintln!("[PowerMonitor] Failed to start scheduler: {}", e);
@@ -229,77 +260,25 @@ pub fn run() {
             let task_queue_clone = task_queue.clone();
 
             tauri::async_runtime::block_on(async {
-                let scheduler = scheduler_clone.lock().await;
+                let (loaded_count, load_errors) = load_scheduler_tasks(
+                    &pool_clone,
+                    &scheduler_clone,
+                    &task_queue_clone,
+                    &app.handle().clone(),
+                )
+                .await
+                .expect("Failed to load scheduler tasks");
 
-                let tasks = crate::models::task::get_all_tasks(&pool_clone)
-                    .await
-                    .expect("Failed to get tasks");
-
-                for task in tasks.iter() {
-                    if task.enabled != 1 {
-                        continue;
-                    }
-
-                    let schedule = crate::scheduler::get_task_schedule(task);
-
-                    if schedule.is_none() {
-                        eprintln!("Task {} has no schedule, skipping", task.id);
-                        continue;
-                    }
-
-                    let Some(schedule) = schedule else {
-                        continue;
-                    };
-
-                    let pool_inner = pool_clone.clone();
-                    let app_handle = app.handle().clone();
-                    let task_id = task.id.clone();
-                    let timeout = task.timeout_seconds as u64;
-                    let task_queue_inner = task_queue_clone.clone();
-
-                    let callback = Arc::new(move || {
-                        let pool = pool_inner.clone();
-                        let app = app_handle.clone();
-                        let task_id = task_id.clone();
-                        let timeout_secs = timeout;
-                        let task_queue = task_queue_inner.clone();
-
-                        Box::pin(async move {
-                            let _ = crate::commands::execute_task_internal(
-                                task_id,
-                                pool,
-                                app,
-                                timeout_secs,
-                                task_queue,
-                            )
-                            .await;
-                        })
-                            as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
-                    });
-
-                    let add_result = match schedule {
-                        crate::scheduler::TaskSchedule::Cron(cron_exp) => {
-                            scheduler.add_job(&task.id, &cron_exp, callback).await
-                        }
-                        crate::scheduler::TaskSchedule::Once(run_at) => {
-                            let now = chrono::Utc::now();
-                            if run_at <= now {
-                                continue;
-                            }
-                            let duration = (run_at - now)
-                                .to_std()
-                                .unwrap_or_else(|_| std::time::Duration::from_secs(0));
-                            scheduler
-                                .add_one_shot_job(&task.id, duration, callback)
-                                .await
-                        }
-                    };
-
-                    if let Err(e) = add_result {
-                        eprintln!("Failed to add job for task {}: {}", task.id, e);
-                    }
+                if !load_errors.is_empty() {
+                    eprintln!(
+                        "Loaded {} scheduler tasks with {} errors: {}",
+                        loaded_count,
+                        load_errors.len(),
+                        load_errors.join(", ")
+                    );
                 }
 
+                let scheduler = scheduler_clone.lock().await;
                 scheduler.start().await.expect("Failed to start scheduler");
             });
 
@@ -310,15 +289,15 @@ pub fn run() {
 
                 let scheduler_for_power = scheduler.clone();
                 let pool_for_power = pool_arc.clone();
+                let task_queue_for_power = task_queue.clone();
+                let app_handle_for_power = app.handle().clone();
 
                 tauri::async_runtime::spawn(async move {
                     let mut power_monitor = PowerMonitor::new();
 
                     while let Some(event) = power_monitor.recv().await {
                         match event {
-                            power_monitor::PowerEvent::WillSleep {
-                                notification_id,
-                            } => {
+                            power_monitor::PowerEvent::WillSleep { notification_id } => {
                                 handle_system_sleep(
                                     &scheduler_for_power,
                                     &pool_for_power,
@@ -327,7 +306,13 @@ pub fn run() {
                                 .await;
                             }
                             power_monitor::PowerEvent::DidWake => {
-                                handle_system_wake(&scheduler_for_power).await;
+                                handle_system_wake(
+                                    &scheduler_for_power,
+                                    &pool_for_power,
+                                    &task_queue_for_power,
+                                    &app_handle_for_power,
+                                )
+                                .await;
                             }
                         }
                     }

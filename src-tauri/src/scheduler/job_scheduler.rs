@@ -392,8 +392,14 @@ impl Scheduler {
                 })?;
         }
 
+        *scheduler_guard = None;
+
         *state = SchedulerState::Stopped;
         Ok(())
+    }
+
+    pub async fn clear_jobs(&self) {
+        self.jobs.lock().await.clear();
     }
 
     /// Get scheduler state
@@ -566,6 +572,38 @@ mod tests {
         scheduler.stop().await.expect("Failed to stop scheduler");
 
         assert_eq!(scheduler.get_state().await, SchedulerState::Stopped);
+
+        let scheduler_guard = scheduler.scheduler.lock().await;
+        assert!(
+            scheduler_guard.is_none(),
+            "scheduler instance should be dropped on stop so wake rebuilds cleanly"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_clear_jobs_removes_all_tracked_jobs() {
+        let scheduler = Scheduler::new();
+        let callback: JobCallback = Arc::new(|| {
+            Box::pin(async {}) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+        });
+
+        scheduler
+            .add_job("task-1", "*/5 * * * *", callback.clone())
+            .await
+            .expect("Failed to add job 1");
+
+        scheduler
+            .add_job("task-2", "*/10 * * * *", callback)
+            .await
+            .expect("Failed to add job 2");
+
+        assert_eq!(scheduler.job_count().await, 2);
+
+        scheduler.clear_jobs().await;
+
+        assert_eq!(scheduler.job_count().await, 0);
+        assert!(!scheduler.has_job("task-1").await);
+        assert!(!scheduler.has_job("task-2").await);
     }
 
     #[tokio::test]
