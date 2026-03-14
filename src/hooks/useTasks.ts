@@ -64,12 +64,6 @@ export function useTasks() {
         setTasks((prev) => [...prev, newTask]);
       }
 
-      try {
-        await api.reloadScheduler();
-      } catch (error) {
-        console.error('Failed to reload scheduler after creating task:', error);
-      }
-
       return newTask;
     } catch (error) {
       console.error('Failed to create task:', error);
@@ -90,12 +84,6 @@ export function useTasks() {
             (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
           );
         });
-      }
-
-      try {
-        await api.reloadScheduler();
-      } catch (error) {
-        console.error('Failed to reload scheduler after updating task:', error);
       }
 
       return updated;

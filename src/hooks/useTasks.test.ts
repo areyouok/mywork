@@ -93,8 +93,6 @@ describe('useTasks', () => {
       created_at: '2026-01-02T00:00:00Z',
       updated_at: '2026-01-02T00:00:00Z',
     });
-    vi.mocked(api.reloadScheduler).mockResolvedValue('reloaded');
-
     const { result } = renderHook(() => useTasks());
 
     let loadPromise!: Promise<void>;
@@ -136,5 +134,28 @@ describe('useTasks', () => {
 
     expect(result.current.tasks).toHaveLength(1);
     expect(result.current.tasks[0].id).toBe('task-new');
+    expect(vi.mocked(api.reloadScheduler)).not.toHaveBeenCalled();
+  });
+
+  it('should update task locally without calling reloadScheduler', async () => {
+    vi.mocked(api.updateTask).mockResolvedValueOnce({
+      id: 'task-1',
+      name: 'Updated Task',
+      prompt: 'updated prompt',
+      enabled: true,
+      timeout_seconds: 60,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-03T00:00:00Z',
+    });
+
+    const { result } = renderHook(() => useTasks());
+
+    await act(async () => {
+      await result.current.updateTask('task-1', { name: 'Updated Task' });
+    });
+
+    expect(vi.mocked(api.updateTask)).toHaveBeenCalledWith('task-1', { name: 'Updated Task' });
+    expect(vi.mocked(api.reloadScheduler)).not.toHaveBeenCalled();
+    expect(result.current.tasks).toHaveLength(0);
   });
 });
