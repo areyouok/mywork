@@ -393,6 +393,7 @@ impl Scheduler {
         }
 
         *scheduler_guard = None;
+        self.jobs.lock().await.clear();
 
         *state = SchedulerState::Stopped;
         Ok(())
