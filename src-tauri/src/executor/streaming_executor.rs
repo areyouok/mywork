@@ -4,6 +4,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 
 use crate::environment::hydrated_path;
+use crate::scheduler::process_tracker;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, Mutex};
@@ -97,6 +98,11 @@ impl StreamingExecutor {
         }
 
         let mut child = cmd.spawn()?;
+        let pid = child.id();
+        if let Some(pid_value) = pid {
+            process_tracker::register_pid(pid_value);
+        }
+
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
 
@@ -159,6 +165,11 @@ impl StreamingExecutor {
                 .ok()
                 .and_then(|status| status.code())
                 .unwrap_or(-1);
+
+            if let Some(pid_value) = pid {
+                process_tracker::unregister_pid(pid_value);
+            }
+
             *exit_code_finished.lock().await = Some(status_code);
             if let Some(handle) = stdout_handle {
                 let _ = handle.await;

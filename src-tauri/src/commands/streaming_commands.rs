@@ -9,6 +9,16 @@ use sqlx::SqlitePool;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, State};
 
+#[cfg(target_os = "macos")]
+fn is_system_sleeping() -> bool {
+    crate::power_monitor::is_sleeping()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn is_system_sleeping() -> bool {
+    false
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum OutputEvent {
@@ -25,6 +35,10 @@ pub async fn execute_task_streaming(
     pool: State<'_, Arc<SqlitePool>>,
     _app: AppHandle,
 ) -> Result<(), String> {
+    if is_system_sleeping() {
+        return Err("System is sleeping; streaming execution is paused".to_string());
+    }
+
     let task = task::get_task(&pool, &task_id)
         .await
         .map_err(|e| format!("Failed to get task: {}", e))?;
@@ -33,6 +47,10 @@ pub async fn execute_task_streaming(
     let cwd_path = cwd.as_deref().map(Path::new);
     let opencode_binary = resolve_opencode_binary_path()
         .map_err(|e| format!("Failed to locate opencode binary: {}", e))?;
+
+    if is_system_sleeping() {
+        return Err("System is sleeping; streaming execution is paused".to_string());
+    }
 
     let mut executor = StreamingExecutor::spawn(&opencode_binary, &args, cwd_path)
         .await
@@ -83,6 +101,24 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_is_system_sleeping_tracks_power_monitor_state() {
+        crate::power_monitor::with_test_power_state_lock(|| {
+            crate::power_monitor::set_sleeping(true);
+            assert!(is_system_sleeping());
+
+            crate::power_monitor::set_sleeping(false);
+            assert!(!is_system_sleeping());
+        });
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn test_is_system_sleeping_is_false_off_macos() {
+        assert!(!is_system_sleeping());
+    }
 
     #[tokio::test]
     async fn test_streaming_command_emits_stdout_stderr_and_finished() {

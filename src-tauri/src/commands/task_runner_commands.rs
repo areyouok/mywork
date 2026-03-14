@@ -17,6 +17,16 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 use tokio::time::{timeout, Duration};
 
+#[cfg(target_os = "macos")]
+fn is_system_sleeping() -> bool {
+    crate::power_monitor::is_sleeping()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn is_system_sleeping() -> bool {
+    false
+}
+
 struct ExecutionFinishedEventGuard {
     app: AppHandle,
     task_id: String,
@@ -61,6 +71,10 @@ pub async fn run_task(
     task_queue: State<'_, Arc<Mutex<TaskQueue>>>,
     app: AppHandle,
 ) -> Result<String, String> {
+    if is_system_sleeping() {
+        return Err("System is sleeping; task execution is paused".to_string());
+    }
+
     let queue = task_queue.inner().lock().await;
     let _guard = match queue.acquire_slot(&task_id).await {
         Ok(guard) => guard,
@@ -103,6 +117,22 @@ pub async fn run_task(
         app: app.clone(),
         task_id: task_id.clone(),
     };
+
+    if is_system_sleeping() {
+        let update = UpdateExecution {
+            session_id: None,
+            status: Some(ExecutionStatus::Failed),
+            finished_at: Some(Utc::now().to_rfc3339()),
+            output_file: execution.output_file.clone(),
+            error_message: Some("System entering sleep".to_string()),
+        };
+
+        let _ = crate::models::execution::update_execution_if_running(&pool, &execution.id, update)
+            .await
+            .map_err(|e| format!("Failed to update execution: {}", e))?;
+
+        return Err("System is sleeping; task execution is paused".to_string());
+    }
 
     let timeout_secs = task.timeout_seconds as u64;
 
@@ -185,6 +215,20 @@ pub async fn run_task(
             return Err(message);
         }
     };
+
+    if is_system_sleeping() {
+        let message = "System entering sleep".to_string();
+        mark_execution_failed(
+            &pool,
+            &execution_id,
+            Some(&output_dir),
+            Some(&output_file_name),
+            &message,
+        )
+        .await;
+
+        return Err("System is sleeping; task execution is paused".to_string());
+    }
 
     let mut executor = match StreamingExecutor::spawn(&opencode_binary, &args, cwd).await {
         Ok(executor) => executor,
@@ -291,7 +335,7 @@ pub async fn run_task(
         error_message: error_message.clone(),
     };
 
-    update_execution(&pool, &execution.id, update)
+    let _ = crate::models::execution::update_execution_if_running(&pool, &execution.id, update)
         .await
         .map_err(|e| format!("Failed to update execution: {}", e))?;
 
@@ -307,5 +351,28 @@ pub async fn run_task(
                 .map(|e| format!(" - {}", e))
                 .unwrap_or_default()
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_is_system_sleeping_tracks_power_monitor_state() {
+        crate::power_monitor::with_test_power_state_lock(|| {
+            crate::power_monitor::set_sleeping(true);
+            assert!(is_system_sleeping());
+
+            crate::power_monitor::set_sleeping(false);
+            assert!(!is_system_sleeping());
+        });
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn test_is_system_sleeping_is_false_off_macos() {
+        assert!(!is_system_sleeping());
     }
 }

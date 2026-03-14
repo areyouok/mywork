@@ -26,6 +26,10 @@ fn is_system_sleeping() -> bool {
 pub async fn start_scheduler(
     scheduler: State<'_, Arc<Mutex<Scheduler>>>,
 ) -> Result<String, String> {
+    if is_system_sleeping() {
+        return Err("System is sleeping; scheduler start is paused".to_string());
+    }
+
     let scheduler = scheduler.inner().clone();
     let scheduler_guard = scheduler.lock().await;
 
@@ -163,6 +167,10 @@ pub async fn reload_scheduler(
     task_queue: State<'_, Arc<Mutex<TaskQueue>>>,
     app: AppHandle,
 ) -> Result<String, String> {
+    if is_system_sleeping() {
+        return Err("System is sleeping; scheduler reload is paused".to_string());
+    }
+
     let pool = pool.inner().clone();
     let scheduler = scheduler.inner().clone();
     let task_queue = task_queue.inner().clone();
@@ -171,7 +179,10 @@ pub async fn reload_scheduler(
     {
         let scheduler_guard = scheduler.lock().await;
         if scheduler_guard.get_state().await == SchedulerState::Running {
-            let _ = scheduler_guard.stop().await;
+            scheduler_guard
+                .stop()
+                .await
+                .map_err(|e| format!("Failed to stop scheduler: {}", e))?;
         }
 
         scheduler_guard.clear_jobs().await;
@@ -292,6 +303,22 @@ pub async fn execute_task_internal(
         task_id: task_id.clone(),
     };
 
+    if is_system_sleeping() {
+        let update = crate::models::execution::UpdateExecution {
+            session_id: None,
+            status: Some(ExecutionStatus::Failed),
+            finished_at: Some(Utc::now().to_rfc3339()),
+            output_file: execution.output_file.clone(),
+            error_message: Some("System entering sleep".to_string()),
+        };
+
+        let _ = crate::models::execution::update_execution_if_running(&pool, &execution.id, update)
+            .await
+            .map_err(|e| format!("Failed to update execution: {}", e))?;
+
+        return Ok(());
+    }
+
     // Run opencode task
     let result = run_opencode_task(&task.prompt, None, Some(timeout_seconds), None, cwd).await;
 
@@ -363,7 +390,7 @@ pub async fn execute_task_internal(
         error_message: error_message.clone(),
     };
 
-    crate::models::execution::update_execution(&pool, &execution.id, update)
+    let _ = crate::models::execution::update_execution_if_running(&pool, &execution.id, update)
         .await
         .map_err(|e| format!("Failed to update execution: {}", e))?;
 
@@ -379,11 +406,13 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn test_is_system_sleeping_tracks_power_monitor_state() {
-        crate::power_monitor::set_sleeping(true);
-        assert!(is_system_sleeping());
+        crate::power_monitor::with_test_power_state_lock(|| {
+            crate::power_monitor::set_sleeping(true);
+            assert!(is_system_sleeping());
 
-        crate::power_monitor::set_sleeping(false);
-        assert!(!is_system_sleeping());
+            crate::power_monitor::set_sleeping(false);
+            assert!(!is_system_sleeping());
+        });
     }
 
     #[cfg(not(target_os = "macos"))]

@@ -4,6 +4,8 @@
 
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
+#[cfg(test)]
+use std::sync::Mutex as StdMutex;
 use tokio::sync::mpsc;
 
 const K_IO_MESSAGE_CAN_SYSTEM_SLEEP: u32 = 0x1;
@@ -30,7 +32,7 @@ enum CallbackEventKind {
 static CURRENT_POWER_STATE: AtomicU8 = AtomicU8::new(0);
 
 /// 全局事件发送器，用于在 C 回调中发送事件
-static EVENT_SENDER: OnceLock<mpsc::Sender<PowerEvent>> = OnceLock::new();
+static EVENT_SENDER: OnceLock<mpsc::UnboundedSender<PowerEvent>> = OnceLock::new();
 
 /// 检查当前是否处于睡眠状态
 pub fn is_sleeping() -> bool {
@@ -40,6 +42,21 @@ pub fn is_sleeping() -> bool {
 /// 设置电源状态
 pub fn set_sleeping(sleeping: bool) {
     CURRENT_POWER_STATE.store(if sleeping { 1 } else { 0 }, Ordering::SeqCst);
+}
+
+#[cfg(test)]
+static TEST_POWER_STATE_LOCK: OnceLock<StdMutex<()>> = OnceLock::new();
+
+#[cfg(test)]
+pub fn with_test_power_state_lock<T>(f: impl FnOnce() -> T) -> T {
+    let lock = TEST_POWER_STATE_LOCK.get_or_init(|| StdMutex::new(()));
+    let _guard = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    let original = is_sleeping();
+    let result = f();
+    set_sleeping(original);
+
+    result
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,7 +106,7 @@ fn decide_power_callback_action(message_type: u32, sleeping: bool) -> CallbackDe
 
 /// 电源监听器
 pub struct PowerMonitor {
-    _receiver: mpsc::Receiver<PowerEvent>,
+    receiver: mpsc::UnboundedReceiver<PowerEvent>,
 }
 
 impl PowerMonitor {
@@ -99,7 +116,7 @@ impl PowerMonitor {
     pub fn new() -> Self {
         #[cfg(target_os = "macos")]
         {
-            let (tx, rx) = mpsc::channel(10);
+            let (tx, rx) = mpsc::unbounded_channel();
             
             // 存储发送器供回调使用
             EVENT_SENDER.set(tx).expect("PowerMonitor should only be created once");
@@ -110,7 +127,7 @@ impl PowerMonitor {
             }
             
             Self {
-                _receiver: rx,
+                receiver: rx,
             }
         }
         
@@ -125,7 +142,7 @@ impl PowerMonitor {
     /// 返回 Some(PowerEvent) 如果收到事件
     /// 返回 None 如果通道关闭
     pub async fn recv(&mut self) -> Option<PowerEvent> {
-        self._receiver.recv().await
+        self.receiver.recv().await
     }
 }
 
@@ -212,17 +229,14 @@ mod macos_impl {
             if let Some(tx) = EVENT_SENDER.get() {
                 match event_kind {
                     CallbackEventKind::WillSleep => {
-                        if tx
-                            .try_send(PowerEvent::WillSleep { notification_id })
-                            .is_err()
-                        {
+                        if tx.send(PowerEvent::WillSleep { notification_id }).is_err() {
                             unsafe {
                                 acknowledge_sleep_impl(notification_id);
                             }
                         }
                     }
                     CallbackEventKind::DidWake => {
-                        let _ = tx.try_send(PowerEvent::DidWake);
+                        let _ = tx.send(PowerEvent::DidWake);
                     }
                 }
             } else if event_kind == CallbackEventKind::WillSleep {
@@ -338,16 +352,19 @@ mod tests {
 
     #[test]
     fn test_power_state_tracking() {
-        // 初始状态应该是 awake
-        assert!(!is_sleeping());
-        
-        // 设置为 sleeping
-        set_sleeping(true);
-        assert!(is_sleeping());
-        
-        // 设置为 awake
-        set_sleeping(false);
-        assert!(!is_sleeping());
+        with_test_power_state_lock(|| {
+            // 初始状态应该是 awake
+            set_sleeping(false);
+            assert!(!is_sleeping());
+
+            // 设置为 sleeping
+            set_sleeping(true);
+            assert!(is_sleeping());
+
+            // 设置为 awake
+            set_sleeping(false);
+            assert!(!is_sleeping());
+        });
     }
 
     #[tokio::test]

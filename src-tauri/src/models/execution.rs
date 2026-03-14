@@ -382,6 +382,51 @@ pub async fn update_execution(
     })
 }
 
+pub async fn update_execution_if_running(
+    pool: &SqlitePool,
+    id: &str,
+    update: UpdateExecution,
+) -> Result<Option<Execution>, sqlx::Error> {
+    let existing = get_execution(pool, id).await?;
+
+    if existing.status != ExecutionStatus::Running.as_str() {
+        return Ok(None);
+    }
+
+    let session_id = update.session_id.or(existing.session_id);
+    let status = update
+        .status
+        .as_ref()
+        .map(|s| s.as_str())
+        .unwrap_or(&existing.status);
+    let finished_at = update.finished_at.or(existing.finished_at);
+    let output_file = update.output_file.or(existing.output_file);
+    let error_message = update.error_message.or(existing.error_message);
+
+    let result = sqlx::query(
+        r#"
+        UPDATE executions
+        SET session_id = ?, status = ?, finished_at = ?, output_file = ?, error_message = ?
+        WHERE id = ? AND status = 'running'
+        "#,
+    )
+    .bind(&session_id)
+    .bind(status)
+    .bind(&finished_at)
+    .bind(&output_file)
+    .bind(&error_message)
+    .bind(id)
+    .execute(pool)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Ok(None);
+    }
+
+    let updated = get_execution(pool, id).await?;
+    Ok(Some(updated))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

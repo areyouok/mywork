@@ -1,4 +1,4 @@
-use scheduler::job_scheduler::Scheduler;
+use scheduler::job_scheduler::{Scheduler, SchedulerState};
 use scheduler::task_queue::TaskQueue;
 use sqlx::SqlitePool;
 use std::sync::Arc;
@@ -32,6 +32,36 @@ use commands::{
     get_scheduler_status, load_scheduler_tasks, reload_scheduler, start_scheduler, stop_scheduler,
 };
 use models::execution::{get_executions_by_status, ExecutionStatus, UpdateExecution};
+
+#[cfg(target_os = "macos")]
+struct SleepAcknowledgeGuard {
+    notification_id: isize,
+    acknowledged: bool,
+}
+
+#[cfg(target_os = "macos")]
+impl SleepAcknowledgeGuard {
+    fn new(notification_id: isize) -> Self {
+        Self {
+            notification_id,
+            acknowledged: false,
+        }
+    }
+
+    fn acknowledge(&mut self) {
+        if !self.acknowledged {
+            power_monitor::acknowledge_sleep(self.notification_id);
+            self.acknowledged = true;
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for SleepAcknowledgeGuard {
+    fn drop(&mut self) {
+        self.acknowledge();
+    }
+}
 
 fn mark_running_as_failed_blocking(pool: &SqlitePool) {
     let runtime = tokio::runtime::Runtime::new().expect("Failed to create runtime");
@@ -78,6 +108,8 @@ async fn handle_system_sleep(
     pool: &Arc<SqlitePool>,
     notification_id: isize,
 ) {
+    let mut sleep_ack_guard = SleepAcknowledgeGuard::new(notification_id);
+
     eprintln!("[PowerMonitor] System entering sleep, pausing scheduler...");
 
     // 1. Stop scheduler
@@ -102,7 +134,7 @@ async fn handle_system_sleep(
                 };
 
                 if let Err(e) =
-                    models::execution::update_execution(pool, &execution.id, update).await
+                    models::execution::update_execution_if_running(pool, &execution.id, update).await
                 {
                     eprintln!(
                         "[PowerMonitor] Failed to mark execution {} as failed: {}",
@@ -116,7 +148,7 @@ async fn handle_system_sleep(
         }
     }
 
-    power_monitor::acknowledge_sleep(notification_id);
+    sleep_ack_guard.acknowledge();
 
     eprintln!("[PowerMonitor] System sleep handling completed");
 }
@@ -135,6 +167,14 @@ async fn handle_system_wake(
 
     let (loaded_count, load_errors) = {
         let scheduler_guard = scheduler.lock().await;
+
+        if scheduler_guard.get_state().await == SchedulerState::Running {
+            if let Err(e) = scheduler_guard.stop().await {
+                eprintln!("[PowerMonitor] Failed to stop scheduler before wake reload: {}", e);
+                return;
+            }
+        }
+
         scheduler_guard.clear_jobs().await;
         drop(scheduler_guard);
 
