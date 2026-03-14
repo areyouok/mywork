@@ -26,32 +26,41 @@ interface UpdateTask {
 export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
-  const requestIdRef = useRef(0);
+  const loadRequestIdRef = useRef(0);
+  const mutationVersionRef = useRef(0);
+  const createRequestIdRef = useRef(0);
+  const updateRequestIdRef = useRef(0);
+  const deleteRequestIdRef = useRef(0);
 
   const loadTasks = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
+    const requestId = ++loadRequestIdRef.current;
+    const mutationVersionAtStart = mutationVersionRef.current;
 
     try {
       setLoading(true);
       const loadedTasks = await api.getTasks();
-      if (requestIdRef.current === requestId) {
+      if (
+        loadRequestIdRef.current === requestId &&
+        mutationVersionRef.current === mutationVersionAtStart
+      ) {
         setTasks(loadedTasks);
       }
     } catch (error) {
       console.error('Failed to load tasks:', error);
     } finally {
-      if (requestIdRef.current === requestId) {
+      if (loadRequestIdRef.current === requestId) {
         setLoading(false);
       }
     }
   }, []);
 
   const createTask = useCallback(async (data: NewTask) => {
-    const requestId = ++requestIdRef.current;
+    const requestId = ++createRequestIdRef.current;
 
     try {
       const newTask = await api.createTask(data);
-      if (requestIdRef.current === requestId) {
+      mutationVersionRef.current += 1;
+      if (createRequestIdRef.current === requestId) {
         setTasks((prev) => [...prev, newTask]);
       }
 
@@ -69,11 +78,12 @@ export function useTasks() {
   }, []);
 
   const updateTask = useCallback(async (id: string, data: UpdateTask) => {
-    const requestId = ++requestIdRef.current;
+    const requestId = ++updateRequestIdRef.current;
 
     try {
       const updated = await api.updateTask(id, data);
-      if (requestIdRef.current === requestId) {
+      mutationVersionRef.current += 1;
+      if (updateRequestIdRef.current === requestId) {
         setTasks((prev) => {
           const newTasks = prev.map((task) => (task.id === id ? updated : task));
           return newTasks.sort(
@@ -96,11 +106,12 @@ export function useTasks() {
   }, []);
 
   const deleteTask = useCallback(async (id: string) => {
-    const requestId = ++requestIdRef.current;
+    const requestId = ++deleteRequestIdRef.current;
 
     try {
       await api.deleteTask(id);
-      if (requestIdRef.current === requestId) {
+      mutationVersionRef.current += 1;
+      if (deleteRequestIdRef.current === requestId) {
         setTasks((prev) => prev.filter((task) => task.id !== id));
       }
     } catch (error) {

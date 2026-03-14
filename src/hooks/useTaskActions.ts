@@ -1,4 +1,4 @@
-import { useCallback, type RefObject } from 'react';
+import { useCallback, useRef, type RefObject } from 'react';
 import * as api from '@/api/tasks';
 
 export function useTaskActions(
@@ -10,14 +10,31 @@ export function useTaskActions(
   selectedTaskIdRef: RefObject<string | null>,
   loadTasks: () => Promise<void>
 ) {
+  const toggleQueueRef = useRef<Map<string, Promise<void>>>(new Map());
+
   const handleToggle = useCallback(
     async (taskId: string, enabled: boolean) => {
-      try {
-        await updateTask(taskId, { enabled: enabled ? 1 : 0 });
-        await loadTasks();
-      } catch (error) {
-        console.error('Failed to toggle task:', error);
-      }
+      const previousToggle = toggleQueueRef.current.get(taskId) ?? Promise.resolve();
+      const currentToggle = previousToggle
+        .catch(() => undefined)
+        .then(async () => {
+          try {
+            await updateTask(taskId, { enabled: enabled ? 1 : 0 });
+            await loadTasks();
+          } catch (error) {
+            console.error('Failed to toggle task:', error);
+          }
+        });
+
+      toggleQueueRef.current.set(taskId, currentToggle);
+
+      currentToggle.finally(() => {
+        if (toggleQueueRef.current.get(taskId) === currentToggle) {
+          toggleQueueRef.current.delete(taskId);
+        }
+      });
+
+      await currentToggle;
     },
     [updateTask, loadTasks]
   );

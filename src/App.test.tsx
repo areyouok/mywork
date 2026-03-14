@@ -343,6 +343,48 @@ describe('App', () => {
     });
   });
 
+  it('should serialize rapid toggle updates for same task', async () => {
+    const user = userEvent.setup();
+    const resolveQueue: Array<() => void> = [];
+
+    vi.mocked(api.updateTask).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveQueue.push(() => resolve(mockTasks[0]));
+        })
+    );
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Daily Code Review')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Daily Code Review'));
+
+    const toggleButton = screen.getByRole('switch', { name: /toggle daily code review/i });
+
+    const firstClick = user.click(toggleButton);
+    const secondClick = user.click(toggleButton);
+
+    await waitFor(() => {
+      expect(vi.mocked(api.updateTask)).toHaveBeenCalledTimes(1);
+    });
+
+    resolveQueue.shift()?.();
+    await firstClick;
+
+    await waitFor(() => {
+      expect(vi.mocked(api.updateTask)).toHaveBeenCalledTimes(2);
+    });
+
+    resolveQueue.shift()?.();
+    await secondClick;
+
+    expect(vi.mocked(api.updateTask).mock.calls[0]?.[0]).toBe('1');
+    expect(vi.mocked(api.updateTask).mock.calls[1]?.[0]).toBe('1');
+  });
+
   it('should delete task after confirmation', async () => {
     const user = userEvent.setup();
     render(<App />);
