@@ -11,6 +11,16 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
+#[cfg(target_os = "macos")]
+fn is_system_sleeping() -> bool {
+    crate::power_monitor::is_sleeping()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn is_system_sleeping() -> bool {
+    false
+}
+
 /// Start the scheduler
 #[tauri::command]
 pub async fn start_scheduler(
@@ -61,7 +71,7 @@ pub async fn get_scheduler_status(
 }
 
 /// Load enabled tasks from database into scheduler
-/// 
+///
 /// This function is used internally by reload_scheduler and for wake-up handling.
 /// It assumes the scheduler is already stopped.
 pub async fn load_scheduler_tasks(
@@ -163,6 +173,8 @@ pub async fn reload_scheduler(
         if scheduler_guard.get_state().await == SchedulerState::Running {
             let _ = scheduler_guard.stop().await;
         }
+
+        scheduler_guard.clear_jobs().await;
     }
 
     // Load tasks
@@ -213,6 +225,14 @@ pub async fn execute_task_internal(
     use crate::opencode::executor::run_opencode_task;
     use crate::storage::output;
     use chrono::Utc;
+
+    if is_system_sleeping() {
+        eprintln!(
+            "Skipping scheduled execution for task '{}' because the system is sleeping",
+            task_id
+        );
+        return Ok(());
+    }
 
     // Atomically check if running and acquire slot (prevents race condition)
     let queue = task_queue.lock().await;
@@ -350,4 +370,25 @@ pub async fn execute_task_internal(
     enforce_execution_history_limit(&pool, &output_dir).await;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_is_system_sleeping_tracks_power_monitor_state() {
+        crate::power_monitor::set_sleeping(true);
+        assert!(is_system_sleeping());
+
+        crate::power_monitor::set_sleeping(false);
+        assert!(!is_system_sleeping());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn test_is_system_sleeping_is_false_off_macos() {
+        assert!(!is_system_sleeping());
+    }
 }
