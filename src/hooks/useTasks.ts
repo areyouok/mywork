@@ -28,15 +28,16 @@ export function useTasks() {
       enabled?: number;
       timeout_seconds?: number;
     }) => {
+      const newTask = await api.createTask(data);
+      setTasks((prev) => [...prev, newTask]);
+
       try {
-        const newTask = await api.createTask(data);
-        setTasks((prev) => [...prev, newTask]);
         await api.reloadScheduler();
-        return newTask;
       } catch (error) {
-        console.error('Failed to create task:', error);
-        throw error;
+        console.error('Failed to reload scheduler after creating task:', error);
       }
+
+      return newTask;
     },
     []
   );
