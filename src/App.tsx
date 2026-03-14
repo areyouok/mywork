@@ -10,7 +10,7 @@ import { useTaskActions } from './hooks/useTaskActions';
 import { useOutput } from './hooks/useOutput';
 import type { Task } from './types/task';
 import type { Execution } from './types/execution';
-import { formatRelativeTime } from './utils/format';
+import { formatAbsoluteTime } from './utils/format';
 import './App.css';
 
 type ViewMode = 'list' | 'form' | 'history' | 'output';
@@ -335,7 +335,7 @@ function App() {
                   <h2>
                     Output -{' '}
                     {selectedExecutionLive?.started_at
-                      ? formatRelativeTime(selectedExecutionLive.started_at)
+                      ? formatAbsoluteTime(selectedExecutionLive.started_at)
                       : 'Unknown time'}
                   </h2>
                 </div>

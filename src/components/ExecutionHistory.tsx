@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { formatRelativeTime, formatDuration } from '@/utils/format';
+import { formatAbsoluteTime, formatDuration } from '@/utils/format';
 import type { ExecutionHistoryProps, Execution } from '@/types/execution';
 import './ExecutionHistory.css';
 
@@ -86,13 +86,13 @@ export function ExecutionHistory({
             tabIndex={isClickable ? 0 : undefined}
             onClick={() => handleClick(execution)}
             onKeyPress={(e) => handleKeyPress(e, execution)}
-            aria-label={`Execution ${getStatusLabel(execution.status)} at ${formatRelativeTime(execution.started_at)}`}
+            aria-label={`Execution ${getStatusLabel(execution.status)} at ${formatAbsoluteTime(execution.started_at)}`}
           >
             <div className="execution-header">
               <span className={`execution-status status-${execution.status}`}>
                 {execution.status}
               </span>
-              <span className="execution-time">{formatRelativeTime(execution.started_at)}</span>
+              <span className="execution-time">{formatAbsoluteTime(execution.started_at)}</span>
             </div>
 
             <div className="execution-duration">

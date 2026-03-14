@@ -42,7 +42,7 @@ describe('ExecutionHistory', () => {
 
       render(<ExecutionHistory executions={executions} />);
 
-      expect(screen.getByText(/2024-03-09|Mar 9, 2024|ago/i)).toBeInTheDocument();
+      expect(screen.getByText(/2024-03-09/)).toBeInTheDocument();
     });
 
     it('should display status for each execution', () => {
@@ -274,13 +274,14 @@ describe('ExecutionHistory', () => {
   });
 
   describe('Time Formatting', () => {
-    it('should display relative time for recent executions', () => {
+    it('should display absolute time for executions', () => {
       const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
       const executions = [createMockExecution({ started_at: oneHourAgo })];
 
       render(<ExecutionHistory executions={executions} />);
 
-      expect(screen.getByText(/1 hour ago|an hour ago/i)).toBeInTheDocument();
+      const timeElement = screen.getByText(/\d{4}-\d{2}-\d{2}/);
+      expect(timeElement).toBeInTheDocument();
     });
 
     it('should display absolute time for old executions', () => {
@@ -289,7 +290,7 @@ describe('ExecutionHistory', () => {
 
       render(<ExecutionHistory executions={executions} />);
 
-      expect(screen.getByText(/2023-03-09|Mar 9, 2023/i)).toBeInTheDocument();
+      expect(screen.getByText(/2023-03-09/)).toBeInTheDocument();
     });
 
     it('should display duration in seconds', () => {

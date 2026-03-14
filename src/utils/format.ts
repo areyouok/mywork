@@ -1,40 +1,17 @@
-export function formatRelativeTime(dateString: string): string {
+export function formatAbsoluteTime(dateString: string): string {
   const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMinutes = Math.floor(diffMs / (1000 * 60));
-  const diffHours = diffMs / (1000 * 60 * 60);
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
-
-  if (diffMinutes < 1) {
-    return 'less than 1 minute ago';
-  }
-  if (diffMinutes === 1) {
-    return '1 minute ago';
-  }
-  if (diffMinutes < 60) {
-    return `${diffMinutes} minutes ago`;
-  }
-  const diffHoursInt = Math.floor(diffHours);
-  if (diffHoursInt === 1) {
-    return '1 hour ago';
-  }
-  if (diffHours < 24) {
-    return `${diffHoursInt} hours ago`;
-  }
-  if (diffDays < 7) {
-    return date.toLocaleString('en-US', {
-      weekday: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  if (Number.isNaN(date.getTime())) {
+    return 'Invalid date';
   }
 
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
 export function formatDuration(startedAt: string, finishedAt: string): string {
