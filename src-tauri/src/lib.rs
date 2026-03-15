@@ -134,7 +134,8 @@ async fn handle_system_sleep(
                 };
 
                 if let Err(e) =
-                    models::execution::update_execution_if_running(pool, &execution.id, update).await
+                    models::execution::update_execution_if_running(pool, &execution.id, update)
+                        .await
                 {
                     eprintln!(
                         "[PowerMonitor] Failed to mark execution {} as failed: {}",
@@ -154,23 +155,75 @@ async fn handle_system_sleep(
 }
 
 #[cfg(target_os = "macos")]
+async fn wait_until_clamshell_open(max_wait: Duration, check_interval: Duration) -> bool {
+    let start = tokio::time::Instant::now();
+
+    while power_monitor::is_clamshell_closed() {
+        if start.elapsed() >= max_wait {
+            return false;
+        }
+
+        tokio::time::sleep(check_interval).await;
+    }
+
+    true
+}
+
+#[cfg(target_os = "macos")]
+fn can_run_scheduler_now() -> bool {
+    !power_monitor::is_sleeping() && !power_monitor::is_clamshell_closed()
+}
+
+#[cfg(target_os = "macos")]
 async fn handle_system_wake(
     scheduler: &Arc<Mutex<Scheduler>>,
     pool: &Arc<SqlitePool>,
     task_queue: &Arc<Mutex<TaskQueue>>,
     app: &tauri::AppHandle,
 ) {
+    if !can_run_scheduler_now() {
+        eprintln!(
+            "[PowerMonitor] Wake event while system still unavailable for scheduling, waiting for lid open"
+        );
+    }
+
+    if power_monitor::is_clamshell_closed() {
+        eprintln!(
+            "[PowerMonitor] Wake event received while clamshell is closed, waiting for lid open before resuming scheduler"
+        );
+
+        let opened =
+            wait_until_clamshell_open(Duration::from_secs(8 * 60 * 60), Duration::from_secs(2))
+                .await;
+        if !opened {
+            eprintln!("[PowerMonitor] Timed out waiting for lid open, keeping scheduler paused");
+            return;
+        }
+
+        eprintln!("[PowerMonitor] Lid opened, continuing scheduler resume");
+    }
+
     eprintln!("[PowerMonitor] System waking up, resuming scheduler in 3 seconds...");
 
     // Wait 3 seconds for network to be ready
     tokio::time::sleep(Duration::from_secs(3)).await;
+
+    if !can_run_scheduler_now() {
+        eprintln!(
+            "[PowerMonitor] System unavailable during wake stabilization, skipping scheduler resume"
+        );
+        return;
+    }
 
     let (loaded_count, load_errors) = {
         let scheduler_guard = scheduler.lock().await;
 
         if scheduler_guard.get_state().await == SchedulerState::Running {
             if let Err(e) = scheduler_guard.stop().await {
-                eprintln!("[PowerMonitor] Failed to stop scheduler before wake reload: {}", e);
+                eprintln!(
+                    "[PowerMonitor] Failed to stop scheduler before wake reload: {}",
+                    e
+                );
                 return;
             }
         }
@@ -194,6 +247,13 @@ async fn handle_system_wake(
             load_errors.len(),
             load_errors.join(", ")
         );
+    }
+
+    if !can_run_scheduler_now() {
+        eprintln!(
+            "[PowerMonitor] System became unavailable before scheduler start, keeping paused"
+        );
+        return;
     }
 
     let scheduler_guard = scheduler.lock().await;

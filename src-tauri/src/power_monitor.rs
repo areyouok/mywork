@@ -2,10 +2,12 @@
 //!
 //! 监听系统睡眠/唤醒事件，通过异步通道通知应用。
 
+#[cfg(target_os = "macos")]
+use std::process::Command;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::OnceLock;
 #[cfg(test)]
 use std::sync::Mutex as StdMutex;
+use std::sync::OnceLock;
 use tokio::sync::mpsc;
 
 const K_IO_MESSAGE_CAN_SYSTEM_SLEEP: u32 = 0x1;
@@ -42,6 +44,48 @@ pub fn is_sleeping() -> bool {
 /// 设置电源状态
 pub fn set_sleeping(sleeping: bool) {
     CURRENT_POWER_STATE.store(if sleeping { 1 } else { 0 }, Ordering::SeqCst);
+}
+
+fn parse_apple_clamshell_state(output: &str) -> Option<bool> {
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("\"AppleClamshellState\" =") {
+            let value = rest.trim();
+            if value.eq_ignore_ascii_case("Yes") {
+                return Some(true);
+            }
+            if value.eq_ignore_ascii_case("No") {
+                return Some(false);
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn read_clamshell_state() -> Option<bool> {
+    let output = Command::new("/usr/sbin/ioreg")
+        .args(["-r", "-k", "AppleClamshellState", "-d", "1"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    parse_apple_clamshell_state(&stdout)
+}
+
+#[cfg(target_os = "macos")]
+pub fn is_clamshell_closed() -> bool {
+    read_clamshell_state().unwrap_or(true)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn is_clamshell_closed() -> bool {
+    false
 }
 
 #[cfg(test)]
@@ -111,34 +155,34 @@ pub struct PowerMonitor {
 
 impl PowerMonitor {
     /// 创建新的电源监听器
-    /// 
+    ///
     /// 此函数只能在 macOS 上调用，其他平台会 panic。
     pub fn new() -> Self {
         #[cfg(target_os = "macos")]
         {
             let (tx, rx) = mpsc::unbounded_channel();
-            
+
             // 存储发送器供回调使用
-            EVENT_SENDER.set(tx).expect("PowerMonitor should only be created once");
-            
+            EVENT_SENDER
+                .set(tx)
+                .expect("PowerMonitor should only be created once");
+
             // 启动 IOKit 监听
             unsafe {
                 start_power_monitoring();
             }
-            
-            Self {
-                receiver: rx,
-            }
+
+            Self { receiver: rx }
         }
-        
+
         #[cfg(not(target_os = "macos"))]
         {
             panic!("PowerMonitor is only supported on macOS");
         }
     }
-    
+
     /// 接收下一个电源事件
-    /// 
+    ///
     /// 返回 Some(PowerEvent) 如果收到事件
     /// 返回 None 如果通道关闭
     pub async fn recv(&mut self) -> Option<PowerEvent> {
@@ -259,18 +303,11 @@ mod macos_impl {
             let mut notifier: io_object_t = 0;
 
             let root_port = unsafe {
-                IORegisterForSystemPower(
-                ptr::null_mut(),
-                &mut port,
-                power_callback,
-                &mut notifier,
-                )
+                IORegisterForSystemPower(ptr::null_mut(), &mut port, power_callback, &mut notifier)
             };
 
             if root_port == 0 {
-                eprintln!(
-                    "[PowerMonitor] Failed to register for system power notifications"
-                );
+                eprintln!("[PowerMonitor] Failed to register for system power notifications");
                 return;
             }
 
@@ -279,11 +316,7 @@ mod macos_impl {
             let run_loop_source = unsafe { IONotificationPortGetRunLoopSource(port) };
             let run_loop = CFRunLoopGetCurrent();
 
-            CFRunLoopAddSource(
-                run_loop,
-                run_loop_source as _,
-                kCFRunLoopDefaultMode,
-            );
+            CFRunLoopAddSource(run_loop, run_loop_source as _, kCFRunLoopDefaultMode);
 
             // 运行 RunLoop
             CFRunLoopRun();
@@ -370,19 +403,37 @@ mod tests {
     #[tokio::test]
     async fn test_power_event_equality() {
         assert_eq!(
-            PowerEvent::WillSleep {
-                notification_id: 1,
-            },
-            PowerEvent::WillSleep {
-                notification_id: 1,
-            }
+            PowerEvent::WillSleep { notification_id: 1 },
+            PowerEvent::WillSleep { notification_id: 1 }
         );
         assert_eq!(PowerEvent::DidWake, PowerEvent::DidWake);
         assert_ne!(
-            PowerEvent::WillSleep {
-                notification_id: 1,
-            },
+            PowerEvent::WillSleep { notification_id: 1 },
             PowerEvent::DidWake
         );
+    }
+
+    #[test]
+    fn test_parse_apple_clamshell_state_yes() {
+        let output = "\"AppleClamshellState\" = Yes";
+        assert_eq!(parse_apple_clamshell_state(output), Some(true));
+    }
+
+    #[test]
+    fn test_parse_apple_clamshell_state_no() {
+        let output = "\"AppleClamshellState\" = No";
+        assert_eq!(parse_apple_clamshell_state(output), Some(false));
+    }
+
+    #[test]
+    fn test_parse_apple_clamshell_state_missing() {
+        let output = "\"Wake Type\" = UserActivity Assertion";
+        assert_eq!(parse_apple_clamshell_state(output), None);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_is_clamshell_closed_fails_closed_when_state_unavailable() {
+        assert!(read_clamshell_state().is_some() || is_clamshell_closed());
     }
 }

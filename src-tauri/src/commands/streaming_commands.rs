@@ -11,7 +11,7 @@ use tauri::{AppHandle, State};
 
 #[cfg(target_os = "macos")]
 fn is_system_sleeping() -> bool {
-    crate::power_monitor::is_sleeping()
+    crate::power_monitor::is_sleeping() || crate::power_monitor::is_clamshell_closed()
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -36,7 +36,10 @@ pub async fn execute_task_streaming(
     _app: AppHandle,
 ) -> Result<(), String> {
     if is_system_sleeping() {
-        return Err("System is sleeping; streaming execution is paused".to_string());
+        return Err(
+            "System is unavailable (sleeping or lid closed); streaming execution is paused"
+                .to_string(),
+        );
     }
 
     let task = task::get_task(&pool, &task_id)
@@ -49,7 +52,10 @@ pub async fn execute_task_streaming(
         .map_err(|e| format!("Failed to locate opencode binary: {}", e))?;
 
     if is_system_sleeping() {
-        return Err("System is sleeping; streaming execution is paused".to_string());
+        return Err(
+            "System is unavailable (sleeping or lid closed); streaming execution is paused"
+                .to_string(),
+        );
     }
 
     let mut executor = StreamingExecutor::spawn(&opencode_binary, &args, cwd_path)

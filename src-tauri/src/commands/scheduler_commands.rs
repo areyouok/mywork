@@ -1,5 +1,6 @@
 use crate::db::connection;
 use crate::execution_retention::enforce_execution_history_limit;
+use crate::executor::streaming_executor::{StreamLine, StreamingExecutor};
 use crate::models::task::touch_task;
 use crate::scheduler::job_scheduler::{JobCallback, Scheduler, SchedulerState};
 use crate::scheduler::task_queue::{TaskQueue, TaskQueueError};
@@ -13,7 +14,7 @@ use tokio::sync::Mutex;
 
 #[cfg(target_os = "macos")]
 fn is_system_sleeping() -> bool {
-    crate::power_monitor::is_sleeping()
+    crate::power_monitor::is_sleeping() || crate::power_monitor::is_clamshell_closed()
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -27,7 +28,9 @@ pub async fn start_scheduler(
     scheduler: State<'_, Arc<Mutex<Scheduler>>>,
 ) -> Result<String, String> {
     if is_system_sleeping() {
-        return Err("System is sleeping; scheduler start is paused".to_string());
+        return Err(
+            "System is unavailable (sleeping or lid closed); scheduler start is paused".to_string(),
+        );
     }
 
     let scheduler = scheduler.inner().clone();
@@ -168,7 +171,10 @@ pub async fn reload_scheduler(
     app: AppHandle,
 ) -> Result<String, String> {
     if is_system_sleeping() {
-        return Err("System is sleeping; scheduler reload is paused".to_string());
+        return Err(
+            "System is unavailable (sleeping or lid closed); scheduler reload is paused"
+                .to_string(),
+        );
     }
 
     let pool = pool.inner().clone();
@@ -233,13 +239,12 @@ pub async fn execute_task_internal(
     task_queue: Arc<Mutex<TaskQueue>>,
 ) -> Result<(), String> {
     use crate::models::execution::{generate_output_file_name, ExecutionStatus};
-    use crate::opencode::executor::run_opencode_task;
     use crate::storage::output;
     use chrono::Utc;
 
     if is_system_sleeping() {
         eprintln!(
-            "Skipping scheduled execution for task '{}' because the system is sleeping",
+            "Skipping scheduled execution for task '{}' because the system is unavailable (sleeping or lid closed)",
             task_id
         );
         return Ok(());
@@ -319,64 +324,139 @@ pub async fn execute_task_internal(
         return Ok(());
     }
 
-    // Run opencode task
-    let result = run_opencode_task(&task.prompt, None, Some(timeout_seconds), None, cwd).await;
-
     let output_file_name = generate_output_file_name(&execution.id, &Utc::now());
 
-    let (session_id, status, finished_at, output_file, error_message) = match result {
-        Ok(opencode_output) => {
-            let (final_status, err_msg) = if opencode_output.timed_out {
-                (
-                    ExecutionStatus::Timeout,
-                    Some("Execution timed out".to_string()),
-                )
-            } else if !opencode_output.success {
-                (
-                    ExecutionStatus::Failed,
-                    Some(opencode_output.stdout.clone()),
-                )
+    output::write_output_file(&output_dir, &output_file_name, "")
+        .await
+        .map_err(|e| format!("Failed to initialize output file: {}", e))?;
+
+    let _ = crate::models::execution::update_execution_if_running(
+        &pool,
+        &execution.id,
+        crate::models::execution::UpdateExecution {
+            session_id: None,
+            status: None,
+            finished_at: None,
+            output_file: Some(output_file_name.clone()),
+            error_message: None,
+        },
+    )
+    .await
+    .map_err(|e| format!("Failed to set output file on execution: {}", e))?;
+
+    let args: Vec<&str> = vec!["run", &task.prompt];
+
+    if is_system_sleeping() {
+        let update = crate::models::execution::UpdateExecution {
+            session_id: None,
+            status: Some(ExecutionStatus::Failed),
+            finished_at: Some(Utc::now().to_rfc3339()),
+            output_file: Some(output_file_name.clone()),
+            error_message: Some("System entering sleep".to_string()),
+        };
+
+        let _ = crate::models::execution::update_execution_if_running(&pool, &execution.id, update)
+            .await
+            .map_err(|e| format!("Failed to update execution: {}", e))?;
+
+        return Ok(());
+    }
+
+    let opencode_binary = crate::opencode::executor::resolve_opencode_binary_path()
+        .map_err(|e| format!("Failed to locate opencode binary: {}", e))?;
+
+    let mut executor = StreamingExecutor::spawn(&opencode_binary, &args, cwd)
+        .await
+        .map_err(|e| format!("Failed to start opencode streaming: {}", e))?;
+
+    let mut parsed_session_id: Option<String> = None;
+    let stream_future = async {
+        while let Some(line) = executor.read_line().await {
+            match line {
+                StreamLine::Stdout(text) => {
+                    if parsed_session_id.is_none() {
+                        parsed_session_id =
+                            crate::opencode::session_parser::parse_session_id(&text);
+                    }
+
+                    output::append_output_file(
+                        &output_dir,
+                        &output_file_name,
+                        &format!("{}\n", text),
+                    )
+                    .await
+                    .map_err(|e| format!("Failed to append stdout: {}", e))?;
+                }
+                StreamLine::Stderr(text) => {
+                    output::append_output_file(
+                        &output_dir,
+                        &output_file_name,
+                        &format!("{}\n", text),
+                    )
+                    .await
+                    .map_err(|e| format!("Failed to append stderr: {}", e))?;
+                }
+                StreamLine::Finished => break,
+            }
+        }
+
+        Ok::<i32, String>(executor.exit_code().await.unwrap_or(-1))
+    };
+
+    let timeout_result =
+        tokio::time::timeout(Duration::from_secs(timeout_seconds), stream_future).await;
+
+    let (session_id, status, finished_at, output_file, error_message) = match timeout_result {
+        Ok(Ok(exit_code)) => {
+            let final_status = if exit_code == 0 {
+                ExecutionStatus::Success
             } else {
-                (ExecutionStatus::Success, None)
+                ExecutionStatus::Failed
             };
 
-            let content = format!(
-                "Session ID: {}\n{}",
-                opencode_output.session_id, opencode_output.stdout
-            );
-
-            let _file_path = output::write_output_file(&output_dir, &output_file_name, &content)
-                .await
-                .map_err(|e| format!("Failed to write output file: {}", e))?;
+            let err_msg = if exit_code == 0 {
+                None
+            } else {
+                Some(format!("Process exited with code {}", exit_code))
+            };
 
             (
-                Some(opencode_output.session_id),
+                parsed_session_id,
                 final_status,
                 Utc::now().to_rfc3339(),
                 Some(output_file_name.clone()),
                 err_msg,
             )
         }
-        Err(e) => {
-            let error_msg = format!("{}", e);
-            let content = format!("Error: {}", error_msg);
-
-            // Try to write error output file, but don't set output_file if it fails
-            let output_file_result =
-                match output::write_output_file(&output_dir, &output_file_name, &content).await {
-                    Ok(_) => Some(output_file_name.clone()),
-                    Err(write_err) => {
-                        eprintln!("Failed to write error output file: {}", write_err);
-                        None
-                    }
-                };
+        Ok(Err(e)) => {
+            let _ = output::append_output_file(
+                &output_dir,
+                &output_file_name,
+                &format!("Error: {}\n", e),
+            )
+            .await;
 
             (
-                None,
+                parsed_session_id,
                 ExecutionStatus::Failed,
                 Utc::now().to_rfc3339(),
-                output_file_result,
-                Some(error_msg),
+                Some(output_file_name.clone()),
+                Some(e),
+            )
+        }
+        Err(_) => {
+            executor.kill().await;
+            let msg = "Execution timed out".to_string();
+            let _ =
+                output::append_output_file(&output_dir, &output_file_name, &format!("{}\n", msg))
+                    .await;
+
+            (
+                parsed_session_id,
+                ExecutionStatus::Timeout,
+                Utc::now().to_rfc3339(),
+                Some(output_file_name.clone()),
+                Some(msg),
             )
         }
     };

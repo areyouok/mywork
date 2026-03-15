@@ -5,9 +5,12 @@ use std::sync::Arc;
 
 use crate::environment::hydrated_path;
 use crate::scheduler::process_tracker;
+use nix::sys::signal::{kill, Signal};
+use nix::unistd::Pid;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, Mutex};
+use tokio::time::{Duration, Instant};
 
 const MAX_BUFFER_BYTES: usize = 1024 * 1024;
 
@@ -75,6 +78,7 @@ fn line_size(line: &StreamLine) -> usize {
 #[derive(Debug)]
 pub struct StreamingExecutor {
     child: Arc<Mutex<Child>>,
+    pid: Option<u32>,
     receiver: mpsc::Receiver<(usize, StreamLine)>,
     buffer: Arc<Mutex<BufferState>>,
     exit_code: Arc<Mutex<Option<i32>>>,
@@ -188,6 +192,7 @@ impl StreamingExecutor {
 
         Ok(Self {
             child,
+            pid,
             receiver: rx,
             buffer,
             exit_code,
@@ -208,11 +213,18 @@ impl StreamingExecutor {
     }
 
     pub async fn is_running(&self) -> bool {
-        let mut child = self.child.lock().await;
-        match child.try_wait() {
-            Ok(Some(_)) => false,
-            Ok(None) => true,
-            Err(_) => false,
+        if self.exit_code().await.is_some() {
+            return false;
+        }
+
+        if let Ok(mut child) = self.child.try_lock() {
+            match child.try_wait() {
+                Ok(Some(_)) => false,
+                Ok(None) => true,
+                Err(_) => false,
+            }
+        } else {
+            true
         }
     }
 
@@ -225,9 +237,15 @@ impl StreamingExecutor {
     }
 
     pub async fn kill(&self) {
-        let mut child = self.child.lock().await;
-        let _ = child.start_kill();
-        let _ = child.wait().await;
+        if let Some(pid) = self.pid {
+            let pgid = Pid::from_raw(-(pid as i32));
+            let _ = kill(pgid, Signal::SIGKILL);
+        }
+
+        let start = Instant::now();
+        while self.exit_code().await.is_none() && start.elapsed() < Duration::from_secs(5) {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
     }
 }
 
@@ -357,6 +375,19 @@ mod tests {
         }
 
         assert!(saw_finished);
+        assert!(!executor.is_running().await);
+    }
+
+    #[tokio::test]
+    async fn test_kill_does_not_block_on_wait_lock() {
+        let executor = StreamingExecutor::spawn("bash", &["-c", "sleep 30"], None)
+            .await
+            .expect("failed to spawn executor");
+
+        timeout(Duration::from_secs(3), executor.kill())
+            .await
+            .expect("kill should not block");
+
         assert!(!executor.is_running().await);
     }
 }

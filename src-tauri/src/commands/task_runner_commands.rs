@@ -19,7 +19,7 @@ use tokio::time::{timeout, Duration};
 
 #[cfg(target_os = "macos")]
 fn is_system_sleeping() -> bool {
-    crate::power_monitor::is_sleeping()
+    crate::power_monitor::is_sleeping() || crate::power_monitor::is_clamshell_closed()
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -72,7 +72,9 @@ pub async fn run_task(
     app: AppHandle,
 ) -> Result<String, String> {
     if is_system_sleeping() {
-        return Err("System is sleeping; task execution is paused".to_string());
+        return Err(
+            "System is unavailable (sleeping or lid closed); task execution is paused".to_string(),
+        );
     }
 
     let queue = task_queue.inner().lock().await;
@@ -131,7 +133,9 @@ pub async fn run_task(
             .await
             .map_err(|e| format!("Failed to update execution: {}", e))?;
 
-        return Err("System is sleeping; task execution is paused".to_string());
+        return Err(
+            "System is unavailable (sleeping or lid closed); task execution is paused".to_string(),
+        );
     }
 
     let timeout_secs = task.timeout_seconds as u64;
@@ -227,7 +231,9 @@ pub async fn run_task(
         )
         .await;
 
-        return Err("System is sleeping; task execution is paused".to_string());
+        return Err(
+            "System is unavailable (sleeping or lid closed); task execution is paused".to_string(),
+        );
     }
 
     let mut executor = match StreamingExecutor::spawn(&opencode_binary, &args, cwd).await {
