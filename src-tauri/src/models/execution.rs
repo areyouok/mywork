@@ -453,6 +453,7 @@ mod tests {
             once_at: None,
             enabled: None,
             timeout_seconds: None,
+            working_directory: None,
         };
         let task = create_task(pool, new_task)
             .await

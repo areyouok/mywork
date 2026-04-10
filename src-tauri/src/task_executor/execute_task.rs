@@ -7,6 +7,7 @@ use crate::models::task::{get_task, touch_task};
 use crate::opencode::executor::run_opencode_task;
 use crate::storage::output;
 use crate::db::connection;
+use crate::working_dir::resolve_working_directory;
 use chrono::Utc;
 use sqlx::SqlitePool;
 use tauri::AppHandle;
@@ -39,11 +40,12 @@ pub async fn execute_task(
         .await
         .map_err(|e| format!("Failed to update task timestamp: {}", e))?;
     
-    let db_path = connection::get_database_directory(app)
+    // Resolve working directory using task.working_directory
+    let default_working_dir = connection::get_database_directory(app)
         .map_err(|e| format!("Failed to get database directory: {}", e))?;
-    let cwd = Some(&db_path);
+    let working_dir = resolve_working_directory(&task.working_directory, &default_working_dir);
     
-    let result = run_opencode_task(&task.prompt, None, Some(timeout_seconds), None, cwd).await;
+    let result = run_opencode_task(&task.prompt, None, Some(timeout_seconds), None, Some(&working_dir)).await;
     
     let output_dir = output::get_output_directory(app)
         .map_err(|e| format!("Failed to get output directory: {}", e))?;

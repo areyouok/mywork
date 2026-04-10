@@ -16,6 +16,7 @@ pub struct Task {
     pub timeout_seconds: i32,
     pub created_at: String,
     pub updated_at: String,
+    pub working_directory: Option<String>,
 }
 
 /// NewTask struct for creating a new task
@@ -28,6 +29,7 @@ pub struct NewTask {
     pub once_at: Option<String>,
     pub enabled: Option<i32>,
     pub timeout_seconds: Option<i32>,
+    pub working_directory: Option<String>,
 }
 
 /// UpdateTask struct for updating an existing task
@@ -41,6 +43,7 @@ pub struct UpdateTask {
     pub schedule_type: Option<String>,
     pub enabled: Option<i32>,
     pub timeout_seconds: Option<i32>,
+    pub working_directory: Option<Option<String>>,
 }
 
 /// Create a new task
@@ -89,8 +92,8 @@ pub async fn create_task(pool: &SqlitePool, new_task: NewTask) -> Result<Task, s
 
     sqlx::query(
         r#"
-        INSERT INTO tasks (id, name, prompt, cron_expression, simple_schedule, once_at, enabled, timeout_seconds, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tasks (id, name, prompt, cron_expression, simple_schedule, once_at, enabled, timeout_seconds, created_at, updated_at, working_directory)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&id)
@@ -103,6 +106,7 @@ pub async fn create_task(pool: &SqlitePool, new_task: NewTask) -> Result<Task, s
     .bind(timeout_seconds)
     .bind(&created_at)
     .bind(&updated_at)
+    .bind(&new_task.working_directory)
     .execute(pool)
     .await?;
 
@@ -117,6 +121,7 @@ pub async fn create_task(pool: &SqlitePool, new_task: NewTask) -> Result<Task, s
         timeout_seconds,
         created_at,
         updated_at,
+        working_directory: new_task.working_directory,
     })
 }
 
@@ -132,7 +137,7 @@ pub async fn create_task(pool: &SqlitePool, new_task: NewTask) -> Result<Task, s
 pub async fn get_task(pool: &SqlitePool, id: &str) -> Result<Task, sqlx::Error> {
     sqlx::query_as::<_, Task>(
         r#"
-        SELECT id, name, prompt, cron_expression, simple_schedule, once_at, enabled, timeout_seconds, created_at, updated_at
+        SELECT id, name, prompt, cron_expression, simple_schedule, once_at, enabled, timeout_seconds, created_at, updated_at, working_directory
         FROM tasks
         WHERE id = ?
         "#,
@@ -153,7 +158,7 @@ pub async fn get_task(pool: &SqlitePool, id: &str) -> Result<Task, sqlx::Error> 
 pub async fn get_all_tasks(pool: &SqlitePool) -> Result<Vec<Task>, sqlx::Error> {
     sqlx::query_as::<_, Task>(
         r#"
-        SELECT id, name, prompt, cron_expression, simple_schedule, once_at, enabled, timeout_seconds, created_at, updated_at
+        SELECT id, name, prompt, cron_expression, simple_schedule, once_at, enabled, timeout_seconds, created_at, updated_at, working_directory
         FROM tasks
         ORDER BY updated_at DESC
         "#,
@@ -262,12 +267,13 @@ pub async fn update_task(
     };
     let enabled = update.enabled.unwrap_or(existing.enabled);
     let timeout_seconds = update.timeout_seconds.unwrap_or(existing.timeout_seconds);
+    let working_directory = update.working_directory.unwrap_or(existing.working_directory);
     let updated_at = Utc::now().to_rfc3339();
 
     sqlx::query(
         r#"
         UPDATE tasks
-        SET name = ?, prompt = ?, cron_expression = ?, simple_schedule = ?, once_at = ?, enabled = ?, timeout_seconds = ?, updated_at = ?
+        SET name = ?, prompt = ?, cron_expression = ?, simple_schedule = ?, once_at = ?, enabled = ?, timeout_seconds = ?, updated_at = ?, working_directory = ?
         WHERE id = ?
         "#,
     )
@@ -279,6 +285,7 @@ pub async fn update_task(
     .bind(enabled)
     .bind(timeout_seconds)
     .bind(&updated_at)
+    .bind(&working_directory)
     .bind(id)
     .execute(pool)
     .await?;
@@ -294,6 +301,7 @@ pub async fn update_task(
         timeout_seconds,
         created_at: existing.created_at,
         updated_at,
+        working_directory,
     })
 }
 
@@ -380,6 +388,7 @@ mod tests {
             once_at: None,
             enabled: Some(1),
             timeout_seconds: Some(300),
+            working_directory: None,
         };
 
         let result = create_task(&pool, new_task).await;
@@ -409,6 +418,7 @@ mod tests {
             once_at: None,
             enabled: None,
             timeout_seconds: None,
+            working_directory: None,
         };
 
         let result = create_task(&pool, new_task).await;
@@ -432,6 +442,7 @@ mod tests {
             once_at: None,
             enabled: Some(1),
             timeout_seconds: Some(600),
+            working_directory: None,
         };
 
         let created = create_task(&pool, new_task)
@@ -491,6 +502,7 @@ mod tests {
             once_at: None,
             enabled: None,
             timeout_seconds: None,
+            working_directory: None,
         };
         let task2 = NewTask {
             name: "Task 2".to_string(),
@@ -500,6 +512,7 @@ mod tests {
             once_at: None,
             enabled: None,
             timeout_seconds: None,
+            working_directory: None,
         };
 
         create_task(&pool, task1)
@@ -529,6 +542,7 @@ mod tests {
             once_at: None,
             enabled: Some(1),
             timeout_seconds: Some(300),
+            working_directory: None,
         };
 
         let created = create_task(&pool, new_task)
@@ -546,6 +560,7 @@ mod tests {
             schedule_type: None,
             enabled: Some(0),
             timeout_seconds: Some(600),
+            working_directory: None,
         };
 
         let result = update_task(&pool, &created.id, update).await;
@@ -578,6 +593,7 @@ mod tests {
             once_at: None,
             enabled: Some(1),
             timeout_seconds: Some(300),
+            working_directory: None,
         };
 
         let created = create_task(&pool, new_task)
@@ -593,6 +609,7 @@ mod tests {
             schedule_type: None,
             enabled: None,
             timeout_seconds: None,
+            working_directory: None,
         };
 
         let result = update_task(&pool, &created.id, update).await;
@@ -619,6 +636,7 @@ mod tests {
             schedule_type: None,
             enabled: None,
             timeout_seconds: None,
+            working_directory: None,
         };
 
         let result = update_task(&pool, "non-existent-id", update).await;
@@ -639,6 +657,7 @@ mod tests {
             once_at: None,
             enabled: None,
             timeout_seconds: None,
+            working_directory: None,
         };
 
         let created = create_task(&pool, new_task)
@@ -684,6 +703,7 @@ mod tests {
             once_at: None,
             enabled: None,
             timeout_seconds: None,
+            working_directory: None,
         };
 
         let created = create_task(&pool, new_task)
@@ -739,6 +759,7 @@ mod tests {
             once_at: None,
             enabled: Some(1),
             timeout_seconds: Some(300),
+            working_directory: None,
         };
         let created = create_task(&pool, new_task).await.expect("Create failed");
 
@@ -755,6 +776,7 @@ mod tests {
             schedule_type: None,
             enabled: None,
             timeout_seconds: None,
+            working_directory: None,
         };
         let updated = update_task(&pool, &created.id, update)
             .await
@@ -783,6 +805,7 @@ mod tests {
             once_at: None,
             enabled: Some(1),
             timeout_seconds: Some(300),
+            working_directory: None,
         };
 
         let created = create_task(&pool, new_task)
@@ -798,6 +821,7 @@ mod tests {
             schedule_type: Some("once".to_string()),
             enabled: None,
             timeout_seconds: None,
+            working_directory: None,
         };
 
         let once_task = update_task(&pool, &created.id, switch_to_once)
@@ -817,6 +841,7 @@ mod tests {
             schedule_type: Some("simple".to_string()),
             enabled: None,
             timeout_seconds: None,
+            working_directory: None,
         };
 
         let simple_task = update_task(&pool, &created.id, switch_to_simple)
@@ -844,6 +869,7 @@ mod tests {
             once_at: Some("2099-02-01T10:00:00Z".to_string()),
             enabled: Some(1),
             timeout_seconds: Some(120),
+            working_directory: None,
         };
 
         let task = create_task(&pool, new_task)
@@ -870,6 +896,7 @@ mod tests {
             once_at: None,
             enabled: Some(1),
             timeout_seconds: Some(300),
+            working_directory: None,
         };
 
         let result = create_task(&pool, new_task).await;
@@ -893,6 +920,7 @@ mod tests {
             once_at: Some("2000-01-01T00:00:00Z".to_string()),
             enabled: Some(1),
             timeout_seconds: Some(300),
+            working_directory: None,
         };
 
         let result = create_task(&pool, new_task).await;
@@ -918,6 +946,7 @@ mod tests {
                 once_at: None,
                 enabled: Some(1),
                 timeout_seconds: Some(300),
+                working_directory: None,
             },
         )
         .await
@@ -935,6 +964,7 @@ mod tests {
                 schedule_type: Some("bad-type".to_string()),
                 enabled: None,
                 timeout_seconds: None,
+                working_directory: None,
             },
         )
         .await;
@@ -961,6 +991,7 @@ mod tests {
                 once_at: None,
                 enabled: Some(1),
                 timeout_seconds: Some(300),
+                working_directory: None,
             },
         )
         .await
@@ -978,6 +1009,7 @@ mod tests {
                 schedule_type: None,
                 enabled: None,
                 timeout_seconds: None,
+                working_directory: None,
             },
         )
         .await;
@@ -1004,6 +1036,7 @@ mod tests {
                 once_at: None,
                 enabled: Some(1),
                 timeout_seconds: Some(300),
+                working_directory: None,
             },
         )
         .await
@@ -1021,6 +1054,7 @@ mod tests {
                 schedule_type: Some("once".to_string()),
                 enabled: None,
                 timeout_seconds: None,
+                working_directory: None,
             },
         )
         .await;
@@ -1029,6 +1063,104 @@ mod tests {
             result.is_err(),
             "update should fail when once_at is in the past"
         );
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_create_task_with_working_directory() {
+        let (pool, _temp_dir) = setup_test_db().await;
+        let new_task = NewTask {
+            name: "Task with WD".to_string(),
+            prompt: "Test prompt".to_string(),
+            cron_expression: Some("0 0 * * *".to_string()),
+            simple_schedule: None,
+            once_at: None,
+            enabled: Some(1),
+            timeout_seconds: Some(300),
+            working_directory: Some("/custom/path".to_string()),
+        };
+
+        let task = create_task(&pool, new_task)
+            .await
+            .expect("Task creation should succeed");
+
+        assert_eq!(task.working_directory, Some("/custom/path".to_string()));
+
+        let fetched = get_task(&pool, &task.id)
+            .await
+            .expect("Should fetch task");
+        assert_eq!(fetched.working_directory, Some("/custom/path".to_string()));
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_update_task_working_directory() {
+        let (pool, _temp_dir) = setup_test_db().await;
+        let new_task = NewTask {
+            name: "Original WD".to_string(),
+            prompt: "Original prompt".to_string(),
+            cron_expression: Some("0 0 * * *".to_string()),
+            simple_schedule: None,
+            once_at: None,
+            enabled: Some(1),
+            timeout_seconds: Some(300),
+            working_directory: Some("/original/path".to_string()),
+        };
+
+        let created = create_task(&pool, new_task)
+            .await
+            .expect("Failed to create task");
+        assert_eq!(created.working_directory, Some("/original/path".to_string()));
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        let update = UpdateTask {
+            name: None,
+            prompt: None,
+            cron_expression: None,
+            simple_schedule: None,
+            once_at: None,
+            schedule_type: None,
+            enabled: None,
+            timeout_seconds: None,
+            working_directory: Some(Some("/updated/path".to_string())),
+        };
+
+        let updated = update_task(&pool, &created.id, update)
+            .await
+            .expect("Update should succeed");
+        assert_eq!(updated.working_directory, Some("/updated/path".to_string()));
+
+        let fetched = get_task(&pool, &created.id)
+            .await
+            .expect("Should fetch task");
+        assert_eq!(fetched.working_directory, Some("/updated/path".to_string()));
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        let clear_update = UpdateTask {
+            name: None,
+            prompt: None,
+            cron_expression: None,
+            simple_schedule: None,
+            once_at: None,
+            schedule_type: None,
+            enabled: None,
+            timeout_seconds: None,
+            working_directory: Some(None),
+        };
+
+        let cleared = update_task(&pool, &created.id, clear_update)
+            .await
+            .expect("Clear update should succeed");
+        assert_eq!(cleared.working_directory, None);
+
+        let final_fetch = get_task(&pool, &created.id)
+            .await
+            .expect("Should fetch task");
+        assert_eq!(final_fetch.working_directory, None);
 
         pool.close().await;
     }

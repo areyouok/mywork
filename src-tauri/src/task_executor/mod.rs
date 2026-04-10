@@ -32,6 +32,7 @@ pub async fn execute_task(
     use crate::opencode::executor::run_opencode_task;
     use crate::storage::output;
     use crate::db::connection;
+    use crate::working_dir::resolve_working_directory;
     use chrono::Utc;
     use std::sync::Arc;
 
@@ -53,13 +54,13 @@ pub async fn execute_task(
         .await
         .map_err(|e| format!("Failed to create execution: {}", e))?;
 
-    // Get database directory for working directory
-    let db_path = connection::get_database_directory(&app)
+    // Resolve working directory using task.working_directory
+    let default_working_dir = connection::get_database_directory(&app)
         .map_err(|e| format!("Failed to get database directory: {}", e))?;
-    let cwd = Some(&db_path);
+    let working_dir = resolve_working_directory(&task.working_directory, &default_working_dir);
 
     // Run opencode task
-    let result = run_opencode_task(&task.prompt, None, Some(timeout_seconds), None, cwd).await;
+    let result = run_opencode_task(&task.prompt, None, Some(timeout_seconds), None, Some(&working_dir)).await;
 
     // Save output
     let output_dir = output::get_output_directory(&app)

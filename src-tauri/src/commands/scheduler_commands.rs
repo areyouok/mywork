@@ -5,6 +5,7 @@ use crate::models::task::touch_task;
 use crate::scheduler::job_scheduler::{JobCallback, Scheduler, SchedulerState};
 use crate::scheduler::task_queue::{TaskQueue, TaskQueueError};
 use crate::scheduler::TaskSchedule;
+use crate::working_dir::resolve_working_directory;
 use chrono::Utc;
 use sqlx::SqlitePool;
 use std::sync::Arc;
@@ -270,10 +271,10 @@ pub async fn execute_task_internal(
         .await
         .map_err(|e| format!("Task not found: {}", e))?;
 
-    // Get database directory for working directory
-    let db_path = connection::get_database_directory(&app)
+    // Resolve working directory using task.working_directory
+    let default_working_dir = connection::get_database_directory(&app)
         .map_err(|e| format!("Failed to get database directory: {}", e))?;
-    let cwd = Some(&db_path);
+    let working_dir = resolve_working_directory(&task.working_directory, &default_working_dir);
 
     let output_dir = output::get_output_directory(&app)
         .map_err(|e| format!("Failed to get output directory: {}", e))?;
@@ -365,7 +366,7 @@ pub async fn execute_task_internal(
     let opencode_binary = crate::opencode::executor::resolve_opencode_binary_path()
         .map_err(|e| format!("Failed to locate opencode binary: {}", e))?;
 
-    let mut executor = StreamingExecutor::spawn(&opencode_binary, &args, cwd.map(|p| p.as_path()))
+    let mut executor = StreamingExecutor::spawn(&opencode_binary, &args, Some(&working_dir))
         .await
         .map_err(|e| format!("Failed to start opencode streaming: {}", e))?;
 

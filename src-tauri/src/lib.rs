@@ -21,6 +21,7 @@ pub mod opencode;
 pub mod power_monitor;
 pub mod scheduler;
 pub mod storage;
+pub mod working_dir;
 
 use chrono::Utc;
 use commands::execute_task_streaming;

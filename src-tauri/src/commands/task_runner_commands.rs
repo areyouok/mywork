@@ -10,6 +10,7 @@ use crate::opencode::executor::resolve_opencode_binary_path;
 use crate::opencode::session_parser::parse_session_id;
 use crate::scheduler::task_queue::{TaskQueue, TaskQueueError};
 use crate::storage::output;
+use crate::working_dir::resolve_working_directory;
 use chrono::Utc;
 use sqlx::SqlitePool;
 use std::sync::Arc;
@@ -142,17 +143,10 @@ pub async fn run_task(
 
     let execution_id = execution.id.clone();
 
-    // Get database directory for working directory
-    let db_path_result = connection::get_database_directory(&app)
-        .map_err(|e| format!("Failed to get database directory: {}", e));
-    let db_path = match db_path_result {
-        Ok(path) => path,
-        Err(message) => {
-            mark_execution_failed(&pool, &execution_id, None, None, &message).await;
-            return Err(message);
-        }
-    };
-    let cwd = Some(&db_path);
+    // Resolve working directory using task.working_directory
+    let default_working_dir = connection::get_database_directory(&app)
+        .map_err(|e| format!("Failed to get database directory: {}", e))?;
+    let working_dir = resolve_working_directory(&task.working_directory, &default_working_dir);
 
     let output_dir_result = output::get_output_directory(&app)
         .map_err(|e| format!("Failed to get output directory: {}", e));
@@ -236,7 +230,7 @@ pub async fn run_task(
         );
     }
 
-    let mut executor = match StreamingExecutor::spawn(&opencode_binary, &args, cwd.map(|p| p.as_path())).await {
+    let mut executor = match StreamingExecutor::spawn(&opencode_binary, &args, Some(&working_dir)).await {
         Ok(executor) => executor,
         Err(e) => {
             let message = format!("Failed to start opencode streaming: {}", e);

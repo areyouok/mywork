@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     once_at TEXT,
     enabled INTEGER DEFAULT 1,
     timeout_seconds INTEGER DEFAULT 300,
+    working_directory TEXT, -- Custom working directory for task execution
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
