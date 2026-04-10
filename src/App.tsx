@@ -141,6 +141,7 @@ function App() {
           simple_schedule: data.simple_schedule ?? null,
           once_at: data.once_at ?? null,
           timeout_seconds: data.timeout_seconds,
+          working_directory: data.working_directory ?? null,
         });
         setEditingTask(null);
       } else {
@@ -151,6 +152,7 @@ function App() {
           simple_schedule: data.simple_schedule,
           once_at: data.once_at,
           timeout_seconds: data.timeout_seconds,
+          working_directory: data.working_directory,
           enabled: 1,
         });
       }
