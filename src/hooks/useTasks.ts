@@ -10,6 +10,7 @@ interface NewTask {
   once_at?: string;
   enabled?: number;
   timeout_seconds?: number;
+  working_directory?: string;
 }
 
 interface UpdateTask {
@@ -21,6 +22,7 @@ interface UpdateTask {
   once_at?: string | null;
   enabled?: number;
   timeout_seconds?: number;
+  working_directory?: string | null;
 }
 
 export function useTasks() {

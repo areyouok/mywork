@@ -7,6 +7,7 @@ export interface Task {
   once_at?: string;
   enabled: boolean;
   timeout_seconds: number;
+  working_directory?: string;
   created_at: string;
   updated_at: string;
 }

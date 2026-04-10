@@ -12,6 +12,7 @@ export interface TaskFormData {
   simple_schedule?: string;
   once_at?: string;
   timeout_seconds: number;
+  working_directory?: string;
 }
 
 interface TaskFormProps {
@@ -27,6 +28,7 @@ interface FormErrors {
   simple_schedule?: string;
   once_at?: string;
   timeout_seconds?: string;
+  working_directory?: string;
   submit?: string;
 }
 
@@ -64,6 +66,7 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
   const [simpleSchedule, setSimpleSchedule] = useState(initialData?.simple_schedule || '');
   const [onceAt, setOnceAt] = useState(toLocalDateTimeInputValue(initialData?.once_at));
   const [timeoutSeconds, setTimeoutSeconds] = useState(initialData?.timeout_seconds || 300);
+  const [workingDirectory, setWorkingDirectory] = useState(initialData?.working_directory || '');
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -76,6 +79,7 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
       setSimpleSchedule(initialData.simple_schedule || '');
       setOnceAt(toLocalDateTimeInputValue(initialData.once_at));
       setTimeoutSeconds(initialData.timeout_seconds);
+      setWorkingDirectory(initialData.working_directory || '');
     }
   }, [initialData]);
 
@@ -148,6 +152,7 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
         simple_schedule: scheduleType === 'simple' ? simpleSchedule.trim() : undefined,
         once_at: scheduleType === 'once' ? new Date(onceAt).toISOString() : undefined,
         timeout_seconds: timeoutSeconds,
+        working_directory: workingDirectory.trim() || undefined,
       });
 
       if (!initialData) {
@@ -157,6 +162,7 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
         setSimpleSchedule('');
         setOnceAt('');
         setTimeoutSeconds(300);
+        setWorkingDirectory('');
         setScheduleType('simple');
       } else {
         onCancel?.();
@@ -310,6 +316,28 @@ export function TaskForm({ initialData, onSubmit, onCancel }: TaskFormProps) {
         {errors.timeout_seconds && (
           <span id="timeout-error" className="field-error">
             {errors.timeout_seconds}
+          </span>
+        )}
+      </div>
+
+      <div className="form-field">
+        <label htmlFor="working-directory">
+          Working Directory
+          <span className="field-hint"> (optional, uses default if empty or invalid)</span>
+        </label>
+        <input
+          id="working-directory"
+          type="text"
+          value={workingDirectory}
+          onChange={(e) => setWorkingDirectory(e.target.value)}
+          placeholder="e.g., /Users/username/projects/my-project"
+          aria-invalid={!!errors.working_directory}
+          aria-describedby={errors.working_directory ? 'working-directory-error' : undefined}
+          disabled={isSubmitting}
+        />
+        {errors.working_directory && (
+          <span id="working-directory-error" className="field-error">
+            {errors.working_directory}
           </span>
         )}
       </div>

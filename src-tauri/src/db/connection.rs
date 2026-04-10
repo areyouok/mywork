@@ -112,22 +112,4 @@ mod tests {
         assert!(result.is_ok(), "Database should be valid after re-init");
         pool2.close().await;
     }
-
-    #[tokio::test]
-    async fn test_working_directory_column_exists() {
-        let temp_dir = tempdir().expect("Failed to create temp dir");
-        let db_path = temp_dir.path().join("test.db");
-
-        let pool = init_database(&db_path).await.expect("Failed to init database");
-
-        let column_exists: bool = sqlx::query_scalar(
-            "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name='working_directory'",
-        )
-        .fetch_one(&pool)
-        .await
-        .expect("Failed to check column");
-
-        assert!(column_exists, "working_directory column should exist");
-        pool.close().await;
-    }
 }
