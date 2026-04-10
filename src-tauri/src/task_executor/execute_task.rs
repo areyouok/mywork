@@ -41,7 +41,7 @@ pub async fn execute_task(
     
     let db_path = connection::get_database_directory(app)
         .map_err(|e| format!("Failed to get database directory: {}", e))?;
-    let cwd = db_path.parent();
+    let cwd = Some(&db_path);
     
     let result = run_opencode_task(&task.prompt, None, Some(timeout_seconds), None, cwd).await;
     

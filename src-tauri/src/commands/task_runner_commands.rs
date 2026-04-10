@@ -152,7 +152,7 @@ pub async fn run_task(
             return Err(message);
         }
     };
-    let cwd = db_path.parent();
+    let cwd = Some(&db_path);
 
     let output_dir_result = output::get_output_directory(&app)
         .map_err(|e| format!("Failed to get output directory: {}", e));

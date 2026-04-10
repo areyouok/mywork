@@ -273,7 +273,7 @@ pub async fn execute_task_internal(
     // Get database directory for working directory
     let db_path = connection::get_database_directory(&app)
         .map_err(|e| format!("Failed to get database directory: {}", e))?;
-    let cwd = db_path.parent();
+    let cwd = Some(&db_path);
 
     let output_dir = output::get_output_directory(&app)
         .map_err(|e| format!("Failed to get output directory: {}", e))?;
