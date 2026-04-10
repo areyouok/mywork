@@ -20,53 +20,7 @@ pub async fn init_database(db_path: &Path) -> Result<SqlitePool, sqlx::Error> {
         }
     }
 
-    run_migrations(&pool).await?;
-
     Ok(pool)
-}
-
-async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    // Remove legacy skip_if_running column if exists
-    let has_legacy_column: bool = match sqlx::query_scalar(
-        "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name='skip_if_running'",
-    )
-    .fetch_one(pool)
-    .await
-    {
-        Ok(value) => value,
-        Err(e) => {
-            eprintln!("Failed to check legacy schema: {}", e);
-            false
-        }
-    };
-
-    if has_legacy_column {
-        sqlx::query("ALTER TABLE tasks DROP COLUMN skip_if_running")
-            .execute(pool)
-            .await?;
-    }
-
-    // Add working_directory column if not exists
-    let has_working_directory: bool = match sqlx::query_scalar(
-        "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name='working_directory'",
-    )
-    .fetch_one(pool)
-    .await
-    {
-        Ok(value) => value,
-        Err(e) => {
-            eprintln!("Failed to check working_directory column: {}", e);
-            false
-        }
-    };
-
-    if !has_working_directory {
-        sqlx::query("ALTER TABLE tasks ADD COLUMN working_directory TEXT")
-            .execute(pool)
-            .await?;
-    }
-
-    Ok(())
 }
 
 pub fn get_database_path(app: &AppHandle) -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -160,73 +114,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_migration_removes_skip_if_running() {
+    async fn test_working_directory_column_exists() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let db_path = temp_dir.path().join("test.db");
 
-        let pool = SqlitePool::connect(&format!("sqlite:{}?mode=rwc", db_path.display()))
-            .await
-            .expect("Failed to connect");
-
-        sqlx::query(
-            "CREATE TABLE tasks (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                prompt TEXT NOT NULL,
-                skip_if_running INTEGER DEFAULT 1
-            )",
-        )
-        .execute(&pool)
-        .await
-        .expect("Failed to create table with legacy column");
-
-        pool.close().await;
-
-        let pool2 = init_database(&db_path).await.expect("Failed to re-init");
-
-        let column_exists: bool = sqlx::query_scalar(
-            "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name='skip_if_running'",
-        )
-        .fetch_one(&pool2)
-        .await
-        .expect("Failed to check column");
-
-        assert!(!column_exists, "skip_if_running column should be removed");
-        pool2.close().await;
-    }
-
-    #[tokio::test]
-    async fn test_migration_adds_working_directory() {
-        let temp_dir = tempdir().expect("Failed to create temp dir");
-        let db_path = temp_dir.path().join("test.db");
-
-        let pool = SqlitePool::connect(&format!("sqlite:{}?mode=rwc", db_path.display()))
-            .await
-            .expect("Failed to connect");
-
-        sqlx::query(
-            "CREATE TABLE tasks (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                prompt TEXT NOT NULL
-            )",
-        )
-        .execute(&pool)
-        .await
-        .expect("Failed to create table without working_directory");
-
-        pool.close().await;
-
-        let pool2 = init_database(&db_path).await.expect("Failed to re-init");
+        let pool = init_database(&db_path).await.expect("Failed to init database");
 
         let column_exists: bool = sqlx::query_scalar(
             "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name='working_directory'",
         )
-        .fetch_one(&pool2)
+        .fetch_one(&pool)
         .await
         .expect("Failed to check column");
 
-        assert!(column_exists, "working_directory column should be added");
-        pool2.close().await;
+        assert!(column_exists, "working_directory column should exist");
+        pool.close().await;
     }
 }
