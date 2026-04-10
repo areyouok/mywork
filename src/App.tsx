@@ -152,7 +152,7 @@ function App() {
           simple_schedule: data.simple_schedule,
           once_at: data.once_at,
           timeout_seconds: data.timeout_seconds,
-          working_directory: data.working_directory,
+          working_directory: data.working_directory?.trim() || undefined,
           enabled: 1,
         });
       }
