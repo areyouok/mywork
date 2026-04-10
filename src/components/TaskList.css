@@ -108,11 +108,16 @@
 }
 
 .task-prompt {
-  margin: 0 0 var(--space-sm);
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
   line-height: var(--line-height-normal);
-  white-space: pre-wrap;
+  width: 100%;
+  padding: var(--space-xs) 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  resize: vertical;
+  font-family: inherit;
 }
 
 .task-meta {
