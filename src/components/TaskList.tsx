@@ -69,7 +69,13 @@ export function TaskList({
           </div>
 
           <div className="task-body">
-            <textarea className="task-prompt" readOnly value={task.prompt} rows={12} />
+            <textarea
+              className="task-prompt"
+              readOnly
+              value={task.prompt}
+              rows={12}
+              tabIndex={-1}
+            />
             {task.timeout_seconds !== 300 && (
               <div className="task-meta">
                 <span className="task-timeout">Timeout: {task.timeout_seconds}s</span>
