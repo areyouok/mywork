@@ -141,7 +141,7 @@ function App() {
           simple_schedule: data.simple_schedule ?? null,
           once_at: data.once_at ?? null,
           timeout_seconds: data.timeout_seconds,
-          working_directory: data.working_directory ?? null,
+          working_directory: data.working_directory?.trim() || null,
         });
         setEditingTask(null);
       } else {

@@ -143,9 +143,13 @@ pub async fn run_task(
 
     let execution_id = execution.id.clone();
 
-    // Resolve working directory using task.working_directory
-    let default_working_dir = connection::get_database_directory(&app)
-        .map_err(|e| format!("Failed to get database directory: {}", e))?;
+    let default_working_dir = match connection::get_database_directory(&app).map_err(|e| format!("Failed to get database directory: {}", e)) {
+        Ok(dir) => dir,
+        Err(message) => {
+            mark_execution_failed(&pool, &execution_id, None, None, &message).await;
+            return Err(message);
+        }
+    };
     let working_dir = resolve_working_directory(&task.working_directory, &default_working_dir);
 
     let output_dir_result = output::get_output_directory(&app)
