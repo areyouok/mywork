@@ -365,7 +365,7 @@ pub async fn execute_task_internal(
     let opencode_binary = crate::opencode::executor::resolve_opencode_binary_path()
         .map_err(|e| format!("Failed to locate opencode binary: {}", e))?;
 
-    let mut executor = StreamingExecutor::spawn(&opencode_binary, &args, cwd)
+    let mut executor = StreamingExecutor::spawn(&opencode_binary, &args, cwd.map(|p| p.as_path()))
         .await
         .map_err(|e| format!("Failed to start opencode streaming: {}", e))?;
 

@@ -236,7 +236,7 @@ pub async fn run_task(
         );
     }
 
-    let mut executor = match StreamingExecutor::spawn(&opencode_binary, &args, cwd).await {
+    let mut executor = match StreamingExecutor::spawn(&opencode_binary, &args, cwd.map(|p| p.as_path())).await {
         Ok(executor) => executor,
         Err(e) => {
             let message = format!("Failed to start opencode streaming: {}", e);
