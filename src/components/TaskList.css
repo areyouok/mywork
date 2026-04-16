@@ -123,12 +123,9 @@
 .task-meta {
   display: flex;
   gap: var(--space-lg);
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   color: var(--text-tertiary);
-}
-
-.task-timeout {
-  color: var(--text-tertiary);
+  margin-top: var(--space-sm);
 }
 
 .task-actions {

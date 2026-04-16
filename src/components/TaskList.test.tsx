@@ -72,6 +72,16 @@ describe('TaskList', () => {
       expect(switches[0]).toHaveAttribute('aria-checked', 'true');
       expect(switches[1]).toHaveAttribute('aria-checked', 'false');
     });
+
+    it('displays non-default timeout value', () => {
+      render(<TaskList tasks={mockTasks} />);
+      expect(screen.getByText('Timeout: 600s')).toBeInTheDocument();
+    });
+
+    it('does not display timeout for default value', () => {
+      render(<TaskList tasks={mockTasks} />);
+      expect(screen.queryByText('Timeout: 300s')).not.toBeInTheDocument();
+    });
   });
 
   describe('Interactions', () => {
