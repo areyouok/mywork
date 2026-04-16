@@ -55,7 +55,7 @@ export function useStreamingOutput() {
 
             const newContent = nextOutput.slice(parsedIndexRef.current);
             const lastNewlineIdx = newContent.lastIndexOf('\n');
-            if (lastNewlineIdx > 0) {
+            if (lastNewlineIdx >= 0) {
               const toParse = newContent.slice(0, lastNewlineIdx);
               parsedIndexRef.current += lastNewlineIdx + 1;
 
@@ -88,6 +88,19 @@ export function useStreamingOutput() {
       clearTimer();
       pollingRef.current = false;
       setIsStreaming(false);
+
+      if (!clearOutput && lastOutputRef.current.length > parsedIndexRef.current) {
+        const remaining = lastOutputRef.current.slice(parsedIndexRef.current);
+        const trimmed = remaining.trim();
+        if (trimmed) {
+          const newEvents = parseJsonlEvents(remaining);
+          if (newEvents.length > 0) {
+            setEvents((prev) => [...prev, ...newEvents]);
+          }
+        }
+        parsedIndexRef.current = lastOutputRef.current.length;
+      }
+
       if (clearOutput) {
         setOutput('');
         setEvents([]);

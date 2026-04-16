@@ -22,16 +22,16 @@
   flex-shrink: 0;
 }
 
-.status-completed {
+.tool-status-indicator.status-completed {
   background-color: var(--success-color);
 }
 
-.status-running {
+.tool-status-indicator.status-running {
   background-color: var(--warning-color);
   animation: pulse 1s ease-in-out infinite;
 }
 
-.status-failed {
+.tool-status-indicator.status-failed {
   background-color: var(--error-color);
 }
 

@@ -345,7 +345,7 @@ pub async fn execute_task_internal(
     .await
     .map_err(|e| format!("Failed to set output file on execution: {}", e))?;
 
-    let args: Vec<&str> = vec!["run", &task.prompt];
+    let args: Vec<&str> = vec!["run", "--format", "json", &task.prompt];
 
     if is_system_sleeping() {
         let update = crate::models::execution::UpdateExecution {
@@ -375,11 +375,6 @@ pub async fn execute_task_internal(
         while let Some(line) = executor.read_line().await {
             match line {
                 StreamLine::Stdout(text) => {
-                    if parsed_session_id.is_none() {
-                        parsed_session_id =
-                            crate::opencode::session_parser::parse_session_id(&text);
-                    }
-
                     output::append_output_file(
                         &output_dir,
                         &output_file_name,
@@ -387,15 +382,17 @@ pub async fn execute_task_internal(
                     )
                     .await
                     .map_err(|e| format!("Failed to append stdout: {}", e))?;
+
+                    if parsed_session_id.is_none() {
+                        if let Ok(event) =
+                            serde_json::from_str::<crate::opencode::event::OpenCodeEvent>(&text)
+                        {
+                            parsed_session_id = Some(event.session_id().to_string());
+                        }
+                    }
                 }
                 StreamLine::Stderr(text) => {
-                    output::append_output_file(
-                        &output_dir,
-                        &output_file_name,
-                        &format!("{}\n", text),
-                    )
-                    .await
-                    .map_err(|e| format!("Failed to append stderr: {}", e))?;
+                    eprintln!("opencode stderr: {}", text);
                 }
                 StreamLine::Finished => break,
             }

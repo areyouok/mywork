@@ -213,5 +213,49 @@ describe('useStreamingOutput', () => {
 
       expect(result.current.events).toHaveLength(0);
     });
+
+    it('streaming 结尾无换行符时 stopStreaming(clearOutput=false) 应 flush 最后事件', async () => {
+      const event1 = JSON.stringify({
+        type: 'text',
+        timestamp: 1000,
+        sessionID: 'ses_1',
+        part: { type: 'text', id: 'p1', messageID: 'm1', sessionID: 'ses_1', text: 'hello' },
+      });
+
+      vi.mocked(tasksApi.getOutput).mockResolvedValueOnce(`${event1}\n${event1}`);
+
+      const { result } = renderHook(() => useStreamingOutput());
+
+      await act(async () => {
+        await result.current.startStreaming('exec-1');
+      });
+
+      expect(result.current.events).toHaveLength(1);
+
+      act(() => {
+        result.current.stopStreaming(false);
+      });
+
+      expect(result.current.events).toHaveLength(2);
+    });
+
+    it('lastNewlineIdx === 0 时不应产生多余事件', async () => {
+      const event1 = JSON.stringify({
+        type: 'text',
+        timestamp: 1000,
+        sessionID: 'ses_1',
+        part: { type: 'text', id: 'p1', messageID: 'm1', sessionID: 'ses_1', text: 'hello' },
+      });
+
+      vi.mocked(tasksApi.getOutput).mockResolvedValueOnce(`\n${event1}\n`);
+
+      const { result } = renderHook(() => useStreamingOutput());
+
+      await act(async () => {
+        await result.current.startStreaming('exec-1');
+      });
+
+      expect(result.current.events).toHaveLength(1);
+    });
   });
 });
