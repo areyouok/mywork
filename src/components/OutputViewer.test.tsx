@@ -3,44 +3,6 @@ import { describe, it, expect } from 'vitest';
 import { OutputViewer } from './OutputViewer';
 
 describe('OutputViewer', () => {
-  describe('Rendering', () => {
-    it('should render component with content', () => {
-      render(<OutputViewer content="Test content" />);
-
-      expect(screen.getByText('Test content')).toBeInTheDocument();
-    });
-
-    it('should render plain text content', () => {
-      render(<OutputViewer content="Plain text content" isMarkdown={false} />);
-
-      expect(screen.getByText('Plain text content')).toBeInTheDocument();
-    });
-
-    it('should render content with isMarkdown prop (treated as plain text)', () => {
-      render(<OutputViewer content="# Heading" isMarkdown={true} />);
-
-      expect(screen.getByText('# Heading')).toBeInTheDocument();
-    });
-  });
-
-  describe('ANSI Content', () => {
-    it('should render content with ANSI codes', () => {
-      const esc = String.fromCharCode(0x1b);
-      render(<OutputViewer content={`${esc}[31mRed Text${esc}[0m`} />);
-
-      const redElement = screen.getByText('Red Text');
-      expect(redElement).toBeInTheDocument();
-    });
-
-    it('should render content with multiple ANSI codes', () => {
-      const esc = String.fromCharCode(0x1b);
-      render(<OutputViewer content={`${esc}[1mBold${esc}[0m ${esc}[32mGreen${esc}[0m`} />);
-
-      expect(screen.getByText('Bold')).toBeInTheDocument();
-      expect(screen.getByText('Green')).toBeInTheDocument();
-    });
-  });
-
   describe('Empty State', () => {
     it('should render empty state when content is empty string', () => {
       render(<OutputViewer content="" />);
@@ -52,12 +14,6 @@ describe('OutputViewer', () => {
       render(<OutputViewer content="   " />);
 
       expect(screen.getByText(/no output/i)).toBeInTheDocument();
-    });
-
-    it('should not render empty state when content exists', () => {
-      render(<OutputViewer content="Some content" />);
-
-      expect(screen.queryByText(/no output/i)).not.toBeInTheDocument();
     });
 
     it('should render execution error message when output is empty for terminal status', () => {
@@ -80,24 +36,6 @@ describe('OutputViewer', () => {
   });
 
   describe('Props', () => {
-    it('should accept content prop', () => {
-      render(<OutputViewer content="Test content" />);
-
-      expect(screen.getByText('Test content')).toBeInTheDocument();
-    });
-
-    it('should accept isMarkdown prop as true', () => {
-      const { container } = render(<OutputViewer content="Test" isMarkdown={true} />);
-
-      expect(container.firstChild).toBeInTheDocument();
-    });
-
-    it('should accept isMarkdown prop as false', () => {
-      const { container } = render(<OutputViewer content="Test" isMarkdown={false} />);
-
-      expect(container.firstChild).toBeInTheDocument();
-    });
-
     it('should accept execution prop as null', () => {
       const { container } = render(<OutputViewer content="Test" execution={null} />);
 
@@ -110,6 +48,90 @@ describe('OutputViewer', () => {
       const { container } = render(<OutputViewer content="Test content" />);
 
       expect(container.firstChild).toBeInTheDocument();
+    });
+  });
+
+  describe('JSONL Rendering', () => {
+    const textEvent = JSON.stringify({
+      type: 'text',
+      timestamp: 1000,
+      sessionID: 'ses_1',
+      part: { type: 'text', id: 'p1', messageID: 'm1', sessionID: 'ses_1', text: 'JSONL text' },
+    });
+
+    const toolEvent = JSON.stringify({
+      type: 'tool_use',
+      timestamp: 2000,
+      sessionID: 'ses_1',
+      part: {
+        type: 'tool',
+        tool: 'bash',
+        callID: 'call_1',
+        state: {
+          status: 'completed',
+          input: { command: 'echo test' },
+          output: 'test\n',
+          metadata: { exit: 0 },
+          title: 'Echo test',
+          time: { start: 2000, end: 2003 },
+        },
+        id: 'p2',
+        sessionID: 'ses_1',
+        messageID: 'm1',
+      },
+    });
+
+    it('should use EventRenderer for .jsonl output files', () => {
+      render(
+        <OutputViewer
+          content={`${textEvent}\n${toolEvent}\n`}
+          execution={{
+            id: 'exec-1',
+            task_id: 'task-1',
+            status: 'success',
+            started_at: '2024-01-01T00:00:00Z',
+            output_file: 'output.jsonl',
+          }}
+        />
+      );
+
+      expect(screen.getByText('JSONL text')).toBeInTheDocument();
+      expect(screen.getByText('Echo test')).toBeInTheDocument();
+    });
+
+    it('should show empty state for empty .jsonl content', () => {
+      render(
+        <OutputViewer
+          content=""
+          execution={{
+            id: 'exec-1',
+            task_id: 'task-1',
+            status: 'success',
+            started_at: '2024-01-01T00:00:00Z',
+            output_file: 'output.jsonl',
+          }}
+        />
+      );
+
+      expect(screen.getByText(/no output/i)).toBeInTheDocument();
+    });
+
+    it('should show error message for failed .jsonl execution', () => {
+      render(
+        <OutputViewer
+          content=""
+          execution={{
+            id: 'exec-1',
+            task_id: 'task-1',
+            status: 'failed',
+            started_at: '2024-01-01T00:00:00Z',
+            output_file: 'output.jsonl',
+            error_message: 'Process crashed',
+          }}
+        />
+      );
+
+      expect(screen.getByText('Process crashed')).toBeInTheDocument();
     });
   });
 });

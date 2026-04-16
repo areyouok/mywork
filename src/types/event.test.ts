@@ -1,0 +1,179 @@
+import { describe, it, expect } from 'vitest';
+import { parseJsonlEvents } from './event';
+import type { OpenCodeEvent } from './event';
+
+describe('parseJsonlEvents', () => {
+  it('should parse valid JSONL text into events', () => {
+    const jsonl = [
+      JSON.stringify({
+        type: 'text',
+        timestamp: 1000,
+        sessionID: 'ses_1',
+        part: { type: 'text', id: 'p1', messageID: 'm1', sessionID: 'ses_1', text: 'hello' },
+      }),
+      JSON.stringify({
+        type: 'tool_use',
+        timestamp: 2000,
+        sessionID: 'ses_1',
+        part: {
+          type: 'tool',
+          tool: 'bash',
+          callID: 'call_1',
+          state: { status: 'completed', input: { command: 'ls' } },
+          id: 'p2',
+          sessionID: 'ses_1',
+          messageID: 'm1',
+        },
+      }),
+    ].join('\n');
+
+    const events = parseJsonlEvents(jsonl);
+    expect(events).toHaveLength(2);
+    expect(events[0].type).toBe('text');
+    expect(events[1].type).toBe('tool_use');
+  });
+
+  it('should skip non-JSON lines', () => {
+    const jsonl = [
+      'this is not json',
+      JSON.stringify({
+        type: 'text',
+        timestamp: 1000,
+        sessionID: 'ses_1',
+        part: { type: 'text', id: 'p1', messageID: 'm1', sessionID: 'ses_1', text: 'hello' },
+      }),
+      'also not json',
+    ].join('\n');
+
+    const events = parseJsonlEvents(jsonl);
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('text');
+  });
+
+  it('should skip empty lines', () => {
+    const jsonl = [
+      '',
+      JSON.stringify({
+        type: 'text',
+        timestamp: 1000,
+        sessionID: 'ses_1',
+        part: { type: 'text', id: 'p1', messageID: 'm1', sessionID: 'ses_1', text: 'hello' },
+      }),
+      '',
+      '',
+    ].join('\n');
+
+    const events = parseJsonlEvents(jsonl);
+    expect(events).toHaveLength(1);
+  });
+
+  it('should handle mixed valid and invalid lines', () => {
+    const jsonl = [
+      JSON.stringify({
+        type: 'step_start',
+        timestamp: 1000,
+        sessionID: 'ses_1',
+        part: { id: 'p1', messageID: 'm1', sessionID: 'ses_1', snapshot: 's1', type: 'step-start' },
+      }),
+      'some random log line',
+      '',
+      JSON.stringify({
+        type: 'text',
+        timestamp: 2000,
+        sessionID: 'ses_1',
+        part: { type: 'text', id: 'p2', messageID: 'm1', sessionID: 'ses_1', text: 'result' },
+      }),
+      '{ incomplete json',
+    ].join('\n');
+
+    const events = parseJsonlEvents(jsonl);
+    expect(events).toHaveLength(2);
+    expect(events[0].type).toBe('step_start');
+    expect(events[1].type).toBe('text');
+  });
+
+  it('should return empty array for empty string', () => {
+    expect(parseJsonlEvents('')).toEqual([]);
+  });
+
+  it('should return empty array for whitespace-only string', () => {
+    expect(parseJsonlEvents('   \n  \n  ')).toEqual([]);
+  });
+
+  it('should parse single event', () => {
+    const json = JSON.stringify({
+      type: 'text',
+      timestamp: 1000,
+      sessionID: 'ses_1',
+      part: { type: 'text', id: 'p1', messageID: 'm1', sessionID: 'ses_1', text: 'single' },
+    });
+
+    const events = parseJsonlEvents(json);
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('text');
+    const textEvent = events[0] as OpenCodeEvent & { type: 'text' };
+    expect(textEvent.part.text).toBe('single');
+  });
+
+  it('should parse step_finish event with tokens and cost', () => {
+    const jsonl = JSON.stringify({
+      type: 'step_finish',
+      timestamp: 3000,
+      sessionID: 'ses_1',
+      part: {
+        id: 'p1',
+        reason: 'stop',
+        snapshot: 's1',
+        messageID: 'm1',
+        sessionID: 'ses_1',
+        type: 'step-finish',
+        tokens: {
+          total: 18548,
+          input: 49,
+          output: 3,
+          reasoning: 0,
+          cache: { write: 0, read: 18496 },
+        },
+        cost: 0,
+      },
+    });
+
+    const events = parseJsonlEvents(jsonl);
+    expect(events).toHaveLength(1);
+    const finishEvent = events[0] as OpenCodeEvent & { type: 'step_finish' };
+    expect(finishEvent.part.tokens?.total).toBe(18548);
+    expect(finishEvent.part.cost).toBe(0);
+  });
+
+  it('should parse tool_use event with full state', () => {
+    const jsonl = JSON.stringify({
+      type: 'tool_use',
+      timestamp: 2000,
+      sessionID: 'ses_1',
+      part: {
+        type: 'tool',
+        tool: 'bash',
+        callID: 'call_xxx',
+        state: {
+          status: 'completed',
+          input: { command: 'echo hello', description: 'Echo hello' },
+          output: 'hello\n',
+          metadata: { output: 'hello\n', exit: 0, description: 'Echo hello', truncated: false },
+          title: 'Echo hello',
+          time: { start: 1776342614905, end: 1776342614908 },
+        },
+        id: 'p1',
+        sessionID: 'ses_1',
+        messageID: 'm1',
+      },
+    });
+
+    const events = parseJsonlEvents(jsonl);
+    expect(events).toHaveLength(1);
+    const toolEvent = events[0] as OpenCodeEvent & { type: 'tool_use' };
+    expect(toolEvent.part.tool).toBe('bash');
+    expect(toolEvent.part.state.status).toBe('completed');
+    expect(toolEvent.part.state.output).toBe('hello\n');
+    expect(toolEvent.part.state.metadata?.exit).toBe(0);
+  });
+});

@@ -82,7 +82,7 @@ pub struct UpdateExecution {
 
 pub fn generate_output_file_name(execution_id: &str, timestamp: &DateTime<Utc>) -> String {
     let ts = timestamp.format("%Y%m%d_%H%M%S_%3f");
-    format!("{}_{}.txt", execution_id, ts)
+    format!("{}_{}.jsonl", execution_id, ts)
 }
 
 pub async fn get_execution_ids_exceeding_limit(
@@ -469,7 +469,7 @@ mod tests {
 
         let file_name = generate_output_file_name("exec-123", &timestamp);
 
-        assert_eq!(file_name, "exec-123_20260311_123456_789.txt");
+        assert_eq!(file_name, "exec-123_20260311_123456_789.jsonl");
     }
 
     #[tokio::test]
@@ -539,7 +539,7 @@ mod tests {
             task_id: task_id.clone(),
             session_id: Some("session-456".to_string()),
             status: Some(ExecutionStatus::Running),
-            output_file: Some("/path/to/output.txt".to_string()),
+            output_file: Some("/path/to/output.jsonl".to_string()),
             error_message: Some("Initial error".to_string()),
         };
 
@@ -551,7 +551,7 @@ mod tests {
         assert_eq!(execution.session_id, Some("session-456".to_string()));
         assert_eq!(
             execution.output_file,
-            Some("/path/to/output.txt".to_string())
+            Some("/path/to/output.jsonl".to_string())
         );
         assert_eq!(execution.error_message, Some("Initial error".to_string()));
 
@@ -567,7 +567,7 @@ mod tests {
             task_id: task_id.clone(),
             session_id: Some("session-789".to_string()),
             status: Some(ExecutionStatus::Success),
-            output_file: Some("/result.txt".to_string()),
+            output_file: Some("/result.jsonl".to_string()),
             error_message: None,
         };
 
@@ -583,7 +583,7 @@ mod tests {
         assert_eq!(execution.task_id, task_id);
         assert_eq!(execution.session_id, Some("session-789".to_string()));
         assert_eq!(execution.status, "success");
-        assert_eq!(execution.output_file, Some("/result.txt".to_string()));
+        assert_eq!(execution.output_file, Some("/result.jsonl".to_string()));
 
         pool.close().await;
     }
@@ -751,7 +751,7 @@ mod tests {
             session_id: None,
             status: Some(ExecutionStatus::Success),
             finished_at: Some(finished_at.clone()),
-            output_file: Some("/output/result.txt".to_string()),
+            output_file: Some("/output/result.jsonl".to_string()),
             error_message: None,
         };
 
@@ -761,7 +761,7 @@ mod tests {
         let updated = result.unwrap();
         assert_eq!(updated.status, "success");
         assert_eq!(updated.finished_at, Some(finished_at));
-        assert_eq!(updated.output_file, Some("/output/result.txt".to_string()));
+        assert_eq!(updated.output_file, Some("/output/result.jsonl".to_string()));
 
         pool.close().await;
     }
@@ -894,7 +894,7 @@ mod tests {
             session_id: None,
             status: Some(ExecutionStatus::Success),
             finished_at: Some(finished_at.clone()),
-            output_file: Some("/output/final.txt".to_string()),
+            output_file: Some("/output/final.jsonl".to_string()),
             error_message: None,
         };
         let success = update_execution(&pool, &created.id, update2)
@@ -905,7 +905,7 @@ mod tests {
 
         let fetched = get_execution(&pool, &created.id).await.expect("Get failed");
         assert_eq!(fetched.status, "success");
-        assert_eq!(fetched.output_file, Some("/output/final.txt".to_string()));
+        assert_eq!(fetched.output_file, Some("/output/final.jsonl".to_string()));
 
         pool.close().await;
     }
@@ -1084,7 +1084,7 @@ mod tests {
                     task_id: task_id.clone(),
                     session_id: Some(format!("done-{}", i)),
                     status: Some(ExecutionStatus::Success),
-                    output_file: Some(format!("done-{}.txt", i)),
+                    output_file: Some(format!("done-{}.jsonl", i)),
                     error_message: None,
                 },
             )
@@ -1101,7 +1101,7 @@ mod tests {
                 task_id,
                 session_id: Some("running-session".to_string()),
                 status: Some(ExecutionStatus::Running),
-                output_file: Some("running.txt".to_string()),
+                output_file: Some("running.jsonl".to_string()),
                 error_message: None,
             },
         )

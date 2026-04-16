@@ -1,17 +1,22 @@
-import { useEffect, useRef } from 'react';
-import { AnsiRenderer } from './AnsiRenderer';
+import { useEffect, useRef, useMemo } from 'react';
+import { EventRenderer } from './EventRenderer';
 import { useStreamingOutput } from '../hooks/useStreamingOutput';
+import { parseJsonlEvents } from '../types/event';
 import type { Execution } from '@/types/execution';
 import './OutputViewer.css';
 
 interface OutputViewerProps {
   content?: string;
-  isMarkdown?: boolean;
   execution?: Execution | null;
 }
 
-export function OutputViewer({ content, isMarkdown: _isMarkdown, execution }: OutputViewerProps) {
-  const { output: streamingOutput, startStreaming, stopStreaming } = useStreamingOutput();
+export function OutputViewer({ content, execution }: OutputViewerProps) {
+  const {
+    output: streamingOutput,
+    events: streamingEvents,
+    startStreaming,
+    stopStreaming,
+  } = useStreamingOutput();
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const executionId = execution?.id;
@@ -37,16 +42,22 @@ export function OutputViewer({ content, isMarkdown: _isMarkdown, execution }: Ou
 
   const displayContent = execution ? streamingOutput || content || '' : content || '';
 
+  const parsedEvents = useMemo(() => {
+    if (streamingEvents.length > 0) return [];
+    return parseJsonlEvents(displayContent);
+  }, [displayContent, streamingEvents.length]);
+
+  const events = streamingEvents.length > 0 ? streamingEvents : parsedEvents;
+
   useEffect(() => {
     if (containerRef.current && shouldAutoScrollRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [displayContent]);
+  }, [displayContent, events]);
 
   const fallbackExecutionMessage =
     execution?.status !== 'running' && execution?.error_message ? execution.error_message : '';
-  const finalDisplayContent = displayContent || fallbackExecutionMessage;
-  const isEmpty = !finalDisplayContent || finalDisplayContent.trim() === '';
+  const isEmpty = events.length === 0 && !fallbackExecutionMessage;
 
   if (isEmpty) {
     return (
@@ -59,7 +70,11 @@ export function OutputViewer({ content, isMarkdown: _isMarkdown, execution }: Ou
   return (
     <div className="output-viewer">
       <div className="output-viewer-content" ref={containerRef} onScroll={handleScroll}>
-        <AnsiRenderer text={finalDisplayContent} />
+        {events.length > 0 ? (
+          <EventRenderer events={events} />
+        ) : (
+          <div className="output-viewer-fallback-error">{fallbackExecutionMessage}</div>
+        )}
       </div>
     </div>
   );

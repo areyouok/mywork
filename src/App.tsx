@@ -348,11 +348,7 @@ function App() {
                 </div>
               </div>
               <div className="panel-body">
-                <OutputViewer
-                  content={outputContent}
-                  isMarkdown={true}
-                  execution={selectedExecutionLive}
-                />
+                <OutputViewer content={outputContent} execution={selectedExecutionLive} />
               </div>
             </div>
           )}

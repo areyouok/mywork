@@ -46,7 +46,7 @@ pub async fn execute_task_streaming(
         .await
         .map_err(|e| format!("Failed to get task: {}", e))?;
 
-    let args: Vec<&str> = vec!["run", &task.prompt];
+    let args: Vec<&str> = vec!["run", "--format", "json", &task.prompt];
     let cwd_path = cwd.as_deref().map(Path::new);
     let opencode_binary = resolve_opencode_binary_path()
         .map_err(|e| format!("Failed to locate opencode binary: {}", e))?;

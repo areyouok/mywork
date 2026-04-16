@@ -1,0 +1,11 @@
+.text-block {
+  margin: var(--space-sm) 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-relaxed);
+}
+
+.text-block-content {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}

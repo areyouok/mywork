@@ -1,6 +1,7 @@
 use crate::environment::hydrated_path;
+use crate::opencode::event::{extract_error_message, parse_session_id_from_ndjson};
 use crate::opencode::session_parser::parse_session_id;
-use crate::scheduler::timeout::{run_with_timeout, run_with_timeout_merged_output, TimeoutError};
+use crate::scheduler::timeout::{run_with_timeout, TimeoutError};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -72,6 +73,8 @@ pub struct OpenCodeOutput {
     pub success: bool,
     /// Whether the execution timed out
     pub timed_out: bool,
+    /// Extracted error message if execution failed
+    pub error_message: Option<String>,
 }
 
 /// Configuration for OpenCode execution
@@ -228,8 +231,8 @@ pub async fn run_opencode_task(
     };
     let timeout = timeout_secs.unwrap_or(config.default_timeout_secs);
 
-    // Build command arguments: opencode run "prompt"
-    let mut args = vec!["run".to_string()];
+    // Build command arguments: opencode run --format json "prompt"
+    let mut args = vec!["run".to_string(), "--format".to_string(), "json".to_string()];
 
     // Add session argument if provided
     if let Some(sid) = session_id {
@@ -240,8 +243,8 @@ pub async fn run_opencode_task(
     // Add the prompt as positional argument
     args.push(prompt.to_string());
 
-    // Execute the command with timeout
-    let process_output = run_with_timeout_merged_output(
+    // Execute the command with timeout (stdout/stderr separated)
+    let process_output = run_with_timeout(
         &binary_path,
         &args.iter().map(String::as_str).collect::<Vec<_>>(),
         timeout,
@@ -250,20 +253,35 @@ pub async fn run_opencode_task(
     .await
     .map_err(OpenCodeError::from)?;
 
-    // Determine session ID from output or use provided one
+    // Determine session ID from JSON events or use provided one
     let result_session_id = session_id.map(|s| s.to_string()).unwrap_or_else(|| {
-        parse_session_id(&process_output.stdout)
+        parse_session_id_from_ndjson(&process_output.stdout)
+            .or_else(|| parse_session_id(&process_output.stdout))
             .unwrap_or_else(|| format!("sess_{}", Uuid::new_v4()))
     });
 
     let success = process_output.success();
     let timed_out = process_output.timed_out;
 
+    let error_message = if !success && !timed_out {
+        extract_error_message(&process_output.stdout)
+            .or_else(|| {
+                if process_output.stderr.is_empty() {
+                    None
+                } else {
+                    Some(process_output.stderr.clone())
+                }
+            })
+    } else {
+        None
+    };
+
     Ok(OpenCodeOutput {
         session_id: result_session_id,
         stdout: process_output.stdout,
         success,
         timed_out,
+        error_message,
     })
 }
 
@@ -325,6 +343,7 @@ pub async fn run_mock_opencode_task(
         stdout,
         success: true,
         timed_out: false,
+        error_message: None,
     })
 }
 
@@ -457,6 +476,7 @@ mod tests {
             stdout: "output".to_string(),
             success: true,
             timed_out: false,
+            error_message: None,
         };
 
         let json = serde_json::to_string(&output).unwrap();
@@ -514,6 +534,7 @@ mod tests {
             stdout: "output".to_string(),
             success: true,
             timed_out: false,
+            error_message: None,
         };
 
         assert!(output.success);
@@ -527,6 +548,7 @@ mod tests {
             stdout: String::new(),
             success: false,
             timed_out: true,
+            error_message: None,
         };
 
         assert!(!output.success);

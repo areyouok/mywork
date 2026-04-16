@@ -6,8 +6,8 @@ use crate::models::execution::{
     UpdateExecution,
 };
 use crate::models::task::{get_task, touch_task};
+use crate::opencode::event::OpenCodeEvent;
 use crate::opencode::executor::resolve_opencode_binary_path;
-use crate::opencode::session_parser::parse_session_id;
 use crate::scheduler::task_queue::{TaskQueue, TaskQueueError};
 use crate::storage::output;
 use crate::working_dir::resolve_working_directory;
@@ -203,7 +203,7 @@ pub async fn run_task(
         return Err(message);
     }
 
-    let args: Vec<&str> = vec!["run", &task.prompt];
+    let args: Vec<&str> = vec!["run", "--format", "json", &task.prompt];
     let opencode_binary = match resolve_opencode_binary_path() {
         Ok(path) => path,
         Err(e) => {
@@ -257,9 +257,6 @@ pub async fn run_task(
         while let Some(line) = executor.read_line().await {
             match line {
                 StreamLine::Stdout(text) => {
-                    if parsed_session_id.is_none() {
-                        parsed_session_id = parse_session_id(&text);
-                    }
                     output::append_output_file(
                         &output_dir,
                         &output_file_name,
@@ -267,15 +264,15 @@ pub async fn run_task(
                     )
                     .await
                     .map_err(|e| format!("Failed to append stdout: {}", e))?;
+
+                    if parsed_session_id.is_none() {
+                        if let Ok(event) = serde_json::from_str::<OpenCodeEvent>(&text) {
+                            parsed_session_id = Some(event.session_id().to_string());
+                        }
+                    }
                 }
                 StreamLine::Stderr(text) => {
-                    output::append_output_file(
-                        &output_dir,
-                        &output_file_name,
-                        &format!("{}\n", text),
-                    )
-                    .await
-                    .map_err(|e| format!("Failed to append stderr: {}", e))?;
+                    eprintln!("opencode stderr: {}", text);
                 }
                 StreamLine::Finished => break,
             }

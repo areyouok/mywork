@@ -714,7 +714,7 @@ mod tests {
             task_id: created.id.clone(),
             session_id: Some("session-delete-related".to_string()),
             status: Some(ExecutionStatus::Success),
-            output_file: Some("test-output-file.txt".to_string()),
+            output_file: Some("test-output-file.jsonl".to_string()),
             error_message: None,
         };
         create_execution(&pool, execution)

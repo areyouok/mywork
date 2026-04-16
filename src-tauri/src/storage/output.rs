@@ -122,9 +122,7 @@ pub async fn delete_output_files_for_execution(
             continue;
         };
 
-        if file_name == format!("{}.txt", execution_id)
-            || (file_name.starts_with(&format!("{}_", execution_id)) && file_name.ends_with(".txt"))
-        {
+        if file_name.starts_with(&format!("{}_", execution_id)) && file_name.ends_with(".jsonl") {
             tokio::fs::remove_file(&path).await?;
             deleted_count += 1;
         }
@@ -138,7 +136,6 @@ pub async fn find_output_file_for_execution(
     execution_id: &str,
 ) -> Result<Option<String>, io::Error> {
     let mut latest_timestamped: Option<String> = None;
-    let legacy_name = format!("{}.txt", execution_id);
     let prefix = format!("{}_", execution_id);
 
     let mut entries = match tokio::fs::read_dir(output_dir).await {
@@ -157,12 +154,7 @@ pub async fn find_output_file_for_execution(
             continue;
         };
 
-        if file_name == legacy_name {
-            latest_timestamped.get_or_insert_with(|| file_name.to_string());
-            continue;
-        }
-
-        if file_name.starts_with(&prefix) && file_name.ends_with(".txt") {
+        if file_name.starts_with(&prefix) && file_name.ends_with(".jsonl") {
             match &latest_timestamped {
                 Some(current) if current.as_str() >= file_name => {}
                 _ => {
@@ -193,7 +185,7 @@ pub async fn cleanup_old_outputs(output_dir: &Path, days_to_keep: i64) -> Result
     while let Some(entry) = entries.next_entry().await? {
         let path = entry.path();
 
-        if path.extension().is_some_and(|ext| ext == "txt") {
+        if path.extension().is_some_and(|ext| ext == "jsonl") {
             let metadata = entry.metadata().await?;
 
             if let Ok(modified_time) = metadata.modified() {
@@ -255,7 +247,7 @@ mod tests {
             .await
             .expect("Failed to create dir");
 
-        let output_file_name = "test-exec-123_20260311_120000_123.txt";
+        let output_file_name = "test-exec-123_20260311_120000_123.jsonl";
         let content = "This is test output content";
 
         // Act
@@ -267,7 +259,7 @@ mod tests {
         assert!(file_path.exists(), "Output file should exist");
         assert_eq!(
             file_path.file_name().unwrap(),
-            "test-exec-123_20260311_120000_123.txt"
+            "test-exec-123_20260311_120000_123.jsonl"
         );
     }
 
@@ -280,7 +272,7 @@ mod tests {
             .await
             .expect("Failed to create dir");
 
-        let output_file_name = "test-exec-456_20260311_120001_456.txt";
+        let output_file_name = "test-exec-456_20260311_120001_456.jsonl";
         let content = "This is test output content for reading";
         write_output_file(&output_dir, output_file_name, content)
             .await
@@ -302,7 +294,7 @@ mod tests {
             .await
             .expect("Failed to create dir");
 
-        let output_file_name = "test-exec-append_20260311_120002_789.txt";
+        let output_file_name = "test-exec-append_20260311_120002_789.jsonl";
         append_output_file(&output_dir, output_file_name, "line1\n")
             .await
             .expect("failed to append line1");
@@ -326,13 +318,13 @@ mod tests {
 
         write_output_file(
             &output_dir,
-            "recent-exec_20260311_120003_111.txt",
+            "recent-exec_20260311_120003_111.jsonl",
             "recent content",
         )
         .await
         .expect("Failed to write file");
 
-        let old_file = output_dir.join("old-exec.txt");
+        let old_file = output_dir.join("old-exec.jsonl");
         fs::write(&old_file, "old content")
             .await
             .expect("Failed to write file");
@@ -346,7 +338,7 @@ mod tests {
         assert!(result.is_ok(), "Cleanup should succeed");
         assert_eq!(result.unwrap(), 1, "Only old file should be deleted");
 
-        let recent_path = output_dir.join("recent-exec_20260311_120003_111.txt");
+        let recent_path = output_dir.join("recent-exec_20260311_120003_111.jsonl");
         assert!(recent_path.exists(), "Recent file should still exist");
         assert!(!old_file.exists(), "Old file should be deleted");
     }
@@ -360,7 +352,7 @@ mod tests {
             .await
             .expect("Failed to create dir");
 
-        let output_file_name = "test-exec-789_20260311_120004_222.txt";
+        let output_file_name = "test-exec-789_20260311_120004_222.jsonl";
         write_output_file(&output_dir, output_file_name, "content")
             .await
             .expect("Failed to write file");
@@ -383,7 +375,7 @@ mod tests {
             .await
             .expect("Failed to create dir");
 
-        let output_file_name = "non-existent_20260311_120005_333.txt";
+        let output_file_name = "non-existent_20260311_120005_333.jsonl";
 
         // Act
         let result = delete_output_file(&output_dir, output_file_name).await;
@@ -403,7 +395,7 @@ mod tests {
             .await
             .expect("Failed to create dir");
 
-        let output_file_name = "test-exec-idempotent_20260311_120007_555.txt";
+        let output_file_name = "test-exec-idempotent_20260311_120007_555.jsonl";
         write_output_file(&output_dir, output_file_name, "content")
             .await
             .expect("Failed to write file");
@@ -416,23 +408,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_delete_output_files_for_execution_matches_timestamped_and_legacy() {
+    async fn test_delete_output_files_for_execution_matches_timestamped() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let output_dir = temp_dir.path().join("outputs");
         create_output_directory(&output_dir)
             .await
             .expect("Failed to create dir");
 
-        write_output_file(&output_dir, "exec-1_20260311_120000_111.txt", "a")
+        write_output_file(&output_dir, "exec-1_20260311_120000_111.jsonl", "a")
             .await
             .expect("Failed to write file a");
-        write_output_file(&output_dir, "exec-1_20260311_120001_222.txt", "b")
+        write_output_file(&output_dir, "exec-1_20260311_120001_222.jsonl", "b")
             .await
             .expect("Failed to write file b");
-        write_output_file(&output_dir, "exec-1.txt", "legacy")
-            .await
-            .expect("Failed to write legacy file");
-        write_output_file(&output_dir, "exec-2_20260311_120002_333.txt", "other")
+        write_output_file(&output_dir, "exec-2_20260311_120002_333.jsonl", "other")
             .await
             .expect("Failed to write other file");
 
@@ -440,11 +429,10 @@ mod tests {
             .await
             .expect("Delete by execution id should succeed");
 
-        assert_eq!(deleted, 3, "Should delete all exec-1 output files");
-        assert!(!output_dir.join("exec-1_20260311_120000_111.txt").exists());
-        assert!(!output_dir.join("exec-1_20260311_120001_222.txt").exists());
-        assert!(!output_dir.join("exec-1.txt").exists());
-        assert!(output_dir.join("exec-2_20260311_120002_333.txt").exists());
+        assert_eq!(deleted, 2, "Should delete all exec-1 output files");
+        assert!(!output_dir.join("exec-1_20260311_120000_111.jsonl").exists());
+        assert!(!output_dir.join("exec-1_20260311_120001_222.jsonl").exists());
+        assert!(output_dir.join("exec-2_20260311_120002_333.jsonl").exists());
     }
 
     #[tokio::test]
@@ -467,13 +455,10 @@ mod tests {
             .await
             .expect("Failed to create dir");
 
-        write_output_file(&output_dir, "exec-1.txt", "legacy")
-            .await
-            .expect("Failed to write legacy file");
-        write_output_file(&output_dir, "exec-1_20260312_100000_001.txt", "old")
+        write_output_file(&output_dir, "exec-1_20260312_100000_001.jsonl", "old")
             .await
             .expect("Failed to write old timestamped file");
-        write_output_file(&output_dir, "exec-1_20260312_100001_002.txt", "new")
+        write_output_file(&output_dir, "exec-1_20260312_100001_002.jsonl", "new")
             .await
             .expect("Failed to write new timestamped file");
 
@@ -481,7 +466,7 @@ mod tests {
             .await
             .expect("Find should succeed");
 
-        assert_eq!(found.as_deref(), Some("exec-1_20260312_100001_002.txt"));
+        assert_eq!(found.as_deref(), Some("exec-1_20260312_100001_002.jsonl"));
     }
 
     #[tokio::test]
@@ -525,7 +510,7 @@ mod tests {
         // Create a recent file
         write_output_file(
             &output_dir,
-            "recent-exec_20260311_120006_444.txt",
+            "recent-exec_20260311_120006_444.jsonl",
             "recent content",
         )
         .await
@@ -538,7 +523,7 @@ mod tests {
         assert!(result.is_ok(), "Cleanup should succeed");
         assert_eq!(result.unwrap(), 0, "Recent files should not be deleted");
 
-        let file_path = output_dir.join("recent-exec_20260311_120006_444.txt");
+        let file_path = output_dir.join("recent-exec_20260311_120006_444.jsonl");
         assert!(file_path.exists(), "Recent file should still exist");
     }
 
@@ -552,7 +537,7 @@ mod tests {
             .expect("Failed to create dir");
 
         // Create a file and set its modification time to 31 days ago
-        let old_file = output_dir.join("old-exec.txt");
+        let old_file = output_dir.join("old-exec.jsonl");
         fs::write(&old_file, "old content")
             .await
             .expect("Failed to write file");
@@ -571,27 +556,4 @@ mod tests {
         assert!(!old_file.exists(), "Old file should be deleted");
     }
 
-    #[tokio::test]
-    async fn test_cleanup_ignores_non_txt_files() {
-        let temp_dir = tempdir().expect("Failed to create temp dir");
-        let output_dir = temp_dir.path().join("outputs");
-        create_output_directory(&output_dir)
-            .await
-            .expect("Failed to create dir");
-
-        let old_file = output_dir.join("old-file.log");
-        fs::write(&old_file, "old content")
-            .await
-            .expect("Failed to write file");
-        let old_time =
-            std::time::SystemTime::now() - std::time::Duration::from_secs(31 * 24 * 60 * 60);
-        filetime::set_file_mtime(&old_file, filetime::FileTime::from_system_time(old_time))
-            .expect("Failed to set file time");
-
-        let result = cleanup_old_outputs(&output_dir, 30).await;
-
-        assert!(result.is_ok(), "Cleanup should succeed");
-        assert_eq!(result.unwrap(), 0, "Non-txt files should not be deleted");
-        assert!(old_file.exists(), "Non-txt file should still exist");
-    }
 }

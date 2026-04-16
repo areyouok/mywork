@@ -4,6 +4,7 @@ use crate::models::execution::{
 };
 use crate::execution_retention::enforce_execution_history_limit;
 use crate::models::task::{get_task, touch_task};
+use crate::opencode::event::parse_session_id_from_ndjson;
 use crate::opencode::executor::run_opencode_task;
 use crate::storage::output;
 use crate::db::connection;
@@ -58,26 +59,23 @@ pub async fn execute_task(
 
     let (session_id, status, finished_at, output_file, error_message) = match result {
         Ok(opencode_output) => {
+            let parsed_sid = parse_session_id_from_ndjson(&opencode_output.stdout)
+                .unwrap_or(opencode_output.session_id.clone());
+
             let (final_status, err_msg) = if opencode_output.timed_out {
                 (ExecutionStatus::Timeout, Some("Execution timed out".to_string()))
             } else if !opencode_output.success {
-                (ExecutionStatus::Failed, Some(opencode_output.stdout.clone()))
+                (ExecutionStatus::Failed, opencode_output.error_message.clone().or(Some("Execution failed".to_string())))
             } else {
                 (ExecutionStatus::Success, None)
             };
             
-            let content = format!(
-                "Session ID: {}\n{}",
-                opencode_output.session_id,
-                opencode_output.stdout
-            );
-            
-            let _file_path = output::write_output_file(&output_dir, &output_file_name, &content)
+            let _file_path = output::write_output_file(&output_dir, &output_file_name, &opencode_output.stdout)
                 .await
                 .map_err(|e| format!("Failed to write output file: {}", e))?;
             
             (
-                Some(opencode_output.session_id),
+                Some(parsed_sid),
                 final_status,
                 Utc::now().to_rfc3339(),
                 Some(output_file_name.clone()),

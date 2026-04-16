@@ -165,7 +165,7 @@ describe('ExecutionHistory', () => {
 
     it('should call onViewOutput when execution with output is clicked', async () => {
       const user = userEvent.setup();
-      const executions = [createMockExecution({ output_file: '/output/result.txt' })];
+      const executions = [createMockExecution({ output_file: '/output/result.jsonl' })];
       const onViewOutput = vi.fn();
 
       render(<ExecutionHistory executions={executions} onViewOutput={onViewOutput} />);
@@ -216,7 +216,7 @@ describe('ExecutionHistory', () => {
     });
 
     it('should have clickable cursor when execution has output file', () => {
-      const executions = [createMockExecution({ output_file: '/output/result.txt' })];
+      const executions = [createMockExecution({ output_file: '/output/result.jsonl' })];
       const onViewOutput = vi.fn();
 
       render(<ExecutionHistory executions={executions} onViewOutput={onViewOutput} />);
@@ -391,7 +391,7 @@ describe('ExecutionHistory', () => {
 
     it('should have accessible name for clickable items', () => {
       const executions = [
-        createMockExecution({ status: 'success', output_file: '/output/result.txt' }),
+        createMockExecution({ status: 'success', output_file: '/output/result.jsonl' }),
       ];
       const onViewOutput = vi.fn();
 

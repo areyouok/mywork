@@ -1,14 +1,18 @@
 import { useState, useCallback, useRef } from 'react';
 import { getOutput } from '@/api/tasks';
+import { parseJsonlEvents } from '@/types/event';
+import type { OpenCodeEvent } from '@/types/event';
 
 export function useStreamingOutput() {
   const [output, setOutput] = useState('');
+  const [events, setEvents] = useState<OpenCodeEvent[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollingRef = useRef(false);
   const currentExecutionIdRef = useRef<string | null>(null);
   const lastOutputRef = useRef('');
+  const parsedIndexRef = useRef(0);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -24,7 +28,9 @@ export function useStreamingOutput() {
 
       if (currentExecutionIdRef.current !== executionId) {
         setOutput('');
+        setEvents([]);
         lastOutputRef.current = '';
+        parsedIndexRef.current = 0;
       }
 
       currentExecutionIdRef.current = executionId;
@@ -42,8 +48,23 @@ export function useStreamingOutput() {
 
           const nextOutput =
             content.length >= lastOutputRef.current.length ? content : lastOutputRef.current;
-          lastOutputRef.current = nextOutput;
-          setOutput(nextOutput);
+
+          if (nextOutput !== lastOutputRef.current) {
+            lastOutputRef.current = nextOutput;
+            setOutput(nextOutput);
+
+            const newContent = nextOutput.slice(parsedIndexRef.current);
+            const lastNewlineIdx = newContent.lastIndexOf('\n');
+            if (lastNewlineIdx > 0) {
+              const toParse = newContent.slice(0, lastNewlineIdx);
+              parsedIndexRef.current += lastNewlineIdx + 1;
+
+              const newEvents = parseJsonlEvents(toParse);
+              if (newEvents.length > 0) {
+                setEvents((prev) => [...prev, ...newEvents]);
+              }
+            }
+          }
         } catch (pollError) {
           const errorMessage = pollError instanceof Error ? pollError.message : String(pollError);
           setError(errorMessage);
@@ -69,7 +90,9 @@ export function useStreamingOutput() {
       setIsStreaming(false);
       if (clearOutput) {
         setOutput('');
+        setEvents([]);
         lastOutputRef.current = '';
+        parsedIndexRef.current = 0;
         currentExecutionIdRef.current = null;
       }
     },
@@ -78,11 +101,14 @@ export function useStreamingOutput() {
 
   const resetOutput = useCallback(() => {
     setOutput('');
+    setEvents([]);
     lastOutputRef.current = '';
+    parsedIndexRef.current = 0;
   }, []);
 
   return {
     output,
+    events,
     isStreaming,
     error,
     startStreaming,
