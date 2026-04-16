@@ -87,9 +87,44 @@ describe('EventRenderer', () => {
     expect(container.querySelector('.event-renderer')?.children.length).toBe(0);
   });
 
-  it('should not render step_finish events', () => {
+  it('should render step_finish events with statistics bar', () => {
     const { container } = render(<EventRenderer events={[stepFinishEvent]} />);
-    expect(container.querySelector('.event-renderer')?.children.length).toBe(0);
+    expect(container.querySelector('.step-stats-bar')).toBeInTheDocument();
+  });
+
+  it('should display reason in step_finish bar', () => {
+    render(<EventRenderer events={[stepFinishEvent]} />);
+    expect(screen.getByText('stop')).toBeInTheDocument();
+  });
+
+  it('should display formatted tokens in step_finish bar', () => {
+    const { container } = render(<EventRenderer events={[stepFinishEvent]} />);
+    expect(container.querySelector('.step-stats-tokens')).toHaveTextContent('10 in / 90 out');
+  });
+
+  it('should display formatted cost in step_finish bar', () => {
+    const { container } = render(<EventRenderer events={[stepFinishEvent]} />);
+    expect(container.querySelector('.step-stats-cost')).toHaveTextContent('$0.00');
+  });
+
+  it('should display only reason when tokens and cost are undefined', () => {
+    const noDataEvent: OpenCodeEvent = {
+      type: 'step_finish',
+      timestamp: 3000,
+      sessionID: 'ses_1',
+      part: {
+        id: 'p3',
+        reason: 'tool-calls',
+        snapshot: 'snap2',
+        messageID: 'm1',
+        sessionID: 'ses_1',
+        type: 'step-finish',
+      },
+    };
+    const { container } = render(<EventRenderer events={[noDataEvent]} />);
+    expect(screen.getByText('tool-calls')).toBeInTheDocument();
+    expect(container.querySelector('.step-stats-tokens')).not.toBeInTheDocument();
+    expect(container.querySelector('.step-stats-cost')).not.toBeInTheDocument();
   });
 
   it('should render text events using TextBlock', () => {
@@ -102,12 +137,12 @@ describe('EventRenderer', () => {
     expect(screen.getByText('Echo hi')).toBeInTheDocument();
   });
 
-  it('should use stable keys for events', () => {
+  it('should use stable keys based on part.id', () => {
     const events: OpenCodeEvent[] = [textEvent, toolEvent];
     const { container } = render(<EventRenderer events={events} />);
     const children = container.querySelector('.event-renderer')?.children;
 
-    expect(children?.[0].getAttribute('data-event-key')).toBe('text-1000-0');
-    expect(children?.[1].getAttribute('data-event-key')).toBe('tool_use-2000-1');
+    expect(children?.[0].getAttribute('data-event-key')).toBe('text-p1');
+    expect(children?.[1].getAttribute('data-event-key')).toBe('tool_use-p2');
   });
 });

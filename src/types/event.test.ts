@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseJsonlEvents } from './event';
+import { parseJsonlEvents, sortEventsByPartId } from './event';
 import type { OpenCodeEvent } from './event';
 
 describe('parseJsonlEvents', () => {
@@ -143,6 +143,85 @@ describe('parseJsonlEvents', () => {
     const finishEvent = events[0] as OpenCodeEvent & { type: 'step_finish' };
     expect(finishEvent.part.tokens?.total).toBe(18548);
     expect(finishEvent.part.cost).toBe(0);
+  });
+
+  describe('sortEventsByPartId', () => {
+    it('should sort events by part.id in lexicographic order', () => {
+      const events: OpenCodeEvent[] = [
+        {
+          type: 'text',
+          timestamp: 3000,
+          sessionID: 'ses_1',
+          part: { type: 'text', id: 'prt_c', messageID: 'm1', sessionID: 'ses_1', text: 'c' },
+        },
+        {
+          type: 'text',
+          timestamp: 1000,
+          sessionID: 'ses_1',
+          part: { type: 'text', id: 'prt_a', messageID: 'm1', sessionID: 'ses_1', text: 'a' },
+        },
+        {
+          type: 'text',
+          timestamp: 2000,
+          sessionID: 'ses_1',
+          part: { type: 'text', id: 'prt_b', messageID: 'm1', sessionID: 'ses_1', text: 'b' },
+        },
+      ];
+
+      const sorted = sortEventsByPartId(events);
+      expect(sorted.map((e) => (e as OpenCodeEvent & { type: 'text' }).part.text)).toEqual([
+        'a',
+        'b',
+        'c',
+      ]);
+    });
+
+    it('should fallback to timestamp when part.id is the same', () => {
+      const events: OpenCodeEvent[] = [
+        {
+          type: 'text',
+          timestamp: 3000,
+          sessionID: 'ses_1',
+          part: { type: 'text', id: 'prt_a', messageID: 'm1', sessionID: 'ses_1', text: 'late' },
+        },
+        {
+          type: 'text',
+          timestamp: 1000,
+          sessionID: 'ses_1',
+          part: { type: 'text', id: 'prt_a', messageID: 'm1', sessionID: 'ses_1', text: 'early' },
+        },
+      ];
+
+      const sorted = sortEventsByPartId(events);
+      const texts = sorted.map((e) => (e as OpenCodeEvent & { type: 'text' }).part.text);
+      expect(texts).toEqual(['early', 'late']);
+    });
+
+    it('should return empty array for empty input', () => {
+      expect(sortEventsByPartId([])).toEqual([]);
+    });
+
+    it('should not mutate the original array', () => {
+      const events: OpenCodeEvent[] = [
+        {
+          type: 'text',
+          timestamp: 2000,
+          sessionID: 'ses_1',
+          part: { type: 'text', id: 'prt_b', messageID: 'm1', sessionID: 'ses_1', text: 'b' },
+        },
+        {
+          type: 'text',
+          timestamp: 1000,
+          sessionID: 'ses_1',
+          part: { type: 'text', id: 'prt_a', messageID: 'm1', sessionID: 'ses_1', text: 'a' },
+        },
+      ];
+
+      const sorted = sortEventsByPartId(events);
+      expect(sorted).not.toBe(events);
+      const originalFirst = (events[0] as OpenCodeEvent & { type: 'text' }).part.text;
+      expect(originalFirst).toBe('b');
+    });
   });
 
   it('should parse tool_use event with full state', () => {

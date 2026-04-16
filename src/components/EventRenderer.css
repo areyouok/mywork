@@ -4,3 +4,13 @@
   gap: var(--space-sm);
   padding: var(--space-sm) 0;
 }
+
+.step-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  border-top: 1px solid var(--border-light);
+}

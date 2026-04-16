@@ -117,3 +117,16 @@ export function parseJsonlEvents(text: string): OpenCodeEvent[] {
   }
   return events;
 }
+
+export function sortEventsByPartId(events: OpenCodeEvent[]): OpenCodeEvent[] {
+  return [...events].sort((a, b) => {
+    const idA = a.part?.id;
+    const idB = b.part?.id;
+    if (!idA && !idB) return 0;
+    if (!idA) return 1;
+    if (!idB) return -1;
+    const idCompare = idA.localeCompare(idB);
+    if (idCompare !== 0) return idCompare;
+    return a.timestamp - b.timestamp;
+  });
+}
