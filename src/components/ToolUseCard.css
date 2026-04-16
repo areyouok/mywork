@@ -160,3 +160,18 @@
 .tool-input-value {
   color: var(--text-primary);
 }
+
+.truncation-notice {
+  text-align: center;
+  color: var(--text-tertiary);
+  padding: var(--space-sm) var(--space-md);
+  user-select: none;
+  font-style: italic;
+}
+
+.tool-output-head,
+.tool-output-tail {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}

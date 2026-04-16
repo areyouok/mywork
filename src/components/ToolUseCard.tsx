@@ -15,6 +15,31 @@ function formatDuration(start?: number, end?: number): string | null {
   return `${diff}ms`;
 }
 
+const TRUNCATE_HEAD = 50;
+const TRUNCATE_TAIL = 50;
+
+interface TruncateResult {
+  head: string;
+  tail: string;
+  omittedCount: number;
+  truncated: boolean;
+}
+
+function truncateOutput(output: string): TruncateResult {
+  let lines = output.split(/\r?\n/);
+  // Trailing newline produces an empty element; remove it for accurate line counting
+  if (lines.length > 0 && lines[lines.length - 1] === '') {
+    lines = lines.slice(0, -1);
+  }
+  if (lines.length <= TRUNCATE_HEAD + TRUNCATE_TAIL) {
+    return { head: output, tail: '', omittedCount: 0, truncated: false };
+  }
+  const head = lines.slice(0, TRUNCATE_HEAD).join('\n');
+  const tail = lines.slice(-TRUNCATE_TAIL).join('\n');
+  const omittedCount = lines.length - TRUNCATE_HEAD - TRUNCATE_TAIL;
+  return { head, tail, omittedCount, truncated: true };
+}
+
 function formatInput(input: Record<string, unknown>): string {
   return Object.entries(input)
     .map(([key, value]) => {
@@ -35,6 +60,7 @@ export function ToolUseCard({ part }: ToolUseCardProps) {
   const duration = formatDuration(state.time?.start, state.time?.end);
   const exitCode = state.metadata?.exit;
   const showExitCode = exitCode != null && exitCode !== 0;
+  const truncated = state.output ? truncateOutput(state.output) : null;
 
   return (
     <div className="tool-use-card" data-call-id={part.callID}>
@@ -80,7 +106,18 @@ export function ToolUseCard({ part }: ToolUseCardProps) {
             <span className="tool-section-label">Output</span>
           </div>
           <div className={`tool-output-content ${outputExpanded ? '' : 'collapsed'}`}>
-            {state.output}
+            {truncated?.truncated ? (
+              <>
+                <pre className="tool-output-head">{truncated.head}</pre>
+                <div className="truncation-notice">
+                  ... {truncated.omittedCount} line
+                  {truncated.omittedCount !== 1 ? 's' : ''} omitted ...
+                </div>
+                <pre className="tool-output-tail">{truncated.tail}</pre>
+              </>
+            ) : (
+              state.output
+            )}
           </div>
         </div>
       )}

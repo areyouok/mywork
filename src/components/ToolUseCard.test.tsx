@@ -189,4 +189,158 @@ describe('ToolUseCard', () => {
     const card = container.querySelector('.tool-use-card');
     expect(card?.getAttribute('data-call-id')).toBe('call_1');
   });
+
+  it('should not truncate exactly 100 lines of output', () => {
+    const output = Array.from({ length: 100 }, (_, i) => `line ${i}`).join('\n');
+    const part = makeToolPart({
+      state: {
+        status: 'completed',
+        input: { command: 'test' },
+        output,
+        title: 'Test',
+        time: { start: 1000, end: 1001 },
+      },
+    });
+    const { container } = render(<ToolUseCard part={part} />);
+    expect(container.querySelector('.truncation-notice')).not.toBeInTheDocument();
+    const outputContent = container.querySelector('.tool-output-content');
+    expect(outputContent?.textContent).toContain('line 0');
+    expect(outputContent?.textContent).toContain('line 99');
+  });
+
+  it('should truncate 101 lines with singular omission notice', () => {
+    const output = Array.from({ length: 101 }, (_, i) => `line ${i}`).join('\n');
+    const part = makeToolPart({
+      state: {
+        status: 'completed',
+        input: { command: 'test' },
+        output,
+        title: 'Test',
+        time: { start: 1000, end: 1001 },
+      },
+    });
+    const { container } = render(<ToolUseCard part={part} />);
+    const notice = container.querySelector('.truncation-notice');
+    expect(notice).toBeInTheDocument();
+    expect(notice?.textContent).toContain('1 line omitted');
+  });
+
+  it('should truncate 200 lines with plural omission notice', () => {
+    const output = Array.from({ length: 200 }, (_, i) => `line ${i}`).join('\n');
+    const part = makeToolPart({
+      state: {
+        status: 'completed',
+        input: { command: 'test' },
+        output,
+        title: 'Test',
+        time: { start: 1000, end: 1001 },
+      },
+    });
+    const { container } = render(<ToolUseCard part={part} />);
+    const notice = container.querySelector('.truncation-notice');
+    expect(notice).toBeInTheDocument();
+    expect(notice?.textContent).toContain('100 lines omitted');
+  });
+
+  it('should not truncate 50 lines of output', () => {
+    const output = Array.from({ length: 50 }, (_, i) => `line ${i}`).join('\n');
+    const part = makeToolPart({
+      state: {
+        status: 'completed',
+        input: { command: 'test' },
+        output,
+        title: 'Test',
+        time: { start: 1000, end: 1001 },
+      },
+    });
+    const { container } = render(<ToolUseCard part={part} />);
+    expect(container.querySelector('.truncation-notice')).not.toBeInTheDocument();
+    const outputContent = container.querySelector('.tool-output-content');
+    expect(outputContent?.textContent).toContain('line 0');
+    expect(outputContent?.textContent).toContain('line 49');
+  });
+
+  it('should not truncate single very long line', () => {
+    const output = 'x'.repeat(10000);
+    const part = makeToolPart({
+      state: {
+        status: 'completed',
+        input: { command: 'test' },
+        output,
+        title: 'Test',
+        time: { start: 1000, end: 1001 },
+      },
+    });
+    const { container } = render(<ToolUseCard part={part} />);
+    expect(container.querySelector('.truncation-notice')).not.toBeInTheDocument();
+  });
+
+  it('should not show output area for empty string output', () => {
+    const part = makeToolPart({
+      state: {
+        status: 'completed',
+        input: { command: 'true' },
+        output: '',
+        title: 'True',
+        time: { start: 1000, end: 1001 },
+      },
+    });
+    const { container } = render(<ToolUseCard part={part} />);
+    expect(container.querySelector('.tool-output-content')).not.toBeInTheDocument();
+  });
+
+  it('should not truncate 100 lines with trailing newline', () => {
+    const output = Array.from({ length: 100 }, (_, i) => `line ${i}`).join('\n') + '\n';
+    const part = makeToolPart({
+      state: {
+        status: 'completed',
+        input: { command: 'test' },
+        output,
+        title: 'Test',
+        time: { start: 1000, end: 1001 },
+      },
+    });
+    const { container } = render(<ToolUseCard part={part} />);
+    expect(container.querySelector('.truncation-notice')).not.toBeInTheDocument();
+  });
+
+  it('should handle Windows-style CRLF line endings', () => {
+    const output = Array.from({ length: 101 }, (_, i) => `line ${i}`).join('\r\n');
+    const part = makeToolPart({
+      state: {
+        status: 'completed',
+        input: { command: 'test' },
+        output,
+        title: 'Test',
+        time: { start: 1000, end: 1001 },
+      },
+    });
+    const { container } = render(<ToolUseCard part={part} />);
+    const notice = container.querySelector('.truncation-notice');
+    expect(notice).toBeInTheDocument();
+    expect(notice?.textContent).toContain('1 line omitted');
+  });
+
+  it('should render head and tail content when truncated', () => {
+    const output = Array.from({ length: 150 }, (_, i) => `line ${i}`).join('\n');
+    const part = makeToolPart({
+      state: {
+        status: 'completed',
+        input: { command: 'test' },
+        output,
+        title: 'Test',
+        time: { start: 1000, end: 1001 },
+      },
+    });
+    const { container } = render(<ToolUseCard part={part} />);
+    const head = container.querySelector('.tool-output-head');
+    const tail = container.querySelector('.tool-output-tail');
+    expect(head).toBeInTheDocument();
+    expect(tail).toBeInTheDocument();
+    expect(head?.textContent).toContain('line 0');
+    expect(head?.textContent).toContain('line 49');
+    expect(head?.textContent).not.toContain('line 50');
+    expect(tail?.textContent).toContain('line 100');
+    expect(tail?.textContent).toContain('line 149');
+  });
 });
