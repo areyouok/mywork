@@ -62,12 +62,39 @@ export function TodoList({ output }: { output: string }) {
           if (isCompleted) itemClasses.push('todo-item-completed');
           if (isCancelled) itemClasses.push('todo-item-cancelled');
 
-          const checkboxClasses = ['todo-checkbox'];
+          const checkboxClasses = ['todo-checkbox-svg'];
           if (isCompleted) checkboxClasses.push('todo-checkbox-completed');
 
           return (
             <li key={index} className={itemClasses.join(' ')}>
-              <span className={checkboxClasses.join(' ')}>{isCompleted ? '[✓]' : '[ ]'}</span>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                className={checkboxClasses.join(' ')}
+                aria-hidden="true"
+              >
+                <rect
+                  x="1"
+                  y="1"
+                  width="14"
+                  height="14"
+                  rx="3"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  fill="none"
+                />
+                {isCompleted && (
+                  <path
+                    d="M4.5 8L7 10.5L11.5 5.5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                )}
+              </svg>
               <span className="todo-content">{todo.content}</span>
             </li>
           );

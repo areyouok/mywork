@@ -89,26 +89,25 @@ describe('TodoList', () => {
     expect(container.querySelectorAll('.todo-item')).toHaveLength(2);
   });
 
-  it('should show [✓] for completed items', () => {
+  it('should show completed checkbox for completed items', () => {
     const output = JSON.stringify([{ content: 'Done task', status: 'completed' }]);
     const { container } = render(<TodoList output={output} />);
-    const checkbox = container.querySelector('.todo-checkbox');
-    expect(checkbox).toHaveTextContent('[✓]');
+    const checkbox = container.querySelector('.todo-checkbox-svg');
     expect(checkbox).toHaveClass('todo-checkbox-completed');
   });
 
-  it('should show [ ] for pending items', () => {
+  it('should show empty checkbox for pending items', () => {
     const output = JSON.stringify([{ content: 'Pending task', status: 'pending' }]);
     const { container } = render(<TodoList output={output} />);
-    const checkbox = container.querySelector('.todo-checkbox');
-    expect(checkbox).toHaveTextContent('[ ]');
+    const checkbox = container.querySelector('.todo-checkbox-svg');
+    expect(checkbox).not.toHaveClass('todo-checkbox-completed');
   });
 
-  it('should show [ ] for in_progress items', () => {
+  it('should show empty checkbox for in_progress items', () => {
     const output = JSON.stringify([{ content: 'Active task', status: 'in_progress' }]);
     const { container } = render(<TodoList output={output} />);
-    const checkbox = container.querySelector('.todo-checkbox');
-    expect(checkbox).toHaveTextContent('[ ]');
+    const checkbox = container.querySelector('.todo-checkbox-svg');
+    expect(checkbox).not.toHaveClass('todo-checkbox-completed');
   });
 
   it('should add todo-item-cancelled class for cancelled items', () => {
@@ -191,11 +190,10 @@ describe('TodoList', () => {
     expect(c2.querySelector('pre')).toBeInTheDocument();
   });
 
-  it('should show [ ] for unknown status values', () => {
+  it('should show empty checkbox for unknown status values', () => {
     const output = JSON.stringify([{ content: 'Mystery', status: 'unknown' }]);
     const { container } = render(<TodoList output={output} />);
-    const checkbox = container.querySelector('.todo-checkbox');
-    expect(checkbox).toHaveTextContent('[ ]');
+    const checkbox = container.querySelector('.todo-checkbox-svg');
     expect(checkbox).not.toHaveClass('todo-checkbox-completed');
   });
 
@@ -210,11 +208,11 @@ describe('TodoList', () => {
     const items = container.querySelectorAll('.todo-item');
     expect(items).toHaveLength(4);
     expect(items[0]).toHaveClass('todo-item-completed');
-    expect(items[0].querySelector('.todo-checkbox')).toHaveTextContent('[✓]');
-    expect(items[1].querySelector('.todo-checkbox')).toHaveTextContent('[ ]');
-    expect(items[2].querySelector('.todo-checkbox')).toHaveTextContent('[ ]');
+    expect(items[0].querySelector('.todo-checkbox-svg')).toHaveClass('todo-checkbox-completed');
+    expect(items[1].querySelector('.todo-checkbox-svg')).not.toHaveClass('todo-checkbox-completed');
+    expect(items[2].querySelector('.todo-checkbox-svg')).not.toHaveClass('todo-checkbox-completed');
     expect(items[3]).toHaveClass('todo-item-cancelled');
-    expect(items[3].querySelector('.todo-checkbox')).toHaveTextContent('[ ]');
+    expect(items[3].querySelector('.todo-checkbox-svg')).not.toHaveClass('todo-checkbox-completed');
     expect(screen.getByText('Design API')).toBeInTheDocument();
     expect(screen.getByText('Write tests')).toBeInTheDocument();
     expect(screen.getByText('Implement feature')).toBeInTheDocument();
