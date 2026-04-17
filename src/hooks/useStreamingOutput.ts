@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { getOutput } from '@/api/tasks';
-import { parseJsonlEvents } from '@/types/event';
+import { parseJsonlEvents, sortEventsByTimestamp } from '@/types/event';
 import type { OpenCodeEvent } from '@/types/event';
 
 export function useStreamingOutput() {
@@ -61,7 +61,7 @@ export function useStreamingOutput() {
 
               const newEvents = parseJsonlEvents(toParse);
               if (newEvents.length > 0) {
-                setEvents((prev) => [...prev, ...newEvents]);
+                setEvents((prev) => sortEventsByTimestamp([...prev, ...newEvents]));
               }
             }
           }
@@ -95,7 +95,7 @@ export function useStreamingOutput() {
         if (trimmed) {
           const newEvents = parseJsonlEvents(remaining);
           if (newEvents.length > 0) {
-            setEvents((prev) => [...prev, ...newEvents]);
+            setEvents((prev) => sortEventsByTimestamp([...prev, ...newEvents]));
           }
         }
         parsedIndexRef.current = lastOutputRef.current.length;

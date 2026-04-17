@@ -239,6 +239,128 @@ describe('useStreamingOutput', () => {
       expect(result.current.events).toHaveLength(2);
     });
 
+    it('初始加载时相同 timestamp 事件应按 part.id 排序', async () => {
+      const toolEvent = JSON.stringify({
+        type: 'tool_use',
+        timestamp: 1000,
+        sessionID: 'ses_1',
+        part: {
+          type: 'tool',
+          tool: 'bash',
+          callID: 'call_1',
+          state: { status: 'completed', input: { command: 'ls' } },
+          id: 'tool_1',
+          sessionID: 'ses_1',
+          messageID: 'm1',
+        },
+      });
+      const textEvent = JSON.stringify({
+        type: 'text',
+        timestamp: 1000,
+        sessionID: 'ses_1',
+        part: { type: 'text', id: 'text_1', messageID: 'm1', sessionID: 'ses_1', text: 'hi' },
+      });
+
+      vi.mocked(tasksApi.getOutput).mockResolvedValueOnce(`${toolEvent}\n${textEvent}\n`);
+
+      const { result } = renderHook(() => useStreamingOutput());
+
+      await act(async () => {
+        await result.current.startStreaming('exec-1');
+      });
+
+      expect(result.current.events).toHaveLength(2);
+      expect(result.current.events[0].part.id).toBe('text_1');
+      expect(result.current.events[1].part.id).toBe('tool_1');
+    });
+
+    it('轮询追加时相同 timestamp 事件应按 part.id 排序', async () => {
+      const toolEvent = JSON.stringify({
+        type: 'tool_use',
+        timestamp: 1000,
+        sessionID: 'ses_1',
+        part: {
+          type: 'tool',
+          tool: 'bash',
+          callID: 'call_1',
+          state: { status: 'completed', input: { command: 'ls' } },
+          id: 'tool_1',
+          sessionID: 'ses_1',
+          messageID: 'm1',
+        },
+      });
+      const textEvent = JSON.stringify({
+        type: 'text',
+        timestamp: 1000,
+        sessionID: 'ses_1',
+        part: { type: 'text', id: 'text_1', messageID: 'm1', sessionID: 'ses_1', text: 'hi' },
+      });
+
+      vi.mocked(tasksApi.getOutput)
+        .mockResolvedValueOnce(`${toolEvent}\n`)
+        .mockResolvedValueOnce(`${toolEvent}\n${textEvent}\n`);
+
+      const { result } = renderHook(() => useStreamingOutput());
+
+      await act(async () => {
+        await result.current.startStreaming('exec-1');
+      });
+
+      expect(result.current.events).toHaveLength(1);
+      expect(result.current.events[0].part.id).toBe('tool_1');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+        await Promise.resolve();
+      });
+
+      expect(result.current.events).toHaveLength(2);
+      expect(result.current.events[0].part.id).toBe('text_1');
+      expect(result.current.events[1].part.id).toBe('tool_1');
+    });
+
+    it('stopStreaming(false) flush 时相同 timestamp 事件应按 part.id 排序', async () => {
+      const toolEvent = JSON.stringify({
+        type: 'tool_use',
+        timestamp: 1000,
+        sessionID: 'ses_1',
+        part: {
+          type: 'tool',
+          tool: 'bash',
+          callID: 'call_1',
+          state: { status: 'completed', input: { command: 'ls' } },
+          id: 'tool_1',
+          sessionID: 'ses_1',
+          messageID: 'm1',
+        },
+      });
+      const textEvent = JSON.stringify({
+        type: 'text',
+        timestamp: 1000,
+        sessionID: 'ses_1',
+        part: { type: 'text', id: 'text_1', messageID: 'm1', sessionID: 'ses_1', text: 'hi' },
+      });
+
+      vi.mocked(tasksApi.getOutput).mockResolvedValueOnce(`${toolEvent}\n${textEvent}`);
+
+      const { result } = renderHook(() => useStreamingOutput());
+
+      await act(async () => {
+        await result.current.startStreaming('exec-1');
+      });
+
+      expect(result.current.events).toHaveLength(1);
+      expect(result.current.events[0].part.id).toBe('tool_1');
+
+      act(() => {
+        result.current.stopStreaming(false);
+      });
+
+      expect(result.current.events).toHaveLength(2);
+      expect(result.current.events[0].part.id).toBe('text_1');
+      expect(result.current.events[1].part.id).toBe('tool_1');
+    });
+
     it('lastNewlineIdx === 0 时不应产生多余事件', async () => {
       const event1 = JSON.stringify({
         type: 'text',

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { EventRenderer } from './EventRenderer';
 import { useStreamingOutput } from '../hooks/useStreamingOutput';
-import { parseJsonlEvents, sortEventsByPartId } from '../types/event';
+import { parseJsonlEvents, sortEventsByTimestamp } from '../types/event';
 import type { Execution } from '@/types/execution';
 import './OutputViewer.css';
 
@@ -44,7 +44,7 @@ export function OutputViewer({ content, execution }: OutputViewerProps) {
 
   const parsedEvents = useMemo(() => {
     if (streamingEvents.length > 0) return [];
-    return sortEventsByPartId(parseJsonlEvents(displayContent));
+    return sortEventsByTimestamp(parseJsonlEvents(displayContent));
   }, [displayContent, streamingEvents.length]);
 
   const events = streamingEvents.length > 0 ? streamingEvents : parsedEvents;

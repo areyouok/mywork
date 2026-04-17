@@ -118,15 +118,20 @@ export function parseJsonlEvents(text: string): OpenCodeEvent[] {
   return events;
 }
 
-export function sortEventsByPartId(events: OpenCodeEvent[]): OpenCodeEvent[] {
+/**
+ * Sort events by timestamp, using part.id as a tie-breaker to guarantee stable
+ * JS sort results. This assumes OpenCode assigns part.id values such that text
+ * events get a lexicographically smaller id than tool_use events under the same
+ * timestamp, matching OpenCode's intended render order.
+ *
+ * NOTE: full re-sort on every streaming append is acceptable because event
+ * counts are typically small; switch to consumer-side useMemo if perf becomes
+ * an issue.
+ */
+export function sortEventsByTimestamp(events: OpenCodeEvent[]): OpenCodeEvent[] {
   return [...events].sort((a, b) => {
-    const idA = a.part?.id;
-    const idB = b.part?.id;
-    if (!idA && !idB) return 0;
-    if (!idA) return 1;
-    if (!idB) return -1;
-    const idCompare = idA.localeCompare(idB);
-    if (idCompare !== 0) return idCompare;
-    return a.timestamp - b.timestamp;
+    const tsDiff = a.timestamp - b.timestamp;
+    if (tsDiff !== 0) return tsDiff;
+    return a.part.id.localeCompare(b.part.id, 'en');
   });
 }
