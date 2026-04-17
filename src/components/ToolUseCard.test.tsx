@@ -343,4 +343,54 @@ describe('ToolUseCard', () => {
     expect(tail?.textContent).toContain('line 100');
     expect(tail?.textContent).toContain('line 149');
   });
+
+  it('should render TodoList component for todowrite tool', () => {
+    const todoOutput = JSON.stringify([
+      { content: 'Design API', status: 'completed', priority: 'high' },
+      { content: 'Write tests', status: 'pending', priority: 'medium' },
+    ]);
+    const part = makeToolPart({
+      tool: 'todowrite',
+      state: {
+        status: 'completed',
+        input: { todos: [] },
+        output: todoOutput,
+        title: 'Update todos',
+      },
+    });
+    const { container } = render(<ToolUseCard part={part} />);
+    expect(container.querySelector('.todo-list-container')).toBeInTheDocument();
+    expect(container.querySelector('.todo-checkbox-completed')).toBeInTheDocument();
+  });
+
+  it('should fall back to raw output for todowrite with invalid JSON', () => {
+    const part = makeToolPart({
+      tool: 'todowrite',
+      state: {
+        status: 'completed',
+        input: { todos: [] },
+        output: 'not valid json',
+        title: 'Update todos',
+      },
+    });
+    const { container } = render(<ToolUseCard part={part} />);
+    expect(container.querySelector('.todo-list-container')).not.toBeInTheDocument();
+    expect(container.querySelector('.tool-output-content')?.textContent).toContain(
+      'not valid json'
+    );
+  });
+
+  it('should not show output area for todowrite with empty output', () => {
+    const part = makeToolPart({
+      tool: 'todowrite',
+      state: {
+        status: 'completed',
+        input: { todos: [] },
+        output: '',
+        title: 'Update todos',
+      },
+    });
+    const { container } = render(<ToolUseCard part={part} />);
+    expect(container.querySelector('.tool-output-content')).not.toBeInTheDocument();
+  });
 });

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ToolUsePart } from '@/types/event';
+import { TodoList } from './TodoList';
 import './ToolUseCard.css';
 
 interface ToolUseCardProps {
@@ -106,7 +107,9 @@ export function ToolUseCard({ part }: ToolUseCardProps) {
             <span className="tool-section-label">Output</span>
           </div>
           <div className={`tool-output-content ${outputExpanded ? '' : 'collapsed'}`}>
-            {truncated?.truncated ? (
+            {part.tool === 'todowrite' && state.output ? (
+              <TodoList output={state.output} />
+            ) : truncated?.truncated ? (
               <>
                 <pre className="tool-output-head">{truncated.head}</pre>
                 <div className="truncation-notice">

@@ -1,0 +1,47 @@
+.todo-list-container {
+  font-family: var(--font-family);
+}
+
+.todo-list-header {
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-sm);
+}
+
+.todo-list-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.todo-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  padding: 2px 0;
+  line-height: var(--line-height-normal);
+  font-size: var(--font-size-sm);
+}
+
+.todo-item-completed {
+  color: var(--text-tertiary);
+}
+
+.todo-item-cancelled {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
+}
+
+.todo-checkbox {
+  flex-shrink: 0;
+  width: 1.5em;
+  font-family:
+    'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: var(--font-size-sm);
+  user-select: none;
+}
+
+.todo-checkbox-completed {
+  color: var(--success-color);
+}
