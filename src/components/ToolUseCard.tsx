@@ -41,6 +41,15 @@ function truncateOutput(output: string): TruncateResult {
   return { head, tail, omittedCount, truncated: true };
 }
 
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
 function formatInput(input: Record<string, unknown>): string {
   return Object.entries(input)
     .map(([key, value]) => {
@@ -71,7 +80,7 @@ export function ToolUseCard({ part }: ToolUseCardProps) {
         {state.title && (
           <>
             <span className="tool-separator">&middot;</span>
-            <span className="tool-title">{state.title}</span>
+            <span className="tool-title">{decodeHtmlEntities(state.title)}</span>
           </>
         )}
         <div className="tool-header-meta">

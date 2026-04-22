@@ -393,4 +393,46 @@ describe('ToolUseCard', () => {
     const { container } = render(<ToolUseCard part={part} />);
     expect(container.querySelector('.tool-output-content')).not.toBeInTheDocument();
   });
+
+  it('should decode HTML entities in title', () => {
+    const part = makeToolPart({
+      state: {
+        status: 'completed',
+        input: { pattern: '<<<<<<<|=======|>>>>>>>' },
+        output: 'Found 1 match',
+        title: '&lt;&lt;&lt;&lt;&lt;&lt;&lt;|=======|&gt;&gt;&gt;&gt;&gt;&gt;&gt;',
+        time: { start: 1000, end: 1005 },
+      },
+    });
+    render(<ToolUseCard part={part} />);
+    expect(screen.getByText('<<<<<<<|=======|>>>>>>>', { selector: '.tool-title' })).toBeInTheDocument();
+  });
+
+  it('should handle &amp; followed by entity-like suffix', () => {
+    const part = makeToolPart({
+      state: {
+        status: 'completed',
+        input: {},
+        output: '',
+        title: 'a &amp; b &lt; c',
+        time: { start: 1000, end: 1005 },
+      },
+    });
+    render(<ToolUseCard part={part} />);
+    expect(screen.getByText('a & b < c', { selector: '.tool-title' })).toBeInTheDocument();
+  });
+
+  it('should render title without entities unchanged', () => {
+    const part = makeToolPart({
+      state: {
+        status: 'completed',
+        input: { command: 'ls' },
+        output: 'file1\nfile2',
+        title: 'List files',
+        time: { start: 1000, end: 1003 },
+      },
+    });
+    render(<ToolUseCard part={part} />);
+    expect(screen.getByText('List files', { selector: '.tool-title' })).toBeInTheDocument();
+  });
 });
